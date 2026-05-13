@@ -20,18 +20,24 @@ Pod::Spec.new do |s|
     "ios/**/*.{m,mm}",
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
-    # Third-party: QuickJS (uncomment once third_party/quickjs is added as a submodule)
-    # "third_party/quickjs/quickjs.{c,h}",
-    # "third_party/quickjs/libregexp.{c,h}",
-    # "third_party/quickjs/libunicode.{c,h}",
-    # "third_party/quickjs/cutils.{c,h}",
+    # Third-party: QuickJS
+    "third_party/quickjs/quickjs.{c,h}",
+    "third_party/quickjs/libregexp.{c,h}",
+    "third_party/quickjs/libunicode.{c,h}",
+    "third_party/quickjs/cutils.{c,h}",
+    "third_party/quickjs/*.h",
+    # Third-party: Lexbor
+    "third_party/lexbor/source/**/*.{c,h}",
   ]
 
-  # Third-party: Lexbor
-  # Option A — CocoaPod (if available): s.dependency 'Lexbor'
-  # Option B — vendored sources: add third_party/lexbor source files above and set:
-  # s.preserve_paths = "third_party/lexbor/**"
-  # s.xcconfig = { 'HEADER_SEARCH_PATHS' => '"$(PODS_ROOT)/../third_party/lexbor/source"' }
+  s.preserve_paths = ["third_party/lexbor/**", "third_party/quickjs/**"]
+
+  s.pod_target_xcconfig = {
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/third_party/lexbor/source" "$(PODS_TARGET_SRCROOT)/third_party/quickjs"',
+    'GCC_PREPROCESSOR_DEFINITIONS' => 'CONFIG_VERSION=\"2024-01-13\"'
+  }
+
+  s.compiler_flags = '-Wno-implicit-fallthrough -Wno-unused-variable -Wno-sign-compare -Wno-shorten-64-to-32'
 
   load 'nitrogen/generated/ios/NitroJsdom+autolinking.rb'
   add_nitrogen_files(s)
