@@ -1,7 +1,7 @@
 #include "DOMBindings.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "QuickJSRuntime.hpp"
-#include <quickjs.h>
+#include "quickjs.h"
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -90,7 +90,7 @@ static JSValue js_setInnerHTML(JSContext* ctx, JSValue, int argc, JSValue* argv)
 }
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
-  JSContext* ctx = runtime->context();
+  JSContext* ctx = static_cast<JSContext*>(runtime->context());
   JS_SetContextOpaque(ctx, document);
 
   JSValue global = JS_GetGlobalObject(ctx);

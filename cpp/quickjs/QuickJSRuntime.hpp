@@ -7,8 +7,6 @@ namespace margelo::nitro::nitrojsdom {
 
 class LexborDocument;
 
-typedef struct JSContext JSContext;
-
 class QuickJSRuntime {
 public:
   QuickJSRuntime();
@@ -18,7 +16,7 @@ public:
   void bindDocument(LexborDocument* document);
   std::string evaluate(const std::string& script);
 
-  JSContext* context() const { return reinterpret_cast<JSContext*>(_context); }
+  void* context() const { return _context; }
 
 private:
   void* _runtime  { nullptr };

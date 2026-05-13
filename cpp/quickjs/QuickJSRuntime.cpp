@@ -1,7 +1,7 @@
 #include "QuickJSRuntime.hpp"
 #include "DOMBindings.hpp"
 #include "../lexbor/LexborDocument.hpp"
-#include <quickjs.h>
+#include "quickjs.h"
 #include <stdexcept>
 #include <string>
 #include <mutex>
