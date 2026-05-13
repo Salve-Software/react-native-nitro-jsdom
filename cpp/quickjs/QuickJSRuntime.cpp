@@ -1,65 +1,72 @@
 #include "QuickJSRuntime.hpp"
 #include "DOMBindings.hpp"
 #include "../lexbor/LexborDocument.hpp"
-
-// TODO: include QuickJS headers once third_party/quickjs is added:
-// #include <quickjs.h>
+#include <quickjs.h>
+#include <stdexcept>
+#include <string>
+#include <mutex>
 
 namespace margelo::nitro::nitrojsdom {
 
 QuickJSRuntime::QuickJSRuntime() = default;
 
 QuickJSRuntime::~QuickJSRuntime() {
-  // TODO: JS_FreeContext((JSContext*)_context);
-  //       JS_FreeRuntime((JSRuntime*)_runtime);
+  if (_context) JS_FreeContext(reinterpret_cast<JSContext*>(_context));
+  if (_runtime) JS_FreeRuntime(reinterpret_cast<JSRuntime*>(_runtime));
   _context = nullptr;
   _runtime = nullptr;
 }
 
-void QuickJSRuntime::initialize(const std::string& /*url*/) {
-  // TODO: Real QuickJS setup:
-  // _runtime = JS_NewRuntime();
-  // _context = JS_NewContext((JSRuntime*)_runtime);
-  //
-  // Set window.location.href:
-  // JSValue global = JS_GetGlobalObject((JSContext*)_context);
-  // JSValue location = JS_NewObject((JSContext*)_context);
-  // JS_SetPropertyStr((JSContext*)_context, location, "href",
-  //     JS_NewString((JSContext*)_context, url.c_str()));
-  // JS_SetPropertyStr((JSContext*)_context, global, "location", location);
-  // JS_FreeValue((JSContext*)_context, global);
+void QuickJSRuntime::initialize(const std::string& url) {
+  JSRuntime* rt = JS_NewRuntime();
+  JSContext* ctx = JS_NewContext(rt);
+  _runtime = rt;
+  _context = ctx;
+
+  JSValue global = JS_GetGlobalObject(ctx);
+
+  // window = globalThis
+  JS_SetPropertyStr(ctx, global, "window", JS_DupValue(ctx, global));
+
+  // location.href
+  JSValue location = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, location, "href", JS_NewString(ctx, url.c_str()));
+  JS_SetPropertyStr(ctx, global, "location", location);
+  JS_FreeValue(ctx, location);
+
+  JS_FreeValue(ctx, global);
 }
 
 void QuickJSRuntime::bindDocument(LexborDocument* document) {
   _document = document;
-  // TODO: DOMBindings::install(this, document);
+  DOMBindings::install(this, document);
 }
 
-std::string QuickJSRuntime::evaluate(const std::string& /*script*/) {
-  // TODO: Real QuickJS evaluation:
-  // JSValue result = JS_Eval((JSContext*)_context,
-  //     script.c_str(), script.size(),
-  //     "<eval>", JS_EVAL_TYPE_GLOBAL);
-  //
-  // if (JS_IsException(result)) {
-  //   JSValue exception = JS_GetException((JSContext*)_context);
-  //   const char* msg = JS_ToCString((JSContext*)_context, exception);
-  //   std::string err(msg);
-  //   JS_FreeCString((JSContext*)_context, msg);
-  //   JS_FreeValue((JSContext*)_context, exception);
-  //   JS_FreeValue((JSContext*)_context, result);
-  //   throw std::runtime_error(err);
-  // }
-  //
-  // JSValue strVal = JS_ToString((JSContext*)_context, result);
-  // const char* str = JS_ToCString((JSContext*)_context, strVal);
-  // std::string out(str);
-  // JS_FreeCString((JSContext*)_context, str);
-  // JS_FreeValue((JSContext*)_context, strVal);
-  // JS_FreeValue((JSContext*)_context, result);
-  // return out;
+std::string QuickJSRuntime::evaluate(const std::string& script) {
+  JSContext* ctx = reinterpret_cast<JSContext*>(_context);
+  std::lock_guard<std::mutex> lock(_mutex);
 
-  return "";
+  JSValue result = JS_Eval(ctx, script.data(), script.size(), "<eval>", JS_EVAL_TYPE_GLOBAL);
+
+  if (JS_IsException(result)) {
+    JSValue ex = JS_GetException(ctx);
+    JSValue msg = JS_ToString(ctx, ex);
+    const char* str = JS_ToCString(ctx, msg);
+    std::string err(str ? str : "Unknown JS error");
+    JS_FreeCString(ctx, str);
+    JS_FreeValue(ctx, msg);
+    JS_FreeValue(ctx, ex);
+    JS_FreeValue(ctx, result);
+    throw std::runtime_error(err);
+  }
+
+  JSValue strVal = JS_ToString(ctx, result);
+  const char* str = JS_ToCString(ctx, strVal);
+  std::string out(str ? str : "");
+  JS_FreeCString(ctx, str);
+  JS_FreeValue(ctx, strVal);
+  JS_FreeValue(ctx, result);
+  return out;
 }
 
 } // namespace margelo::nitro::nitrojsdom
