@@ -19,7 +19,12 @@ QuickJSRuntime::~QuickJSRuntime() {
 
 void QuickJSRuntime::initialize(const std::string& url) {
   JSRuntime* rt = JS_NewRuntime();
+  if (!rt) throw std::runtime_error("QuickJS: failed to create runtime");
   JSContext* ctx = JS_NewContext(rt);
+  if (!ctx) {
+    JS_FreeRuntime(rt);
+    throw std::runtime_error("QuickJS: failed to create context");
+  }
   _runtime = rt;
   _context = ctx;
 
@@ -38,6 +43,7 @@ void QuickJSRuntime::initialize(const std::string& url) {
 }
 
 void QuickJSRuntime::bindDocument(LexborDocument* document) {
+  if (!_context) return;
   _document = document;
   DOMBindings::install(this, document);
 }

@@ -35,8 +35,8 @@ static JSValue js_getAttribute(JSContext* ctx, JSValue, int argc, JSValue* argv)
   const char* sel  = JS_ToCString(ctx, argv[0]);
   const char* attr = JS_ToCString(ctx, argv[1]);
   if (!sel || !attr) {
-    JS_FreeCString(ctx, sel);
-    JS_FreeCString(ctx, attr);
+    if (sel)  JS_FreeCString(ctx, sel);
+    if (attr) JS_FreeCString(ctx, attr);
     return JS_NULL;
   }
   auto result = doc->getAttribute(sel, attr);
