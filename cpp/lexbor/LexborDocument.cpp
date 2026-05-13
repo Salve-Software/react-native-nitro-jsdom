@@ -1,8 +1,7 @@
 #include "LexborDocument.hpp"
 #include <lexbor/html/html.h>
-#include <lexbor/css/css.h>
-#include <lexbor/selectors/selectors.h>
 #include <lexbor/dom/dom.h>
+#include <stdexcept>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -12,7 +11,7 @@ static std::string serializeNode(lxb_dom_node_t* node) {
   lexbor_str_t str = {0};
   lxb_html_serialize_tree_str(node, &str);
   std::string result(reinterpret_cast<char*>(str.data), str.length);
-  lexbor_str_destroy(&str, node->owner_document->cobj, false);
+  lexbor_str_destroy(&str, NULL, false);
   return result;
 }
 
@@ -32,9 +31,16 @@ static lxb_status_t findAllCallback(lxb_dom_node_t* node, lxb_css_selector_speci
 
 } // namespace
 
-LexborDocument::LexborDocument() = default;
+LexborDocument::LexborDocument() {
+  _cssParser = lxb_css_parser_create();
+  lxb_css_parser_init(_cssParser, nullptr);
+  _selectors = lxb_selectors_create();
+  lxb_selectors_init(_selectors);
+}
 
 LexborDocument::~LexborDocument() {
+  if (_selectors) lxb_selectors_destroy(_selectors, true);
+  if (_cssParser) lxb_css_parser_destroy(_cssParser, true);
   if (_document) {
     lxb_html_document_destroy(_document);
     _document = nullptr;
@@ -43,27 +49,27 @@ LexborDocument::~LexborDocument() {
 
 lxb_dom_element_t* LexborDocument::findFirst(const std::string& selector) const {
   if (!_document) return nullptr;
-  lxb_css_parser_t* parser = lxb_css_parser_create();
-  lxb_css_parser_init(parser, nullptr);
-  lxb_selectors_t* selectors = lxb_selectors_create();
-  lxb_selectors_init(selectors);
-  lxb_css_selector_list_t* list = lxb_css_selectors_parse(parser,
+  lxb_css_selector_list_t* list = lxb_css_selectors_parse(_cssParser,
       reinterpret_cast<const lxb_char_t*>(selector.data()), selector.size());
   FindFirstCtx ctx;
   if (list) {
-    lxb_selectors_find(selectors, lxb_dom_interface_node(_document), list, findFirstCallback, &ctx);
+    lxb_selectors_find(_selectors, lxb_dom_interface_node(_document), list, findFirstCallback, &ctx);
     lxb_css_selector_list_destroy_memory(list);
   }
-  lxb_selectors_destroy(selectors, true);
-  lxb_css_parser_destroy(parser, true);
   return ctx.result;
 }
 
 void LexborDocument::parse(const std::string& html) {
   if (_document) lxb_html_document_destroy(_document);
   _document = lxb_html_document_create();
-  lxb_html_document_parse(_document,
+  if (!_document) throw std::runtime_error("Lexbor: failed to create document");
+  lxb_status_t status = lxb_html_document_parse(_document,
       reinterpret_cast<const lxb_char_t*>(html.data()), html.size());
+  if (status != LXB_STATUS_OK) {
+    lxb_html_document_destroy(_document);
+    _document = nullptr;
+    throw std::runtime_error("Lexbor: failed to parse HTML");
+  }
 }
 
 std::string LexborDocument::serialize() const {
@@ -79,19 +85,13 @@ std::optional<std::string> LexborDocument::querySelector(const std::string& sele
 
 std::vector<std::string> LexborDocument::querySelectorAll(const std::string& selector) const {
   if (!_document) return {};
-  lxb_css_parser_t* parser = lxb_css_parser_create();
-  lxb_css_parser_init(parser, nullptr);
-  lxb_selectors_t* selectors = lxb_selectors_create();
-  lxb_selectors_init(selectors);
-  lxb_css_selector_list_t* list = lxb_css_selectors_parse(parser,
+  lxb_css_selector_list_t* list = lxb_css_selectors_parse(_cssParser,
       reinterpret_cast<const lxb_char_t*>(selector.data()), selector.size());
   std::vector<std::string> results;
   if (list) {
-    lxb_selectors_find(selectors, lxb_dom_interface_node(_document), list, findAllCallback, &results);
+    lxb_selectors_find(_selectors, lxb_dom_interface_node(_document), list, findAllCallback, &results);
     lxb_css_selector_list_destroy_memory(list);
   }
-  lxb_selectors_destroy(selectors, true);
-  lxb_css_parser_destroy(parser, true);
   return results;
 }
 
@@ -145,6 +145,7 @@ void LexborDocument::setInnerHTML(const std::string& selector, const std::string
   lxb_dom_node_t* child = node->first_child;
   while (child) {
     lxb_dom_node_t* next = child->next;
+    lxb_dom_node_remove(child);
     lxb_dom_node_destroy_deep(child);
     child = next;
   }

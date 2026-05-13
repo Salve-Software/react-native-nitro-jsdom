@@ -4,6 +4,8 @@
 #include <optional>
 #include <vector>
 #include <lexbor/html/html.h>
+#include <lexbor/css/css.h>
+#include <lexbor/selectors/selectors.h>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -39,7 +41,9 @@ public:
   void setInnerHTML(const std::string& selector, const std::string& html);
 
 private:
-  lxb_html_document_t* _document { nullptr };
+  lxb_html_document_t* _document  { nullptr };
+  lxb_css_parser_t*    _cssParser { nullptr };
+  lxb_selectors_t*     _selectors { nullptr };
 
   lxb_dom_element_t* findFirst(const std::string& selector) const;
 };
