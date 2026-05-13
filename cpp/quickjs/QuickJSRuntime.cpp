@@ -37,7 +37,7 @@ void QuickJSRuntime::initialize(const std::string& url) {
   JSValue location = JS_NewObject(ctx);
   JS_SetPropertyStr(ctx, location, "href", JS_NewString(ctx, url.c_str()));
   JS_SetPropertyStr(ctx, global, "location", location);
-  JS_FreeValue(ctx, location);
+  // location consumed by SetPropertyStr — no FreeValue here
 
   JS_FreeValue(ctx, global);
 }

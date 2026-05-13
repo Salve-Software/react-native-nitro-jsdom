@@ -9,11 +9,15 @@ namespace margelo::nitro::nitrojsdom {
 
 namespace {
 
+static lxb_status_t serializeCallback(const lxb_char_t* data, size_t len, void* ctx) {
+  auto* out = static_cast<std::string*>(ctx);
+  out->append(reinterpret_cast<const char*>(data), len);
+  return LXB_STATUS_OK;
+}
+
 static std::string serializeNode(lxb_dom_node_t* node) {
-  lexbor_str_t str = {0};
-  lxb_html_serialize_tree_str(node, &str);
-  std::string result(reinterpret_cast<char*>(str.data), str.length);
-  lexbor_str_destroy(&str, NULL, false);
+  std::string result;
+  lxb_html_serialize_tree_cb(node, serializeCallback, &result);
   return result;
 }
 
