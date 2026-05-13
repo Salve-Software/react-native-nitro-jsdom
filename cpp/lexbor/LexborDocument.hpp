@@ -3,6 +3,7 @@
 #include <string>
 #include <optional>
 #include <vector>
+#include <lexbor/html/html.h>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -10,8 +11,6 @@ namespace margelo::nitro::nitrojsdom {
  * Wraps a Lexbor HTML document.
  *
  * Lexbor provides a WHATWG-compliant HTML parser and in-memory DOM tree.
- * Integration: add Lexbor sources to third_party/lexbor and link via CMakeLists.txt.
- * Include <lexbor/html/html.h> and replace stub bodies with real Lexbor calls.
  */
 class LexborDocument {
 public:
@@ -40,11 +39,9 @@ public:
   void setInnerHTML(const std::string& selector, const std::string& html);
 
 private:
-  // Opaque pointer to lxb_html_document_t — will be a real type once Lexbor is linked.
-  void* _document { nullptr };
+  lxb_html_document_t* _document { nullptr };
 
-  // Stored HTML used by the stub serializer until Lexbor is wired up.
-  std::string _rawHtml;
+  lxb_dom_element_t* findFirst(const std::string& selector) const;
 };
 
 } // namespace margelo::nitro::nitrojsdom
