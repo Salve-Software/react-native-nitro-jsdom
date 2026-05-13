@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => min_ios_version_supported, :visionos => 1.0 }
-  s.source       = { :git => "https://github.com/eumaninho54/react-native-nitro-jsdom.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/Salve-Software/react-native-nitro-jsdom.git", :tag => "#{s.version}" }
 
   s.source_files = [
     # Implementation (Swift)
@@ -20,7 +20,18 @@ Pod::Spec.new do |s|
     "ios/**/*.{m,mm}",
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
+    # Third-party: QuickJS (uncomment once third_party/quickjs is added as a submodule)
+    # "third_party/quickjs/quickjs.{c,h}",
+    # "third_party/quickjs/libregexp.{c,h}",
+    # "third_party/quickjs/libunicode.{c,h}",
+    # "third_party/quickjs/cutils.{c,h}",
   ]
+
+  # Third-party: Lexbor
+  # Option A — CocoaPod (if available): s.dependency 'Lexbor'
+  # Option B — vendored sources: add third_party/lexbor source files above and set:
+  # s.preserve_paths = "third_party/lexbor/**"
+  # s.xcconfig = { 'HEADER_SEARCH_PATHS' => '"$(PODS_ROOT)/../third_party/lexbor/source"' }
 
   load 'nitrogen/generated/ios/NitroJsdom+autolinking.rb'
   add_nitrogen_files(s)

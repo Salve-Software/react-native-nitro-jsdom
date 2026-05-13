@@ -1,5 +1,5 @@
 {
-  "name": "react-native-nitro-jsdom",
+  "name": "@salve-software/react-native-nitro-jsdom",
   "version": "0.1.0",
   "description": "A headless HTML/DOM environment for React Native.",
   "main": "./lib/commonjs/index.js",
@@ -8,16 +8,18 @@
   "react-native": "src/index",
   "source": "src/index",
   "scripts": {
+    "postinstall": "bash scripts/setup-clangd.sh",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",
     "build": "yarn run typecheck && bob build",
     "codegen": "nitrogen --logLevel=\"debug\" && yarn run build",
-    "postcodegen": "yarn --cwd example pod"
+    "postcodegen": "yarn --cwd example pod",
+    "example": "yarn workspace @salve-software/react-native-nitro-jsdom-example"
   },
   "keywords": [
     "react-native",
-    "react-native-nitro-jsdom"
+    "@salve-software/react-native-nitro-jsdom"
   ],
   "files": [
     "src",
@@ -43,11 +45,11 @@
   "workspaces": [
     "example"
   ],
-  "repository": "https://github.com/eumaninho54/react-native-nitro-jsdom.git",
+  "repository": "https://github.com/Salve-Software/react-native-nitro-jsdom.git",
   "author": "eumaninho54",
   "license": "MIT",
-  "bugs": "https://github.com/eumaninho54/react-native-nitro-jsdom/issues",
-  "homepage": "https://github.com/eumaninho54/react-native-nitro-jsdom#readme",
+  "bugs": "https://github.com/Salve-Software/react-native-nitro-jsdom/issues",
+  "homepage": "https://github.com/Salve-Software/react-native-nitro-jsdom#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

@@ -13,10 +13,10 @@
     "androidCxxLibName": "NitroJsdom"
   },
   "autolinking": {
-    "NitroJsdom": {
+    "HtmlSandbox": {
       "all": {
         "language": "c++",
-        "implementationClassName": "HybridNitroJsdom"
+        "implementationClassName": "HybridHtmlSandbox"
       }
     }
   },

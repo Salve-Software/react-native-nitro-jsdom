@@ -10,7 +10,7 @@
 
 #import <type_traits>
 
-#include "HybridNitroJsdom.hpp"
+#include "HybridHtmlSandbox.hpp"
 
 @interface NitroJsdomAutolinking : NSObject
 @end
@@ -22,12 +22,12 @@
   using namespace margelo::nitro::nitrojsdom;
 
   HybridObjectRegistry::registerHybridObjectConstructor(
-    "NitroJsdom",
+    "HtmlSandbox",
     []() -> std::shared_ptr<HybridObject> {
-      static_assert(std::is_default_constructible_v<HybridNitroJsdom>,
-                    "The HybridObject \"HybridNitroJsdom\" is not default-constructible! "
+      static_assert(std::is_default_constructible_v<HybridHtmlSandbox>,
+                    "The HybridObject \"HybridHtmlSandbox\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-      return std::make_shared<HybridNitroJsdom>();
+      return std::make_shared<HybridHtmlSandbox>();
     }
   );
 }
