@@ -9,6 +9,7 @@
   "source": "src/index",
   "scripts": {
     "postinstall": "bash scripts/setup-clangd.sh",
+    "ai:setup": "aiworkers setup",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",
@@ -56,6 +57,7 @@
   },
   "devDependencies": {
     "@jamesacarr/eslint-formatter-github-actions": "^0.2.0",
+    "@salve-software/aiworkers": "^0.3.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/jest": "^29.5.12",
