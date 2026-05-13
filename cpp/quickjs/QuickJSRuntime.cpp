@@ -1,6 +1,6 @@
 #include "QuickJSRuntime.hpp"
 #include "DOMBindings.hpp"
-#include "LexborDocument.hpp"
+#include "../lexbor/LexborDocument.hpp"
 
 // TODO: include QuickJS headers once third_party/quickjs is added:
 // #include <quickjs.h>
