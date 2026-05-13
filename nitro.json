@@ -1,0 +1,26 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": [
+    "nitrojsdom"
+  ],
+  "ios": {
+    "iosModuleName": "NitroJsdom"
+  },
+  "android": {
+    "androidNamespace": [
+      "nitrojsdom"
+    ],
+    "androidCxxLibName": "NitroJsdom"
+  },
+  "autolinking": {
+    "NitroJsdom": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridNitroJsdom"
+      }
+    }
+  },
+  "ignorePaths": [
+    "**/node_modules"
+  ]
+}
