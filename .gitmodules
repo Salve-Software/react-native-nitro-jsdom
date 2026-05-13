@@ -1,6 +1,6 @@
-[submodule "third_party/lexbor"]
-	path = third_party/lexbor
+[submodule "packages/lexbor"]
+	path = packages/lexbor
 	url = https://github.com/lexbor/lexbor.git
-[submodule "third_party/quickjs"]
-	path = third_party/quickjs
+[submodule "packages/quickjs"]
+	path = packages/quickjs
 	url = https://github.com/bellard/quickjs.git

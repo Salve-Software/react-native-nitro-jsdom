@@ -21,19 +21,19 @@ Pod::Spec.new do |s|
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
     # Third-party: QuickJS
-    "third_party/quickjs/quickjs.{c,h}",
-    "third_party/quickjs/libregexp.{c,h}",
-    "third_party/quickjs/libunicode.{c,h}",
-    "third_party/quickjs/cutils.{c,h}",
-    "third_party/quickjs/*.h",
+    "packages/quickjs/quickjs.{c,h}",
+    "packages/quickjs/libregexp.{c,h}",
+    "packages/quickjs/libunicode.{c,h}",
+    "packages/quickjs/cutils.{c,h}",
+    "packages/quickjs/*.h",
     # Third-party: Lexbor
-    "third_party/lexbor/source/**/*.{c,h}",
+    "packages/lexbor/source/**/*.{c,h}",
   ]
 
-  s.preserve_paths = ["third_party/lexbor/**", "third_party/quickjs/**"]
+  s.preserve_paths = ["packages/lexbor/**", "packages/quickjs/**"]
 
   s.pod_target_xcconfig = {
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/third_party/lexbor/source" "$(PODS_TARGET_SRCROOT)/third_party/quickjs"',
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/packages/lexbor/source" "$(PODS_TARGET_SRCROOT)/packages/quickjs"',
     'GCC_PREPROCESSOR_DEFINITIONS' => 'CONFIG_VERSION=\"2024-01-13\"'
   }
 

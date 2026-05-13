@@ -13,16 +13,16 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 # ---------------------------------------------------------------------------
 set(LEXBOR_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(LEXBOR_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../third_party/lexbor lexbor_build)
+add_subdirectory(${CMAKE_SOURCE_DIR}/../packages/lexbor lexbor_build)
 
 # ---------------------------------------------------------------------------
 # Third-party: QuickJS
 # ---------------------------------------------------------------------------
 set(QUICKJS_SOURCES
-  ${CMAKE_SOURCE_DIR}/../third_party/quickjs/quickjs.c
-  ${CMAKE_SOURCE_DIR}/../third_party/quickjs/libregexp.c
-  ${CMAKE_SOURCE_DIR}/../third_party/quickjs/libunicode.c
-  ${CMAKE_SOURCE_DIR}/../third_party/quickjs/cutils.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/quickjs.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/libregexp.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/libunicode.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/cutils.c
 )
 
 set_source_files_properties(${QUICKJS_SOURCES} PROPERTIES
@@ -48,8 +48,8 @@ include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroJsdom+autolinking
 include_directories(
   "src/main/cpp"
   "../cpp"
-  "${CMAKE_SOURCE_DIR}/../third_party/lexbor/source"
-  "${CMAKE_SOURCE_DIR}/../third_party/quickjs"
+  "${CMAKE_SOURCE_DIR}/../packages/lexbor/source"
+  "${CMAKE_SOURCE_DIR}/../packages/quickjs"
 )
 
 find_library(LOG_LIB log)
