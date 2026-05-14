@@ -77,3 +77,6 @@ lib/
 tsconfig.tsbuildinfo
 # clangd local headers (relative symlinks, generated per-machine)
 .clangd-headers/
+
+# aiworkers
+.claude/*/aiworkers/

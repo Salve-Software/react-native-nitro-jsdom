@@ -20,18 +20,39 @@ Pod::Spec.new do |s|
     "ios/**/*.{m,mm}",
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
-    # Third-party: QuickJS (uncomment once third_party/quickjs is added as a submodule)
-    # "third_party/quickjs/quickjs.{c,h}",
-    # "third_party/quickjs/libregexp.{c,h}",
-    # "third_party/quickjs/libunicode.{c,h}",
-    # "third_party/quickjs/cutils.{c,h}",
+    # Third-party: QuickJS
+    "packages/quickjs/quickjs.{c,h}",
+    "packages/quickjs/libregexp.{c,h}",
+    "packages/quickjs/libunicode.{c,h}",
+    "packages/quickjs/cutils.{c,h}",
+    "packages/quickjs/dtoa.{c,h}",
+    "packages/quickjs/*.h",
+    # Third-party: Lexbor (explicit per-directory — omits ports/windows_nt)
+    "packages/lexbor/source/lexbor/core/*.{c,h}",
+    "packages/lexbor/source/lexbor/css/**/*.{c,h}",
+    "packages/lexbor/source/lexbor/dom/**/*.{c,h}",
+    "packages/lexbor/source/lexbor/encoding/*.{c,h}",
+    "packages/lexbor/source/lexbor/html/**/*.{c,h}",
+    "packages/lexbor/source/lexbor/ns/*.{c,h}",
+    "packages/lexbor/source/lexbor/ports/posix/**/*.{c,h}",
+    "packages/lexbor/source/lexbor/punycode/*.{c,h}",
+    "packages/lexbor/source/lexbor/selectors/*.{c,h}",
+    "packages/lexbor/source/lexbor/tag/*.{c,h}",
+    "packages/lexbor/source/lexbor/unicode/*.{c,h}",
+    "packages/lexbor/source/lexbor/url/*.{c,h}",
+    "packages/lexbor/source/lexbor/utils/*.{c,h}",
   ]
 
-  # Third-party: Lexbor
-  # Option A — CocoaPod (if available): s.dependency 'Lexbor'
-  # Option B — vendored sources: add third_party/lexbor source files above and set:
-  # s.preserve_paths = "third_party/lexbor/**"
-  # s.xcconfig = { 'HEADER_SEARCH_PATHS' => '"$(PODS_ROOT)/../third_party/lexbor/source"' }
+  s.preserve_paths = ["packages/lexbor/**", "packages/quickjs/**"]
+
+  s.pod_target_xcconfig = {
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/packages/lexbor/source"',
+    # QuickJS headers use -iquote so packages/quickjs/VERSION never shadows <version> (C++20)
+    'USER_HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/packages/quickjs"',
+    'GCC_PREPROCESSOR_DEFINITIONS' => 'CONFIG_VERSION=\"2025-09-13\"',
+  }
+
+  s.compiler_flags = '-Wno-implicit-fallthrough -Wno-unused-variable -Wno-sign-compare -Wno-shorten-64-to-32'
 
   load 'nitrogen/generated/ios/NitroJsdom+autolinking.rb'
   add_nitrogen_files(s)

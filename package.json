@@ -1,6 +1,7 @@
 {
   "name": "@salve-software/react-native-nitro-jsdom",
   "version": "0.1.0",
+  "packageManager": "yarn@4.9.1",
   "description": "A headless HTML/DOM environment for React Native.",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
@@ -9,6 +10,7 @@
   "source": "src/index",
   "scripts": {
     "postinstall": "bash scripts/setup-clangd.sh",
+    "ai:setup": "aiworkers setup",
     "typecheck": "tsc --noEmit",
     "clean": "git clean -dfX",
     "release": "semantic-release",
@@ -56,6 +58,7 @@
   },
   "devDependencies": {
     "@jamesacarr/eslint-formatter-github-actions": "^0.2.0",
+    "@salve-software/aiworkers": "^0.3.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/jest": "^29.5.12",

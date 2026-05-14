@@ -15,7 +15,7 @@ export const runExamples = async (): Promise<IResult[]> => {
   const dom = JSDOM.create(html);
 
   const evalResult = await dom.evaluate(
-    `document.getElementById('result').textContent = String(2 + 2); document.getElementById('result').textContent`
+    `document.setInnerHTML('#result', String(2 + 2)); document.getTextContent('#result')`
   );
 
   const textContent = dom.getTextContent('#result') ?? '(null)';
@@ -26,7 +26,7 @@ export const runExamples = async (): Promise<IResult[]> => {
   dom.dispose();
 
   return [
-    { label: 'evaluate() → 2+2', value: evalResult || '(stub — QuickJS not yet wired)' },
+    { label: 'evaluate() → 2+2', value: evalResult || '(empty)' },
     { label: 'getTextContent(#result)', value: textContent },
     { label: 'querySelectorAll(.item).length', value: String(items.length) },
     { label: 'serialize() length', value: `${serialized.length} chars` },

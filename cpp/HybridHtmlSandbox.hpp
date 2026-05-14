@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "HybridHtmlSandboxSpec.hpp"
-#include "LexborDocument.hpp"
-#include "QuickJSRuntime.hpp"
+#include "lexbor/LexborDocument.hpp"
+#include "quickjs/QuickJSRuntime.hpp"
 
 namespace margelo::nitro::nitrojsdom {
 

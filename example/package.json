@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.84.1",
-    "@salve-software/react-native-nitro-jsdom": "*",
+    "@salve-software/react-native-nitro-jsdom": "workspace:*",
     "react": "19.2.3",
     "react-native": "0.84.1",
     "react-native-nitro-modules": "0.35.6",

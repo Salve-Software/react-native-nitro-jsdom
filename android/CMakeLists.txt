@@ -10,36 +10,37 @@ add_compile_options(-DRN_SERIALIZABLE_STATE=1)
 
 # ---------------------------------------------------------------------------
 # Third-party: Lexbor
-# Add as a git submodule: git submodule add https://github.com/lexbor/lexbor.git third_party/lexbor
-# Then uncomment the block below:
-#
-# set(LEXBOR_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-# set(LEXBOR_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
-# add_subdirectory(${CMAKE_SOURCE_DIR}/../third_party/lexbor lexbor_build)
 # ---------------------------------------------------------------------------
+set(LEXBOR_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(LEXBOR_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_SOURCE_DIR}/../packages/lexbor lexbor_build)
 
 # ---------------------------------------------------------------------------
 # Third-party: QuickJS
-# Add as a git submodule: git submodule add https://github.com/bellard/quickjs.git third_party/quickjs
-# Then add its sources here:
-#
-# set(QUICKJS_SOURCES
-#   ${CMAKE_SOURCE_DIR}/../third_party/quickjs/quickjs.c
-#   ${CMAKE_SOURCE_DIR}/../third_party/quickjs/libregexp.c
-#   ${CMAKE_SOURCE_DIR}/../third_party/quickjs/libunicode.c
-#   ${CMAKE_SOURCE_DIR}/../third_party/quickjs/cutils.c
-# )
 # ---------------------------------------------------------------------------
+set(QUICKJS_SOURCES
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/quickjs.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/libregexp.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/libunicode.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/cutils.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/dtoa.c
+)
+
+set_source_files_properties(${QUICKJS_SOURCES} PROPERTIES
+  COMPILE_FLAGS "-Wno-implicit-fallthrough -Wno-unused-variable -Wno-sign-compare"
+)
 
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
   src/main/cpp/cpp-adapter.cpp
   ../cpp/HybridHtmlSandbox.cpp
-  ../cpp/LexborDocument.cpp
-  ../cpp/QuickJSRuntime.cpp
-  ../cpp/DOMBindings.cpp
-  # ${QUICKJS_SOURCES}   # uncomment once QuickJS is added
+  ../cpp/lexbor/LexborDocument.cpp
+  ../cpp/quickjs/QuickJSRuntime.cpp
+  ../cpp/quickjs/DOMBindings.cpp
+  ${QUICKJS_SOURCES}
 )
+
+target_compile_definitions(${PACKAGE_NAME} PRIVATE CONFIG_VERSION="2025-09-13")
 
 # Add Nitrogen specs :)
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroJsdom+autolinking.cmake)
@@ -48,8 +49,12 @@ include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroJsdom+autolinking
 include_directories(
   "src/main/cpp"
   "../cpp"
-  # "${CMAKE_SOURCE_DIR}/../third_party/lexbor/source"   # uncomment once Lexbor is added
-  # "${CMAKE_SOURCE_DIR}/../third_party/quickjs"         # uncomment once QuickJS is added
+  "${CMAKE_SOURCE_DIR}/../packages/lexbor/source"
+)
+
+# Use -iquote for QuickJS so packages/quickjs/VERSION never shadows <version> (C++20)
+target_compile_options(${PACKAGE_NAME} PRIVATE
+  "-iquote${CMAKE_SOURCE_DIR}/../packages/quickjs"
 )
 
 find_library(LOG_LIB log)
@@ -59,5 +64,5 @@ target_link_libraries(
   ${PACKAGE_NAME}
   ${LOG_LIB}
   android                                   # <-- Android core
-  # lexbor_static                           # uncomment once Lexbor is added
+  lexbor_static
 )
