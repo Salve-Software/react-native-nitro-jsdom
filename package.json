@@ -1,6 +1,7 @@
 {
   "name": "@salve-software/react-native-nitro-jsdom",
   "version": "0.1.0",
+  "packageManager": "yarn@4.9.1",
   "description": "A headless HTML/DOM environment for React Native.",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",

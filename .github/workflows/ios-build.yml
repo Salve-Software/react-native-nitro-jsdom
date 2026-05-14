@@ -61,7 +61,7 @@ jobs:
           xcode-version: 16.4
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: corepack enable && yarn install --frozen-lockfile
 
       - name: Setup Ruby (bundle)
         uses: ruby/setup-ruby@v1
