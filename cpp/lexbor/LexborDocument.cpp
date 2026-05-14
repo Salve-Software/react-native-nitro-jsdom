@@ -156,19 +156,29 @@ std::optional<std::string> LexborDocument::getInnerHTML(const std::string& selec
 }
 
 void LexborDocument::setInnerHTML(const std::string& selector, const std::string& html) {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
+  auto* el  = static_cast<lxb_dom_element_t*>(findFirst(selector));
   if (!el) return;
-  auto* doc  = static_cast<lxb_html_document_t*>(_document);
-  lxb_dom_node_t* node = lxb_dom_interface_node(el);
-  lxb_dom_node_t* child = node->first_child;
-  while (child) {
-    lxb_dom_node_t* next = child->next;
-    lxb_dom_node_remove(child);
-    lxb_dom_node_destroy_deep(child);
-    child = next;
-  }
-  lxb_html_document_parse_fragment(doc, el,
+  auto* doc = static_cast<lxb_html_document_t*>(_document);
+  lxb_dom_node_t* root = lxb_dom_interface_node(el);
+
+  // Parse fragment first (mirrors lxb_html_element_inner_html_set)
+  lxb_dom_node_t* frag = lxb_html_document_parse_fragment(doc, el,
       reinterpret_cast<const lxb_char_t*>(html.data()), html.size());
+  if (!frag) return;
+
+  // Remove existing children
+  while (root->first_child != nullptr) {
+    lxb_dom_node_destroy_deep(root->first_child);
+  }
+
+  // Move new children from fragment into element
+  while (frag->first_child != nullptr) {
+    lxb_dom_node_t* child = frag->first_child;
+    lxb_dom_node_remove(child);
+    lxb_dom_node_insert_child(root, child);
+  }
+
+  lxb_dom_node_destroy(frag);
 }
 
 } // namespace margelo::nitro::nitrojsdom

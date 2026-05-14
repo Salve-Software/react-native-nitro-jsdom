@@ -23,6 +23,7 @@ set(QUICKJS_SOURCES
   ${CMAKE_SOURCE_DIR}/../packages/quickjs/libregexp.c
   ${CMAKE_SOURCE_DIR}/../packages/quickjs/libunicode.c
   ${CMAKE_SOURCE_DIR}/../packages/quickjs/cutils.c
+  ${CMAKE_SOURCE_DIR}/../packages/quickjs/dtoa.c
 )
 
 set_source_files_properties(${QUICKJS_SOURCES} PROPERTIES
@@ -39,7 +40,7 @@ add_library(${PACKAGE_NAME} SHARED
   ${QUICKJS_SOURCES}
 )
 
-target_compile_definitions(${PACKAGE_NAME} PRIVATE CONFIG_VERSION="2024-01-13")
+target_compile_definitions(${PACKAGE_NAME} PRIVATE CONFIG_VERSION="2025-09-13")
 
 # Add Nitrogen specs :)
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroJsdom+autolinking.cmake)
@@ -49,7 +50,11 @@ include_directories(
   "src/main/cpp"
   "../cpp"
   "${CMAKE_SOURCE_DIR}/../packages/lexbor/source"
-  "${CMAKE_SOURCE_DIR}/../packages/quickjs"
+)
+
+# Use -iquote for QuickJS so packages/quickjs/VERSION never shadows <version> (C++20)
+target_compile_options(${PACKAGE_NAME} PRIVATE
+  "-iquote${CMAKE_SOURCE_DIR}/../packages/quickjs"
 )
 
 find_library(LOG_LIB log)
