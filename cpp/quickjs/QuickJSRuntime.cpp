@@ -31,8 +31,17 @@ static void promise_rejection_tracker(JSContext* ctx, JSValue promise,
                                        JSValue reason, JS_BOOL is_handled,
                                        void* opaque) {
   (void)promise;
-  if (is_handled) return; // rejection was handled — clear any pending
   RuntimeContext* rctx = static_cast<RuntimeContext*>(opaque);
+  if (is_handled) {
+    // Issue 7: rejection was handled — free and clear any stored pending rejection
+    if (rctx->pending_rejection) {
+      JSValue* stored = static_cast<JSValue*>(rctx->pending_rejection);
+      JS_FreeValue(ctx, *stored);
+      delete stored;
+      rctx->pending_rejection = nullptr;
+    }
+    return;
+  }
   // Free any previously stored rejection
   if (rctx->pending_rejection) {
     JSValue* stored = static_cast<JSValue*>(rctx->pending_rejection);
@@ -49,6 +58,8 @@ static void promise_rejection_tracker(JSContext* ctx, JSValue promise,
 QuickJSRuntime::QuickJSRuntime() = default;
 
 QuickJSRuntime::~QuickJSRuntime() {
+  // Issue 6: acquire mutex before teardown to prevent races with drainEventLoop
+  std::lock_guard<std::mutex> lock(_mutex);
   if (_context && _ctxState) {
     JSContext* ctx = reinterpret_cast<JSContext*>(_context);
     cleanupTimers();
@@ -82,7 +93,30 @@ void QuickJSRuntime::cleanupTimers() {
   if (!_context || !_ctxState) return;
   JSContext* ctx = reinterpret_cast<JSContext*>(_context);
 
-  // Free all timer callbacks (using timer_map as the canonical owner)
+  // Issue 5: drain the heap first — it is the authoritative cleanup loop.
+  // The heap may contain Timer* pointers that are not in timer_map (cancelled
+  // timers whose map entry was already erased by clearTimeout/clearInterval).
+  // Using the heap as the primary loop ensures every heap-held pointer is freed
+  // exactly once.
+  while (!_ctxState->timer_heap.empty()) {
+    Timer* t = _ctxState->timer_heap.top();
+    _ctxState->timer_heap.pop();
+    // Only free timers still owned by timer_map (not yet erased by clearTimer)
+    if (_ctxState->timer_map.find(t->id) != _ctxState->timer_map.end()) {
+      if (t->callback) {
+        JSValue* cb = static_cast<JSValue*>(t->callback);
+        JS_FreeValue(ctx, *cb);
+        delete cb;
+        t->callback = nullptr;
+      }
+      _ctxState->timer_map.erase(t->id);
+      delete t;
+    } else {
+      // Already erased from map (cancelled) — just delete the dangling heap ptr
+      delete t;
+    }
+  }
+  // Any remaining map entries not in the heap (should not happen, but be safe)
   for (auto& [id, t] : _ctxState->timer_map) {
     if (t->callback) {
       JSValue* cb = static_cast<JSValue*>(t->callback);
@@ -93,11 +127,6 @@ void QuickJSRuntime::cleanupTimers() {
     delete t;
   }
   _ctxState->timer_map.clear();
-
-  // Drain the heap of dangling pointers (already deleted above)
-  while (!_ctxState->timer_heap.empty()) {
-    _ctxState->timer_heap.pop();
-  }
 }
 
 // ── initialize ─────────────────────────────────────────────────────────────────
@@ -233,8 +262,22 @@ void QuickJSRuntime::drainEventLoop() {
         continue;
       }
 
-      // Fire the callback
-      fireTimer(top);
+      // Fire the callback — issues 1 & 2: wrap in try/catch so that if the
+      // callback throws, we clean up the Timer before rethrowing.
+      try {
+        fireTimer(top);
+      } catch (...) {
+        // Free the JSValue callback and delete the Timer to avoid leaks/double-free
+        if (top->callback) {
+          JSValue* cb = static_cast<JSValue*>(top->callback);
+          JS_FreeValue(ctx, *cb);
+          delete cb;
+          top->callback = nullptr;
+        }
+        _ctxState->timer_map.erase(top->id);
+        delete top;
+        throw;
+      }
 
       if (top->repeat && !top->cancelled) {
         // Re-arm: keep same interval from original schedule
@@ -284,6 +327,12 @@ void QuickJSRuntime::drainEventLoop() {
       if (next_timer) {
         int64_t sleep_ms = min_fire - now_ms();
         if (sleep_ms > 0) {
+          // Issue 12: the mutex is intentionally held across this sleep.
+          // QuickJS is inherently single-threaded — its context and heap must
+          // not be touched concurrently. Holding the mutex blocks serialize()
+          // and dispose() callers, which is acceptable: they will run as soon
+          // as the event loop drains. The destructor acquires the same mutex
+          // (see ~QuickJSRuntime) so there is no destructor race.
           std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
         }
       }
