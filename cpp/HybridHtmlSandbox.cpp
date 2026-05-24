@@ -12,7 +12,9 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
   _runtime->bindDocument(_document.get());
 
   if (runScripts) {
-    // TODO: extract and evaluate all <script> tags from the parsed document.
+    for (const auto& script : _document->getScriptContents()) {
+      _runtime->evaluate(script);
+    }
   }
 
   _initialized = true;

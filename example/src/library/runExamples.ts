@@ -81,5 +81,22 @@ export const runExamples = async (): Promise<IResult[]> => {
 
   dom.dispose();
 
+  // runScripts: true — <script> tags execute automatically on create()
+  const htmlWithScript = `
+    <html>
+      <body>
+        <div id="output">pending</div>
+        <script>
+          document.getElementById('output').textContent = 'script ran';
+        </script>
+      </body>
+    </html>
+  `;
+
+  const domWithScripts = JSDOM.create(htmlWithScript, { runScripts: true });
+  const scriptResult = await domWithScripts.evaluate(`document.getElementById('output').textContent`);
+  results.push({ label: 'runScripts: true → textContent — expect: script ran', value: scriptResult });
+  domWithScripts.dispose();
+
   return results;
 }

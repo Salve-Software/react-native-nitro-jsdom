@@ -171,6 +171,25 @@ void* LexborDocument::documentElement() const {
       lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document)));
 }
 
+// ── Script extraction ────────────────────────────────────────────────────────
+
+std::vector<std::string> LexborDocument::getScriptContents() const {
+  auto scriptEls = querySelectorAll_el("script");
+  std::vector<std::string> contents;
+  contents.reserve(scriptEls.size());
+
+  for (void* el : scriptEls) {
+    auto* node = lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(el));
+    size_t len = 0;
+    lxb_char_t* text = lxb_dom_node_text_content(node, &len);
+    if (text && len > 0) {
+      contents.emplace_back(reinterpret_cast<char*>(text), len);
+      lxb_dom_document_destroy_text(node->owner_document, text);
+    }
+  }
+  return contents;
+}
+
 // ── Node creation ─────────────────────────────────────────────────────────────
 
 void* LexborDocument::createElement(const std::string& tag) {

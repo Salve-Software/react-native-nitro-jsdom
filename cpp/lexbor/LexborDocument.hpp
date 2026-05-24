@@ -30,6 +30,9 @@ public:
   void* head() const;
   void* documentElement() const;
 
+  // ── Script extraction ────────────────────────────────────────────────────
+  std::vector<std::string> getScriptContents() const;
+
   // ── Node creation ─────────────────────────────────────────────────────────
   void* createElement(const std::string& tag);
   void* createTextNode(const std::string& text);
