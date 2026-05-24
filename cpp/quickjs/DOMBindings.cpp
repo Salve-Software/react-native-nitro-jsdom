@@ -9,6 +9,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <functional>
+#include <chrono>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -22,8 +24,13 @@ static JSClassDef js_classList_class = { "DOMTokenList", .finalizer = nullptr };
 
 // ── Core helpers ──────────────────────────────────────────────────────────────
 
+static RuntimeContext* get_ctx(JSContext* ctx) {
+  return static_cast<RuntimeContext*>(JS_GetContextOpaque(ctx));
+}
+
 static LexborDocument* get_doc(JSContext* ctx) {
-  return static_cast<LexborDocument*>(JS_GetContextOpaque(ctx));
+  auto* rctx = get_ctx(ctx);
+  return rctx ? rctx->document : nullptr;
 }
 
 static lxb_dom_element_t* unwrap_element(JSContext* ctx, JSValue val) {
@@ -540,7 +547,9 @@ static void define_prop(JSContext* ctx, JSValue obj, const char* name,
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSContext* ctx = static_cast<JSContext*>(runtime->context());
-  JS_SetContextOpaque(ctx, document);
+  // Note: JS_SetContextOpaque is now set in QuickJSRuntime::initialize to RuntimeContext*.
+  // document is already set on RuntimeContext by QuickJSRuntime::bindDocument before calling here.
+  (void)document; // RuntimeContext already holds the document pointer
 
   // Register JS classes
   JS_NewClassID(&js_element_class_id);
