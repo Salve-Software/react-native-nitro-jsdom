@@ -14,21 +14,22 @@ export const runExamples = async (): Promise<IResult[]> => {
 
   const dom = JSDOM.create(html);
 
-  const evalResult = await dom.evaluate(
-    `document.setInnerHTML('#result', String(2 + 2)); document.getTextContent('#result')`
-  );
+  // Mutate the DOM via evaluate() — the only DOM access path
+  await dom.evaluate(`document.getElementById('result').textContent = String(2 + 2)`);
 
-  const textContent = dom.getTextContent('#result') ?? '(null)';
+  // Read back via evaluate()
+  const evalResult = await dom.evaluate(`document.getElementById('result').textContent`);
+
+  // Count items via evaluate()
+  const itemCount = await dom.evaluate(`document.querySelectorAll('.item').length`);
+
   const serialized = dom.serialize();
-
-  const items = dom.querySelectorAll('.item');
 
   dom.dispose();
 
   return [
     { label: 'evaluate() → 2+2', value: evalResult || '(empty)' },
-    { label: 'getTextContent(#result)', value: textContent },
-    { label: 'querySelectorAll(.item).length', value: String(items.length) },
+    { label: 'evaluate() → querySelectorAll(.item).length', value: itemCount || '(empty)' },
     { label: 'serialize() length', value: `${serialized.length} chars` },
   ];
 }
