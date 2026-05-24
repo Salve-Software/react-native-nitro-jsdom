@@ -40,6 +40,7 @@ on:
 
 env:
   USE_CCACHE: 1
+  CCACHE_DIR: ~/.ccache
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -83,6 +84,16 @@ jobs:
 
       - name: Install xcpretty
         run: gem install xcpretty
+
+      - name: Install ccache
+        run: brew install ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('cpp/**', 'packages/lexbor/**', 'packages/quickjs/**') }}
+          restore-keys: ${{ runner.os }}-ccache-
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
