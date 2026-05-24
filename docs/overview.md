@@ -32,13 +32,14 @@ const dom = JSDOM.create(`
   </html>
 `)
 
-// Run arbitrary JS inside the isolated sandbox
+// Mutate the DOM via evaluate() — the only DOM access path
 await dom.evaluate(`
   document.getElementById('result').textContent = String(2 + 2)
 `)
 
-// Read values back
-const value = dom.getTextContent('#result') // "4"
+// Read values back via evaluate()
+const value = await dom.evaluate(`document.getElementById('result').textContent`)
+// → "4"
 
 // Get the final HTML
 const html = dom.serialize()
@@ -47,7 +48,7 @@ const html = dom.serialize()
 dom.dispose()
 ```
 
-The API is intentionally compatible with [jsdom](https://github.com/jsdom/jsdom) — code written for Node.js should migrate with minimal changes.
+`evaluate()` is the single door into the sandbox — all DOM queries and mutations are expressed as JavaScript strings passed to QuickJS, which delegates to Lexbor internally. The API is intentionally compatible with [jsdom](https://github.com/jsdom/jsdom) — code written for Node.js should migrate with minimal changes.
 
 ---
 
@@ -138,59 +139,38 @@ const dom = JSDOM.create('<html><body><p id="x">hello</p></body></html>', {
 
 ### `dom.evaluate(script)`
 
-Runs arbitrary JavaScript inside the QuickJS sandbox. Returns the result as a string.
+Runs arbitrary JavaScript inside the isolated QuickJS sandbox. This is the **only** door into the sandbox — all DOM queries and mutations must be expressed as JS strings passed to `evaluate()`, which executes them in QuickJS and delegates DOM operations to Lexbor internally.
+
+Returns the stringified result of the last evaluated expression. Rejects if called after `dispose()`.
 
 ```ts
+// Read from the DOM
 const result = await dom.evaluate(`document.querySelector('p').textContent`)
 // → "hello"
+
+// Mutate the DOM
+await dom.evaluate(`document.getElementById('result').textContent = String(2 + 2)`)
+
+// Run any JS expression
+const count = await dom.evaluate(`document.querySelectorAll('.item').length`)
+// → "2"
 ```
 
 ### `dom.serialize()`
 
-Returns the current HTML of the document, reflecting all mutations.
+Returns the current HTML of the document, reflecting all DOM mutations made via `evaluate()`. Returns an empty string if called after `dispose()`.
 
 ```ts
 const html = dom.serialize()
 ```
 
-### `dom.querySelector(selector)`
-
-Returns the serialized outer HTML of the first matching element, or `null`.
-
-```ts
-dom.querySelector('#x') // "<p id=\"x\">hello</p>"
-```
-
-### `dom.querySelectorAll(selector)`
-
-Returns serialized outer HTML for all matching elements.
-
-```ts
-dom.querySelectorAll('.item') // ["<li>A</li>", "<li>B</li>"]
-```
-
-### `dom.getAttribute(selector, attr)` / `dom.setAttribute(selector, attr, value)`
-
-Read or write an attribute on the first matching element.
-
-```ts
-dom.getAttribute('#x', 'id')           // "x"
-dom.setAttribute('#x', 'data-val', '42')
-```
-
-### `dom.getTextContent(selector)` / `dom.getInnerHTML(selector)` / `dom.setInnerHTML(selector, html)`
-
-Read or replace text and inner HTML of the first matching element.
-
-```ts
-dom.getTextContent('#x')              // "hello"
-dom.setInnerHTML('#x', '<b>world</b>')
-dom.getInnerHTML('#x')                // "<b>world</b>"
-```
-
 ### `dom.dispose()`
 
-Frees all native memory (Lexbor document + QuickJS runtime). Always call this when done to avoid memory leaks.
+Frees all native memory held by this sandbox (Lexbor document + QuickJS runtime). Calling `dispose()` multiple times is safe (idempotent). After disposing, any further `evaluate()` calls will reject with `"JSDOM instance has been disposed"`. Always call this when you are done to avoid memory leaks.
+
+```ts
+dom.dispose() // ← always pair with create()
+```
 
 ---
 
@@ -219,11 +199,13 @@ Frees all native memory (Lexbor document + QuickJS runtime). Always call this wh
 - [ ] iOS support
 - [ ] Android support
 
-### v0.2 — DOM API
-- [ ] `querySelector` / `querySelectorAll` via Lexbor selectors
-- [ ] `getAttribute` / `setAttribute`
-- [ ] `textContent` / `innerHTML`
-- [ ] `createElement` / `appendChild` / `removeChild`
+### v0.2 — Real DOM inside evaluate()
+- [ ] Wire real Lexbor HTML parsing so `evaluate()` sees a live DOM
+- [ ] Wire QuickJS JS execution so scripts run inside the sandbox
+- [ ] `document.querySelector(sel)` / `document.querySelectorAll(sel)` return real element objects inside `evaluate()`
+- [ ] `element.textContent` / `element.innerHTML` getter and setter accessible inside `evaluate()`
+- [ ] `document.getAttribute(sel, attr)` / `document.setAttribute(sel, attr, val)` inside `evaluate()`
+- [ ] `document.createElement` / `element.appendChild` / `element.removeChild` inside `evaluate()`
 
 ### v0.3 — Async & Events
 - [ ] `addEventListener` / `removeEventListener`

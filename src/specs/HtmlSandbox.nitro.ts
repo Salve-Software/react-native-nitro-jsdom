@@ -9,17 +9,4 @@ export interface HtmlSandbox extends HybridObject<{ ios: 'c++'; android: 'c++' }
 
   // Returns the current HTML of the document
   serialize(): string;
-
-  // DOM query methods
-  querySelector(selector: string): string | null;
-  querySelectorAll(selector: string): string[];
-
-  // DOM attribute manipulation
-  getAttribute(selector: string, attr: string): string | null;
-  setAttribute(selector: string, attr: string, value: string): void;
-
-  // Text / inner HTML
-  getTextContent(selector: string): string | null;
-  getInnerHTML(selector: string): string | null;
-  setInnerHTML(selector: string, html: string): void;
 }
