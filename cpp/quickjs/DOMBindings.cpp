@@ -669,9 +669,10 @@ static JSValue js_el_removeEventListener(JSContext* ctx, JSValue this_val, int a
   void* node = lxb_dom_interface_node(el);
   for (auto it = rctx->listeners.begin(); it != rctx->listeners.end(); ) {
     if (it->node == node && it->event_type == event_type) {
-      // Check JS function identity via pointer
+      // Issue 10: check both tag (type) and pointer for correct JS function identity
       JSValue* stored_cb = static_cast<JSValue*>(it->callback);
-      if (JS_VALUE_GET_PTR(*stored_cb) == JS_VALUE_GET_PTR(argv[1])) {
+      if (JS_VALUE_GET_TAG(*stored_cb) == JS_VALUE_GET_TAG(argv[1]) &&
+          JS_VALUE_GET_PTR(*stored_cb) == JS_VALUE_GET_PTR(argv[1])) {
         JS_FreeValue(ctx, *stored_cb);
         delete stored_cb;
         it = rctx->listeners.erase(it);
@@ -740,14 +741,20 @@ static JSValue js_el_dispatchEvent(JSContext* ctx, JSValue this_val, int argc, J
 static JSValue js_doc_addEventListener(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
-  auto* doc = rctx->document ? rctx->document->documentElement() : nullptr;
-  if (!doc) return JS_UNDEFINED;
+  if (!rctx->document) return JS_UNDEFINED;
 
   const char* type_str = JS_ToCString(ctx, argv[0]);
   if (!type_str) return JS_UNDEFINED;
 
+  // Issue 8: use the lxb_dom_document_t node as a stable sentinel key for
+  // document-level listeners, so they never alias element-level listeners
+  // (including the <html> documentElement).
+  void* doc_node = lxb_dom_interface_node(
+      lxb_dom_interface_document(
+          static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
+
   EventListener listener;
-  listener.node = lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(doc));
+  listener.node = doc_node;
   listener.event_type = type_str;
   listener.callback = new JSValue(JS_DupValue(ctx, argv[1]));
   JS_FreeCString(ctx, type_str);
@@ -759,10 +766,12 @@ static JSValue js_doc_addEventListener(JSContext* ctx, JSValue, int argc, JSValu
 static JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 1) return JS_TRUE;
-  auto* doc_el = rctx->document ? rctx->document->documentElement() : nullptr;
-  if (!doc_el) return JS_TRUE;
+  if (!rctx->document) return JS_TRUE;
 
-  void* node = lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(doc_el));
+  // Issue 8: use the same stable lxb_dom_document_t sentinel key
+  void* node = lxb_dom_interface_node(
+      lxb_dom_interface_document(
+          static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
   JSValue type_val = JS_GetPropertyStr(ctx, argv[0], "type");
   const char* type_str = JS_ToCString(ctx, type_val);
   JS_FreeValue(ctx, type_val);
@@ -783,6 +792,10 @@ static JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* 
     JS_FreeValue(ctx, cb);
     if (JS_IsException(ret)) {
       JS_FreeValue(ctx, ret);
+      // Issue 4: free remaining dup'd callbacks before returning
+      for (size_t i = (&cb - cbs_to_fire.data()) + 1; i < cbs_to_fire.size(); i++) {
+        JS_FreeValue(ctx, cbs_to_fire[i]);
+      }
       return JS_EXCEPTION;
     }
     JS_FreeValue(ctx, ret);
