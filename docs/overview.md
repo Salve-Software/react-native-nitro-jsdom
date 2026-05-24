@@ -134,6 +134,7 @@ const dom = JSDOM.create('<html><body><p id="x">hello</p></body></html>', {
   runScripts: true,       // execute <script> tags — default: true
   url: 'about:blank',     // window.location.href — default: 'about:blank'
   pretendToBeVisual: false, // document.hidden = false — default: false
+  onConsole: (level, args) => console.log(`[sandbox ${level}]`, ...args),
 })
 ```
 
@@ -208,10 +209,12 @@ dom.dispose() // ← always pair with create()
 - [x] `document.createElement` / `element.appendChild` / `element.removeChild` inside `evaluate()`
 
 ### v0.3 — Async & Events
-- [ ] `addEventListener` / `removeEventListener`
-- [ ] `setTimeout` / `setInterval` / `clearTimeout`
-- [ ] `Promise` support inside sandbox
-- [ ] `console.log` forwarding to RN console
+- [x] `addEventListener` / `removeEventListener`
+- [x] `setTimeout` / `setInterval` / `clearTimeout` / `clearInterval`
+- [x] `Promise` support inside sandbox (microtask drain + uncaught rejection propagation)
+- [x] `console.log` forwarding to RN console via `onConsole` option
+- [x] `dispatchEvent(new Event('type'))` dispatches to registered listeners
+- [x] `evaluate()` drains the event loop completely before returning
 
 ### v0.4 — Network & Storage
 - [ ] `fetch` (bridged through RN's network stack)
