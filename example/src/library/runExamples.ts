@@ -15,10 +15,10 @@ export const runExamples = async (): Promise<IResult[]> => {
   const dom = JSDOM.create(html);
 
   // Mutate the DOM via evaluate() — the only DOM access path
-  await dom.evaluate(`document.getElementById('result').textContent = String(2 + 2)`);
+  await dom.evaluate(`document.setInnerHTML('#result', String(2 + 2))`);
 
   // Read back via evaluate()
-  const evalResult = await dom.evaluate(`document.getElementById('result').textContent`);
+  const evalResult = await dom.evaluate(`document.getTextContent('#result')`);
 
   // Count items via evaluate()
   const itemCount = await dom.evaluate(`document.querySelectorAll('.item').length`);
