@@ -408,6 +408,31 @@ std::string QuickJSRuntime::evaluate(const std::string& script) {
     throw;
   }
 
+  // If the script returned a Promise, extract its settled value.
+  // drainEventLoop() already handled unhandled rejections via pending_rejection,
+  // so here we only need to unwrap FULFILLED promises.
+  if (JS_IsObject(result)) {
+    JSPromiseStateEnum state = JS_PromiseState(ctx, result);
+    if (state == JS_PROMISE_FULFILLED) {
+      JSValue resolved = JS_PromiseResult(ctx, result);
+      JS_FreeValue(ctx, result);
+      result = resolved;
+    } else if (state == JS_PROMISE_REJECTED) {
+      // Fallback: rejection that wasn't caught by pending_rejection tracker
+      JSValue reason = JS_PromiseResult(ctx, result);
+      JS_FreeValue(ctx, result);
+      std::string err = "Promise rejected";
+      JSValue msg = JS_GetPropertyStr(ctx, reason, "message");
+      if (!JS_IsException(msg) && !JS_IsUndefined(msg)) {
+        const char* s = JS_ToCString(ctx, msg);
+        if (s) { err = s; JS_FreeCString(ctx, s); }
+      }
+      JS_FreeValue(ctx, msg);
+      JS_FreeValue(ctx, reason);
+      throw std::runtime_error(err);
+    }
+  }
+
   JSValue strVal = JS_ToString(ctx, result);
   const char* str = JS_ToCString(ctx, strVal);
   std::string out(str ? str : "");
