@@ -17,9 +17,6 @@
 
 #include <string>
 #include <NitroModules/Promise.hpp>
-#include <NitroModules/Null.hpp>
-#include <variant>
-#include <vector>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -55,13 +52,6 @@ namespace margelo::nitro::nitrojsdom {
       virtual void initialize(const std::string& html, bool runScripts, const std::string& url) = 0;
       virtual std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) = 0;
       virtual std::string serialize() = 0;
-      virtual std::variant<nitro::NullType, std::string> querySelector(const std::string& selector) = 0;
-      virtual std::vector<std::string> querySelectorAll(const std::string& selector) = 0;
-      virtual std::variant<nitro::NullType, std::string> getAttribute(const std::string& selector, const std::string& attr) = 0;
-      virtual void setAttribute(const std::string& selector, const std::string& attr, const std::string& value) = 0;
-      virtual std::variant<nitro::NullType, std::string> getTextContent(const std::string& selector) = 0;
-      virtual std::variant<nitro::NullType, std::string> getInnerHTML(const std::string& selector) = 0;
-      virtual void setInnerHTML(const std::string& selector, const std::string& html) = 0;
 
     protected:
       // Hybrid Setup

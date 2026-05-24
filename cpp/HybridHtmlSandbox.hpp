@@ -2,8 +2,6 @@
 
 #include <memory>
 #include <string>
-#include <variant>
-#include <vector>
 
 #include "HybridHtmlSandboxSpec.hpp"
 #include "lexbor/LexborDocument.hpp"
@@ -21,16 +19,6 @@ public:
   std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) override;
 
   std::string serialize() override;
-
-  std::variant<nitro::NullType, std::string> querySelector(const std::string& selector) override;
-  std::vector<std::string> querySelectorAll(const std::string& selector) override;
-
-  std::variant<nitro::NullType, std::string> getAttribute(const std::string& selector, const std::string& attr) override;
-  void setAttribute(const std::string& selector, const std::string& attr, const std::string& value) override;
-
-  std::variant<nitro::NullType, std::string> getTextContent(const std::string& selector) override;
-  std::variant<nitro::NullType, std::string> getInnerHTML(const std::string& selector) override;
-  void setInnerHTML(const std::string& selector, const std::string& html) override;
 
 private:
   std::unique_ptr<LexborDocument> _document;

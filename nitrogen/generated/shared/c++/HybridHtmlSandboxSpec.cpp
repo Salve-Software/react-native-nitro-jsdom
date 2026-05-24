@@ -17,13 +17,6 @@ namespace margelo::nitro::nitrojsdom {
       prototype.registerHybridMethod("initialize", &HybridHtmlSandboxSpec::initialize);
       prototype.registerHybridMethod("evaluate", &HybridHtmlSandboxSpec::evaluate);
       prototype.registerHybridMethod("serialize", &HybridHtmlSandboxSpec::serialize);
-      prototype.registerHybridMethod("querySelector", &HybridHtmlSandboxSpec::querySelector);
-      prototype.registerHybridMethod("querySelectorAll", &HybridHtmlSandboxSpec::querySelectorAll);
-      prototype.registerHybridMethod("getAttribute", &HybridHtmlSandboxSpec::getAttribute);
-      prototype.registerHybridMethod("setAttribute", &HybridHtmlSandboxSpec::setAttribute);
-      prototype.registerHybridMethod("getTextContent", &HybridHtmlSandboxSpec::getTextContent);
-      prototype.registerHybridMethod("getInnerHTML", &HybridHtmlSandboxSpec::getInnerHTML);
-      prototype.registerHybridMethod("setInnerHTML", &HybridHtmlSandboxSpec::setInnerHTML);
     });
   }
 

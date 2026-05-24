@@ -34,47 +34,4 @@ std::string HybridHtmlSandbox::serialize() {
   return _document->serialize();
 }
 
-std::variant<nitro::NullType, std::string> HybridHtmlSandbox::querySelector(const std::string& selector) {
-  if (!_initialized) return nitro::NullType{};
-  auto result = _document->querySelector(selector);
-  if (!result) return nitro::NullType{};
-  return *result;
-}
-
-std::vector<std::string> HybridHtmlSandbox::querySelectorAll(const std::string& selector) {
-  if (!_initialized) return {};
-  return _document->querySelectorAll(selector);
-}
-
-std::variant<nitro::NullType, std::string> HybridHtmlSandbox::getAttribute(const std::string& selector, const std::string& attr) {
-  if (!_initialized) return nitro::NullType{};
-  auto result = _document->getAttribute(selector, attr);
-  if (!result) return nitro::NullType{};
-  return *result;
-}
-
-void HybridHtmlSandbox::setAttribute(const std::string& selector, const std::string& attr, const std::string& value) {
-  if (!_initialized) return;
-  _document->setAttribute(selector, attr, value);
-}
-
-std::variant<nitro::NullType, std::string> HybridHtmlSandbox::getTextContent(const std::string& selector) {
-  if (!_initialized) return nitro::NullType{};
-  auto result = _document->getTextContent(selector);
-  if (!result) return nitro::NullType{};
-  return *result;
-}
-
-std::variant<nitro::NullType, std::string> HybridHtmlSandbox::getInnerHTML(const std::string& selector) {
-  if (!_initialized) return nitro::NullType{};
-  auto result = _document->getInnerHTML(selector);
-  if (!result) return nitro::NullType{};
-  return *result;
-}
-
-void HybridHtmlSandbox::setInnerHTML(const std::string& selector, const std::string& html) {
-  if (!_initialized) return;
-  _document->setInnerHTML(selector, html);
-}
-
 } // namespace margelo::nitro::nitrojsdom
