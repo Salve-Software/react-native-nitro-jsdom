@@ -2,6 +2,10 @@
 
 #include <memory>
 #include <string>
+#include <optional>
+#include <variant>
+#include <functional>
+#include <vector>
 
 #include "HybridHtmlSandboxSpec.hpp"
 #include "lexbor/LexborDocument.hpp"
@@ -19,6 +23,10 @@ public:
   std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) override;
 
   std::string serialize() override;
+
+  void setConsoleCallback(
+    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& level, const std::vector<std::string>& args)>>>& callback
+  ) override;
 
 private:
   std::unique_ptr<LexborDocument> _document;
