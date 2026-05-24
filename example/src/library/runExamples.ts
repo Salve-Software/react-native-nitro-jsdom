@@ -180,11 +180,19 @@ export const runExamples = async (): Promise<IResult[]> => {
   silentDom.dispose();
 
   // dispose() with pending timers — no crash
+  // Issue 9: await the evaluate that arms the interval first, then call dispose()
+  // while the interval is still pending. Verifies no crash at the C++ level.
   const disposeDom = JSDOM.create(asyncHtml);
   let disposeOk = true;
   try {
-    // Schedule an infinite interval then dispose immediately
-    disposeDom.evaluate(`setInterval(() => {}, 10)`).catch(() => {});
+    // Arm a short interval; the evaluate() returns once the event loop is drained
+    // for this script (the setInterval re-arms itself, so evaluate returns after
+    // the first tick). Then dispose() while a repeat timer would still fire.
+    await disposeDom.evaluate(`
+      let _disposeTestId = setInterval(() => {}, 50);
+      setTimeout(() => clearInterval(_disposeTestId), 10);
+    `);
+    // At this point timers are active — dispose must not crash
     disposeDom.dispose();
   } catch {
     disposeOk = false;
