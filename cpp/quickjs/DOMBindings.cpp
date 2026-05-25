@@ -9,6 +9,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <functional>
+#include <chrono>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -22,8 +24,13 @@ static JSClassDef js_classList_class = { "DOMTokenList", .finalizer = nullptr };
 
 // ── Core helpers ──────────────────────────────────────────────────────────────
 
+static RuntimeContext* get_ctx(JSContext* ctx) {
+  return static_cast<RuntimeContext*>(JS_GetContextOpaque(ctx));
+}
+
 static LexborDocument* get_doc(JSContext* ctx) {
-  return static_cast<LexborDocument*>(JS_GetContextOpaque(ctx));
+  auto* rctx = get_ctx(ctx);
+  return rctx ? rctx->document : nullptr;
 }
 
 static lxb_dom_element_t* unwrap_element(JSContext* ctx, JSValue val) {
@@ -536,17 +543,298 @@ static void define_prop(JSContext* ctx, JSValue obj, const char* name,
   JS_FreeAtom(ctx, atom);
 }
 
+// ── Timer helpers ─────────────────────────────────────────────────────────────
+
+static int64_t dom_now_ms() {
+  using namespace std::chrono;
+  return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
+static JSValue js_setTimeout(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1 || !JS_IsFunction(ctx, argv[0])) return JS_NewInt32(ctx, 0);
+  auto* rctx = get_ctx(ctx);
+  if (!rctx) return JS_NewInt32(ctx, 0);
+
+  int32_t delay_ms = 0;
+  if (argc >= 2) JS_ToInt32(ctx, &delay_ms, argv[1]);
+  if (delay_ms < 0) delay_ms = 0;
+
+  uint32_t id = rctx->next_timer_id++;
+  Timer* t = new Timer();
+  t->id = id;
+  t->repeat = false;
+  t->interval_ms = delay_ms;
+  t->fire_at_ms = dom_now_ms() + delay_ms;
+  t->callback = new JSValue(JS_DupValue(ctx, argv[0]));
+  t->cancelled = false;
+
+  rctx->timer_map[id] = t;
+  rctx->timer_heap.push(t);
+  return JS_NewInt32(ctx, (int32_t)id);
+}
+
+static JSValue js_setInterval(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1 || !JS_IsFunction(ctx, argv[0])) return JS_NewInt32(ctx, 0);
+  auto* rctx = get_ctx(ctx);
+  if (!rctx) return JS_NewInt32(ctx, 0);
+
+  int32_t interval_ms = 0;
+  if (argc >= 2) JS_ToInt32(ctx, &interval_ms, argv[1]);
+  if (interval_ms < 1) interval_ms = 1;
+
+  uint32_t id = rctx->next_timer_id++;
+  Timer* t = new Timer();
+  t->id = id;
+  t->repeat = true;
+  t->interval_ms = interval_ms;
+  t->fire_at_ms = dom_now_ms() + interval_ms;
+  t->callback = new JSValue(JS_DupValue(ctx, argv[0]));
+  t->cancelled = false;
+
+  rctx->timer_map[id] = t;
+  rctx->timer_heap.push(t);
+  return JS_NewInt32(ctx, (int32_t)id);
+}
+
+static JSValue js_clearTimer(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_UNDEFINED;
+  auto* rctx = get_ctx(ctx);
+  if (!rctx) return JS_UNDEFINED;
+
+  uint32_t id = 0;
+  JS_ToUint32(ctx, &id, argv[0]);
+  auto it = rctx->timer_map.find(id);
+  if (it != rctx->timer_map.end()) {
+    it->second->cancelled = true;
+    // Free the callback now to save memory; mark as null
+    if (it->second->callback) {
+      JSValue* cb = static_cast<JSValue*>(it->second->callback);
+      JS_FreeValue(ctx, *cb);
+      delete cb;
+      it->second->callback = nullptr;
+    }
+    rctx->timer_map.erase(it);
+    // The Timer object itself will be cleaned up when the heap pops it
+  }
+  return JS_UNDEFINED;
+}
+
+// ── Event + addEventListener + dispatchEvent ───────────────────────────────────
+
+static JSClassID js_event_class_id = 0;
+static JSClassDef js_event_class = { "Event", .finalizer = nullptr };
+
+// new Event('type') constructor
+static JSValue js_Event_constructor(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  JSValue obj = JS_NewObjectClass(ctx, js_event_class_id);
+  const char* type_str = (argc >= 1) ? JS_ToCString(ctx, argv[0]) : nullptr;
+  JS_SetPropertyStr(ctx, obj, "type",             JS_NewString(ctx, type_str ? type_str : ""));
+  JS_SetPropertyStr(ctx, obj, "defaultPrevented",  JS_NewBool(ctx, false));
+  JS_SetPropertyStr(ctx, obj, "bubbles",           JS_NewBool(ctx, false));
+  JS_SetPropertyStr(ctx, obj, "cancelable",        JS_NewBool(ctx, false));
+  if (type_str) JS_FreeCString(ctx, type_str);
+  return obj;
+}
+
+static JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+
+  const char* type_str = JS_ToCString(ctx, argv[0]);
+  if (!type_str) return JS_UNDEFINED;
+
+  EventListener listener;
+  listener.node = lxb_dom_interface_node(el);
+  listener.event_type = type_str;
+  listener.callback = new JSValue(JS_DupValue(ctx, argv[1]));
+  JS_FreeCString(ctx, type_str);
+
+  rctx->listeners.push_back(std::move(listener));
+  return JS_UNDEFINED;
+}
+
+static JSValue js_el_removeEventListener(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+
+  const char* type_str = JS_ToCString(ctx, argv[0]);
+  if (!type_str) return JS_UNDEFINED;
+  std::string event_type(type_str);
+  JS_FreeCString(ctx, type_str);
+
+  void* node = lxb_dom_interface_node(el);
+  for (auto it = rctx->listeners.begin(); it != rctx->listeners.end(); ) {
+    if (it->node == node && it->event_type == event_type) {
+      JSValue* stored_cb = static_cast<JSValue*>(it->callback);
+      if (JS_VALUE_GET_TAG(*stored_cb) == JS_VALUE_GET_TAG(argv[1]) &&
+          JS_VALUE_GET_PTR(*stored_cb) == JS_VALUE_GET_PTR(argv[1])) {
+        JS_FreeValue(ctx, *stored_cb);
+        delete stored_cb;
+        it = rctx->listeners.erase(it);
+        break; // remove first matching listener only (DOM spec)
+      } else {
+        ++it;
+      }
+    } else {
+      ++it;
+    }
+  }
+  return JS_UNDEFINED;
+}
+
+static JSValue js_el_dispatchEvent(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 1) return JS_TRUE;
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_TRUE;
+
+  void* node = lxb_dom_interface_node(el);
+  JSValue type_val = JS_GetPropertyStr(ctx, argv[0], "type");
+  const char* type_str = JS_ToCString(ctx, type_val);
+  JS_FreeValue(ctx, type_val);
+  if (!type_str) return JS_TRUE;
+  std::string event_type(type_str);
+  JS_FreeCString(ctx, type_str);
+
+  // Snapshot the listeners to avoid invalidation during iteration
+  std::vector<JSValue> cbs_to_fire;
+  for (auto& listener : rctx->listeners) {
+    if (listener.node == node && listener.event_type == event_type) {
+      JSValue* cb = static_cast<JSValue*>(listener.callback);
+      cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
+    }
+  }
+
+  for (auto& cb : cbs_to_fire) {
+    JSValue ret = JS_Call(ctx, cb, this_val, 1, argv);
+    JS_FreeValue(ctx, cb);
+    if (JS_IsException(ret)) {
+      JS_FreeValue(ctx, ret);
+      // Free remaining dup'd callbacks
+      for (size_t i = (&cb - cbs_to_fire.data()) + 1; i < cbs_to_fire.size(); i++) {
+        JS_FreeValue(ctx, cbs_to_fire[i]);
+      }
+      JSValue ex = JS_GetException(ctx);
+      std::string err = "Event callback error";
+      JSValue msg_prop = JS_GetPropertyStr(ctx, ex, "message");
+      if (!JS_IsException(msg_prop) && !JS_IsUndefined(msg_prop)) {
+        const char* s = JS_ToCString(ctx, msg_prop);
+        if (s) { err = s; JS_FreeCString(ctx, s); }
+      }
+      JS_FreeValue(ctx, msg_prop);
+      JS_FreeValue(ctx, ex);
+      JS_ThrowInternalError(ctx, "%s", err.c_str());
+      return JS_EXCEPTION;
+    }
+    JS_FreeValue(ctx, ret);
+  }
+  return JS_TRUE;
+}
+
+// ── document.addEventListener / dispatchEvent ─────────────────────────────────
+
+static JSValue js_doc_addEventListener(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
+  if (!rctx->document) return JS_UNDEFINED;
+
+  const char* type_str = JS_ToCString(ctx, argv[0]);
+  if (!type_str) return JS_UNDEFINED;
+
+  void* doc_node = lxb_dom_interface_node(
+      lxb_dom_interface_document(
+          static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
+
+  EventListener listener;
+  listener.node = doc_node;
+  listener.event_type = type_str;
+  listener.callback = new JSValue(JS_DupValue(ctx, argv[1]));
+  JS_FreeCString(ctx, type_str);
+
+  rctx->listeners.push_back(std::move(listener));
+  return JS_UNDEFINED;
+}
+
+static JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 1) return JS_TRUE;
+  if (!rctx->document) return JS_TRUE;
+
+  void* node = lxb_dom_interface_node(
+      lxb_dom_interface_document(
+          static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
+  JSValue type_val = JS_GetPropertyStr(ctx, argv[0], "type");
+  const char* type_str = JS_ToCString(ctx, type_val);
+  JS_FreeValue(ctx, type_val);
+  if (!type_str) return JS_TRUE;
+  std::string event_type(type_str);
+  JS_FreeCString(ctx, type_str);
+
+  std::vector<JSValue> cbs_to_fire;
+  for (auto& listener : rctx->listeners) {
+    if (listener.node == node && listener.event_type == event_type) {
+      JSValue* cb = static_cast<JSValue*>(listener.callback);
+      cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
+    }
+  }
+
+  for (auto& cb : cbs_to_fire) {
+    JSValue ret = JS_Call(ctx, cb, JS_UNDEFINED, 1, argv);
+    JS_FreeValue(ctx, cb);
+    if (JS_IsException(ret)) {
+      JS_FreeValue(ctx, ret);
+      for (size_t i = (&cb - cbs_to_fire.data()) + 1; i < cbs_to_fire.size(); i++) {
+        JS_FreeValue(ctx, cbs_to_fire[i]);
+      }
+      return JS_EXCEPTION;
+    }
+    JS_FreeValue(ctx, ret);
+  }
+  return JS_TRUE;
+}
+
+// ── Console bindings ──────────────────────────────────────────────────────────
+
+static JSValue js_console_method(JSContext* ctx, JSValue, int argc, JSValue* argv, int magic) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !rctx->console_callback) return JS_UNDEFINED;
+
+  static const char* levels[] = { "log", "warn", "error", "info", "debug" };
+  std::string level = (magic >= 0 && magic < 5) ? levels[magic] : "log";
+
+  std::vector<std::string> args;
+  args.reserve(argc);
+  for (int i = 0; i < argc; i++) {
+    JSValue str_val = JS_ToString(ctx, argv[i]);
+    const char* s = JS_ToCString(ctx, str_val);
+    args.push_back(s ? s : "");
+    if (s) JS_FreeCString(ctx, s);
+    JS_FreeValue(ctx, str_val);
+  }
+
+  rctx->console_callback(level, args);
+  return JS_UNDEFINED;
+}
+
 // ── DOMBindings::install ──────────────────────────────────────────────────────
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSContext* ctx = static_cast<JSContext*>(runtime->context());
-  JS_SetContextOpaque(ctx, document);
+  // Note: JS_SetContextOpaque is now set in QuickJSRuntime::initialize to RuntimeContext*.
+  // document is already set on RuntimeContext by QuickJSRuntime::bindDocument before calling here.
+  (void)document; // RuntimeContext already holds the document pointer
 
   // Register JS classes
   JS_NewClassID(&js_element_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_element_class_id, &js_element_class);
   JS_NewClassID(&js_classList_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_classList_class_id, &js_classList_class);
+  JS_NewClassID(&js_event_class_id);
+  JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
 
   // ── Element prototype ──────────────────────────────────────────────────────
   JSValue proto = JS_NewObject(ctx);
@@ -559,9 +847,12 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, proto, "removeChild",      JS_NewCFunction(ctx, js_el_removeChild,      "removeChild",      1));
   JS_SetPropertyStr(ctx, proto, "insertBefore",     JS_NewCFunction(ctx, js_el_insertBefore,     "insertBefore",     2));
   JS_SetPropertyStr(ctx, proto, "remove",           JS_NewCFunction(ctx, js_el_remove,           "remove",           0));
-  JS_SetPropertyStr(ctx, proto, "matches",          JS_NewCFunction(ctx, js_el_matches,          "matches",          1));
-  JS_SetPropertyStr(ctx, proto, "querySelector",    JS_NewCFunction(ctx, js_el_querySelector,    "querySelector",    1));
-  JS_SetPropertyStr(ctx, proto, "querySelectorAll", JS_NewCFunction(ctx, js_el_querySelectorAll, "querySelectorAll", 1));
+  JS_SetPropertyStr(ctx, proto, "matches",               JS_NewCFunction(ctx, js_el_matches,               "matches",               1));
+  JS_SetPropertyStr(ctx, proto, "querySelector",         JS_NewCFunction(ctx, js_el_querySelector,         "querySelector",         1));
+  JS_SetPropertyStr(ctx, proto, "querySelectorAll",      JS_NewCFunction(ctx, js_el_querySelectorAll,      "querySelectorAll",      1));
+  JS_SetPropertyStr(ctx, proto, "addEventListener",      JS_NewCFunction(ctx, js_el_addEventListener,      "addEventListener",      2));
+  JS_SetPropertyStr(ctx, proto, "removeEventListener",   JS_NewCFunction(ctx, js_el_removeEventListener,   "removeEventListener",   2));
+  JS_SetPropertyStr(ctx, proto, "dispatchEvent",         JS_NewCFunction(ctx, js_el_dispatchEvent,         "dispatchEvent",         1));
 
   define_prop(ctx, proto, "tagName",                js_el_get_tagName,             nullptr);
   define_prop(ctx, proto, "id",                     js_el_get_id,                  js_el_set_id);
@@ -588,13 +879,35 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, doc, "querySelector",     JS_NewCFunction(ctx, js_doc_querySelector,     "querySelector",     1));
   JS_SetPropertyStr(ctx, doc, "querySelectorAll",  JS_NewCFunction(ctx, js_doc_querySelectorAll,  "querySelectorAll",  1));
   JS_SetPropertyStr(ctx, doc, "createElement",     JS_NewCFunction(ctx, js_doc_createElement,     "createElement",     1));
-  JS_SetPropertyStr(ctx, doc, "createTextNode",    JS_NewCFunction(ctx, js_doc_createTextNode,    "createTextNode",    1));
+  JS_SetPropertyStr(ctx, doc, "createTextNode",      JS_NewCFunction(ctx, js_doc_createTextNode,     "createTextNode",      1));
+  JS_SetPropertyStr(ctx, doc, "addEventListener",    JS_NewCFunction(ctx, js_doc_addEventListener,   "addEventListener",    2));
+  JS_SetPropertyStr(ctx, doc, "dispatchEvent",       JS_NewCFunction(ctx, js_doc_dispatchEvent,      "dispatchEvent",       1));
 
   define_prop(ctx, doc, "body",            js_doc_get_body,            nullptr);
   define_prop(ctx, doc, "head",            js_doc_get_head,            nullptr);
   define_prop(ctx, doc, "documentElement", js_doc_get_documentElement, nullptr);
 
   JS_SetPropertyStr(ctx, global, "document", doc);
+
+  // ── Global timer functions ─────────────────────────────────────────────────
+  JS_SetPropertyStr(ctx, global, "setTimeout",   JS_NewCFunction(ctx, js_setTimeout,   "setTimeout",   2));
+  JS_SetPropertyStr(ctx, global, "setInterval",  JS_NewCFunction(ctx, js_setInterval,  "setInterval",  2));
+  JS_SetPropertyStr(ctx, global, "clearTimeout", JS_NewCFunction(ctx, js_clearTimer,   "clearTimeout", 1));
+  JS_SetPropertyStr(ctx, global, "clearInterval",JS_NewCFunction(ctx, js_clearTimer,   "clearInterval",1));
+
+  // ── Event constructor ──────────────────────────────────────────────────────
+  JSValue event_ctor = JS_NewCFunction2(ctx, js_Event_constructor, "Event", 1, JS_CFUNC_constructor, 0);
+  JS_SetPropertyStr(ctx, global, "Event", event_ctor);
+
+  // ── console object ─────────────────────────────────────────────────────────
+  JSValue console_obj = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, console_obj, "log",   JS_NewCFunctionMagic(ctx, js_console_method, "log",   0, JS_CFUNC_generic_magic, 0));
+  JS_SetPropertyStr(ctx, console_obj, "warn",  JS_NewCFunctionMagic(ctx, js_console_method, "warn",  0, JS_CFUNC_generic_magic, 1));
+  JS_SetPropertyStr(ctx, console_obj, "error", JS_NewCFunctionMagic(ctx, js_console_method, "error", 0, JS_CFUNC_generic_magic, 2));
+  JS_SetPropertyStr(ctx, console_obj, "info",  JS_NewCFunctionMagic(ctx, js_console_method, "info",  0, JS_CFUNC_generic_magic, 3));
+  JS_SetPropertyStr(ctx, console_obj, "debug", JS_NewCFunctionMagic(ctx, js_console_method, "debug", 0, JS_CFUNC_generic_magic, 4));
+  JS_SetPropertyStr(ctx, global, "console", console_obj);
+
   JS_FreeValue(ctx, global);
 }
 

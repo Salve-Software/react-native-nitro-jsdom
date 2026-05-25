@@ -1,6 +1,12 @@
 project(NitroJsdom)
 cmake_minimum_required(VERSION 3.9.0)
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+  set(CMAKE_C_COMPILER_LAUNCHER ccache)
+  set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
+endif()
+
 set (PACKAGE_NAME NitroJsdom)
 set (CMAKE_VERBOSE_MAKEFILE ON)
 set (CMAKE_CXX_STANDARD 20)

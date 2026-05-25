@@ -76,8 +76,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Install ccache
+        run: sudo apt-get install -y ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('cpp/**', 'packages/lexbor/**', 'packages/quickjs/**') }}
+          restore-keys: ${{ runner.os }}-ccache-
+
       - name: Run Gradle build
         working-directory: example/android
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
         run: ./gradlew assembleDebug --no-daemon --build-cache
 
       - name: Stop Gradle daemon
