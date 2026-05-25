@@ -77,6 +77,20 @@ public:
   // True when no active (non-disconnected) observers exist (fast-path check)
   bool empty() const { return _active_count == 0; }
 
+  // True if at least one active observer requests attributeOldValue capture
+  bool hasAttributeOldValueObserver() const {
+    for (const auto& obs : _observers)
+      if (!obs.disconnected && obs.options.attributeOldValue) return true;
+    return false;
+  }
+
+  // True if at least one active observer requests characterDataOldValue capture
+  bool hasCharacterDataOldValueObserver() const {
+    for (const auto& obs : _observers)
+      if (!obs.disconnected && obs.options.characterDataOldValue) return true;
+    return false;
+  }
+
   // Free all held JSValue callbacks — must be called before JS_FreeContext
   void clearAll(JSContext* ctx);
 

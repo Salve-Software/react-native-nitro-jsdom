@@ -108,8 +108,10 @@ static JSValue js_classList_add(JSContext* ctx, JSValue this_val, int argc, JSVa
 
   auto* rctx = get_ctx(ctx);
   bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  // PERF-1: only capture old class value if at least one observer needs attributeOldValue
   std::optional<std::string> old_val;
-  if (has_obs) old_val = get_class_attr(el);
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
 
   auto classes = split_classes(get_class_attr(el));
   for (int i = 0; i < argc; i++) {
@@ -134,8 +136,10 @@ static JSValue js_classList_remove(JSContext* ctx, JSValue this_val, int argc, J
 
   auto* rctx = get_ctx(ctx);
   bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  // PERF-1: only capture old class value if at least one observer needs attributeOldValue
   std::optional<std::string> old_val;
-  if (has_obs) old_val = get_class_attr(el);
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
 
   auto classes = split_classes(get_class_attr(el));
   for (int i = 0; i < argc; i++) {
@@ -170,8 +174,10 @@ static JSValue js_classList_toggle(JSContext* ctx, JSValue this_val, int argc, J
 
   auto* rctx = get_ctx(ctx);
   bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  // PERF-1: only capture old class value if at least one observer needs attributeOldValue
   std::optional<std::string> old_val;
-  if (has_obs) old_val = get_class_attr(el);
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
 
   auto classes = split_classes(get_class_attr(el));
   auto it = std::find(classes.begin(), classes.end(), cls);
@@ -197,8 +203,10 @@ static JSValue js_classList_replace(JSContext* ctx, JSValue this_val, int argc, 
   if (oldCls && newCls) {
     auto* rctx = get_ctx(ctx);
     bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+    // PERF-1: only capture old class value if at least one observer needs attributeOldValue
     std::optional<std::string> old_val;
-    if (has_obs) old_val = get_class_attr(el);
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+      old_val = get_class_attr(el);
 
     auto classes = split_classes(get_class_attr(el));
     auto it = std::find(classes.begin(), classes.end(), oldCls);
@@ -256,8 +264,9 @@ static JSValue js_el_set_id(JSContext* ctx, JSValue this_val, JSValue val) {
     auto* rctx = get_ctx(ctx);
     bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
 
+    // PERF-1: only capture old attribute value if at least one observer needs it
     std::optional<std::string> old_val;
-    if (has_obs) {
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
       size_t len = 0;
       const lxb_char_t* v = lxb_dom_element_get_attribute(el,
           reinterpret_cast<const lxb_char_t*>("id"), 2, &len);
@@ -291,8 +300,10 @@ static JSValue js_el_set_className(JSContext* ctx, JSValue this_val, JSValue val
     auto* rctx = get_ctx(ctx);
     bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
 
+    // PERF-1: only capture old class value if at least one observer needs attributeOldValue
     std::optional<std::string> old_val;
-    if (has_obs) old_val = get_class_attr(el);
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+      old_val = get_class_attr(el);
 
     set_class_attr(el, str);
     JS_FreeCString(ctx, str);
@@ -331,8 +342,9 @@ static JSValue js_el_set_textContent(JSContext* ctx, JSValue this_val, JSValue v
   // Determine if this is an element node (childList) or text node (characterData)
   if (node->type == LXB_DOM_NODE_TYPE_TEXT) {
     // characterData mutation: capture old value before mutation
+    // PERF-1: only capture if at least one observer needs characterDataOldValue
     std::optional<std::string> old_val;
-    if (has_observers) {
+    if (has_observers && rctx->mutation_observers->hasCharacterDataOldValueObserver()) {
       size_t len = 0;
       lxb_char_t* text = lxb_dom_node_text_content(node, &len);
       if (text) {
@@ -516,8 +528,9 @@ static JSValue js_el_setAttribute(JSContext* ctx, JSValue this_val, int argc, JS
     auto* rctx = get_ctx(ctx);
     bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
 
+    // PERF-1: only capture old attribute value if at least one observer needs it
     std::optional<std::string> old_val;
-    if (has_obs) {
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
       size_t len = 0;
       const lxb_char_t* v = lxb_dom_element_get_attribute(el,
           reinterpret_cast<const lxb_char_t*>(name), strlen(name), &len);
@@ -546,8 +559,9 @@ static JSValue js_el_removeAttribute(JSContext* ctx, JSValue this_val, int argc,
     auto* rctx = get_ctx(ctx);
     bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
 
+    // PERF-1: only capture old attribute value if at least one observer needs it
     std::optional<std::string> old_val;
-    if (has_obs) {
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
       size_t len = 0;
       const lxb_char_t* v = lxb_dom_element_get_attribute(el,
           reinterpret_cast<const lxb_char_t*>(name), strlen(name), &len);
