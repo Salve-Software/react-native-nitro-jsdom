@@ -214,6 +214,21 @@ static JSValue js_MutationObserver_observe(JSContext* ctx, JSValue this_val,
     JS_FreeValue(ctx, filterVal);
   }
 
+  // GAP-3: per WHATWG spec, attributeFilter or attributeOldValue implicitly
+  // enables attributes observation; characterDataOldValue implies characterData.
+  if ((opts.attributeFilter.has_value() || opts.attributeOldValue) && !opts.attributes)
+    opts.attributes = true;
+  if (opts.characterDataOldValue && !opts.characterData)
+    opts.characterData = true;
+
+  // GAP-4: per WHATWG spec, observe() must throw TypeError if none of the
+  // three mutation types is enabled after applying the implicit-enable rules.
+  if (!opts.childList && !opts.attributes && !opts.characterData) {
+    JS_ThrowTypeError(ctx,
+        "The options object must set at least one of 'attributes', 'characterData', or 'childList' to true.");
+    return JS_EXCEPTION;
+  }
+
   // Update the existing observer with the new target and options
   opaque->registry->updateObserver(opaque->id, reinterpret_cast<lxb_dom_node_t*>(target), opts);
   return JS_UNDEFINED;
