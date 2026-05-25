@@ -481,6 +481,24 @@ void MutationObservers::notifyCharacterData(JSContext* ctx, void* target,
   }
 }
 
+// ── MutationObservers::disconnectDetachedTargets ──────────────────────────────
+
+void MutationObservers::disconnectDetachedTargets(const std::vector<void*>& destroyed_nodes) {
+  if (_observers.empty() || destroyed_nodes.empty()) return;
+  for (auto& obs : _observers) {
+    if (obs.disconnected || !obs.target) continue;
+    // Check if this observer's target is in the destroyed set
+    for (void* dn : destroyed_nodes) {
+      if (obs.target == dn) {
+        obs.disconnected = true;
+        obs.queue.clear();
+        obs.dispatch_scheduled = false;
+        break;
+      }
+    }
+  }
+}
+
 // ── MutationObservers::clearAll ───────────────────────────────────────────────
 
 void MutationObservers::clearAll(JSContext* ctx) {

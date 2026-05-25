@@ -86,6 +86,9 @@ public:
   // Update target + options for an existing observer (called from observe())
   void updateObserver(uint32_t id, void* target, ObserverInit options);
 
+  // Disconnect any observer whose target is in the given set of destroyed nodes
+  void disconnectDetachedTargets(const std::vector<void*>& destroyed_nodes);
+
   // Public wrappers around private helpers (needed by dispatch_trampoline)
   bool isInDocument_public(void* node) const;
   std::vector<RegisteredObserver>& _observers_ref();
