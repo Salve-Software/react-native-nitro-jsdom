@@ -17,6 +17,11 @@
 
 #include <string>
 #include <NitroModules/Promise.hpp>
+#include <NitroModules/Null.hpp>
+#include <vector>
+#include <functional>
+#include <variant>
+#include <optional>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -52,6 +57,7 @@ namespace margelo::nitro::nitrojsdom {
       virtual void initialize(const std::string& html, bool runScripts, const std::string& url) = 0;
       virtual std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) = 0;
       virtual std::string serialize() = 0;
+      virtual void setConsoleCallback(const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& /* level */, const std::vector<std::string>& /* args */)>>>& callback) = 0;
 
     protected:
       // Hybrid Setup

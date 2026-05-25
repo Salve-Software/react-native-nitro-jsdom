@@ -36,6 +36,14 @@ export class JSDOM {
       options?.runScripts ?? true,
       options?.url ?? 'about:blank',
     );
+
+    if (options?.onConsole) {
+      const cb = options.onConsole;
+      sandbox.setConsoleCallback((level, args) => cb(level as any, args));
+    } else {
+      sandbox.setConsoleCallback(null);
+    }
+
     return new JSDOM(sandbox);
   }
 

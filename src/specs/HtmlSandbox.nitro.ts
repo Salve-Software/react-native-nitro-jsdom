@@ -9,4 +9,7 @@ export interface HtmlSandbox extends HybridObject<{ ios: 'c++'; android: 'c++' }
 
   // Returns the current HTML of the document
   serialize(): string;
+
+  // Set (or clear) the console output callback. Pass null to silence console output.
+  setConsoleCallback(callback: ((level: string, args: string[]) => void) | null): void;
 }

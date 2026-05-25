@@ -13,7 +13,7 @@ export const Playground: React.FC = () => {
   }, []);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
       <Text style={styles.title}>react-native-nitro-jsdom</Text>
 
       {loading ? (

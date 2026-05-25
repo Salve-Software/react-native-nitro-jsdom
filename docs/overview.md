@@ -134,6 +134,7 @@ const dom = JSDOM.create('<html><body><p id="x">hello</p></body></html>', {
   runScripts: true,       // execute <script> tags — default: true
   url: 'about:blank',     // window.location.href — default: 'about:blank'
   pretendToBeVisual: false, // document.hidden = false — default: false
+  onConsole: (level, args) => console.log(`[sandbox ${level}]`, ...args),
 })
 ```
 
@@ -194,24 +195,26 @@ dom.dispose() // ← always pair with create()
 ### v0.1 — MVP
 - [x] Nitro spec + TypeScript API (`JSDOM.create`, `evaluate`, `serialize`, `dispose`)
 - [x] C++ structure (`HybridHtmlSandbox`, `LexborDocument`, `QuickJSRuntime`, `DOMBindings`)
-- [ ] Lexbor integration — real HTML parsing and DOM queries
-- [ ] QuickJS integration — real JS execution
-- [ ] iOS support
-- [ ] Android support
+- [x] Lexbor integration — real HTML parsing and DOM queries
+- [x] QuickJS integration — real JS execution
+- [x] iOS support
+- [x] Android support
 
 ### v0.2 — Real DOM inside evaluate()
-- [ ] Wire real Lexbor HTML parsing so `evaluate()` sees a live DOM
-- [ ] Wire QuickJS JS execution so scripts run inside the sandbox
-- [ ] `document.querySelector(sel)` / `document.querySelectorAll(sel)` return real element objects inside `evaluate()`
-- [ ] `element.textContent` / `element.innerHTML` getter and setter accessible inside `evaluate()`
-- [ ] `document.getAttribute(sel, attr)` / `document.setAttribute(sel, attr, val)` inside `evaluate()`
-- [ ] `document.createElement` / `element.appendChild` / `element.removeChild` inside `evaluate()`
+- [x] Wire real Lexbor HTML parsing so `evaluate()` sees a live DOM
+- [x] Wire QuickJS JS execution so scripts run inside the sandbox
+- [x] `document.querySelector(sel)` / `document.querySelectorAll(sel)` return real element objects inside `evaluate()`
+- [x] `element.textContent` / `element.innerHTML` getter and setter accessible inside `evaluate()`
+- [x] `document.getAttribute(sel, attr)` / `document.setAttribute(sel, attr, val)` inside `evaluate()`
+- [x] `document.createElement` / `element.appendChild` / `element.removeChild` inside `evaluate()`
 
 ### v0.3 — Async & Events
-- [ ] `addEventListener` / `removeEventListener`
-- [ ] `setTimeout` / `setInterval` / `clearTimeout`
-- [ ] `Promise` support inside sandbox
-- [ ] `console.log` forwarding to RN console
+- [x] `addEventListener` / `removeEventListener`
+- [x] `setTimeout` / `setInterval` / `clearTimeout` / `clearInterval`
+- [x] `Promise` support inside sandbox (microtask drain + uncaught rejection propagation)
+- [x] `console.log` forwarding to RN console via `onConsole` option
+- [x] `dispatchEvent(new Event('type'))` dispatches to registered listeners
+- [x] `evaluate()` drains the event loop completely before returning
 
 ### v0.4 — Network & Storage
 - [ ] `fetch` (bridged through RN's network stack)
