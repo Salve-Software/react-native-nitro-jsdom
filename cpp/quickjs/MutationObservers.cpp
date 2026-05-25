@@ -47,6 +47,7 @@ struct MutationObserverOpaque {
 struct DispatchJob {
   MutationObservers* registry { nullptr };
   uint32_t observer_id { 0 };
+  uint32_t generation { 0 };  // BUG-6: generation at time of scheduling
 };
 
 static JSValue dispatch_trampoline(JSContext* ctx, int argc, JSValue* argv) {
@@ -64,8 +65,9 @@ static JSValue dispatch_trampoline(JSContext* ctx, int argc, JSValue* argv) {
     if (o.id == obs_id) { obs = &o; break; }
   }
 
-  if (!obs || obs->disconnected || obs->queue.empty()) {
-    // Reset scheduled flag and return — nothing to do
+  // BUG-6: check generation to detect stale jobs enqueued before takeRecords()
+  if (!obs || obs->disconnected || obs->queue.empty() ||
+      obs->dispatch_generation != job->generation) {
     if (obs) obs->dispatch_scheduled = false;
     return JS_UNDEFINED;
   }
@@ -368,6 +370,9 @@ std::vector<MutationRecord> MutationObservers::takeRecords(uint32_t observer_id)
       auto records = std::move(obs.queue);
       obs.queue.clear();
       obs.dispatch_scheduled = false;
+      // BUG-6: bump generation so any already-enqueued job in the QuickJS
+      // job queue is recognized as stale and skipped in dispatch_trampoline.
+      obs.dispatch_generation++;
       return records;
     }
   }
@@ -412,7 +417,8 @@ void MutationObservers::scheduleDispatch(JSContext* ctx, RegisteredObserver& obs
   // Create an opaque carrier object for the trampoline
   JSValue carrier = JS_NewObjectClass(ctx, js_dispatch_carrier_class_id);
   // We store a DispatchJob as opaque — the carrier object owns it
-  auto* job = new DispatchJob{ this, observer.id };
+  // BUG-6: include current generation so stale jobs can be ignored
+  auto* job = new DispatchJob{ this, observer.id, observer.dispatch_generation };
   JS_SetOpaque(carrier, job);
 
   // Enqueue a job — the carrier JSValue is passed as argv[0]

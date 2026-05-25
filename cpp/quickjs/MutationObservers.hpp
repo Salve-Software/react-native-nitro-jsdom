@@ -46,6 +46,8 @@ struct RegisteredObserver {
   std::vector<MutationRecord> queue;
   bool dispatch_scheduled { false };
   bool disconnected { false };
+  // BUG-6: generation counter — the trampoline skips if its generation doesn't match
+  uint32_t dispatch_generation { 0 };
 };
 
 // ── MutationObservers ─────────────────────────────────────────────────────────
