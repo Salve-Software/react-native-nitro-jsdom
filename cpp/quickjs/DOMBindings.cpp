@@ -1,4 +1,5 @@
 #include "DOMBindings.hpp"
+#include "MutationObservers.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "QuickJSRuntime.hpp"
 #include "quickjs.h"
@@ -16,7 +17,7 @@ namespace margelo::nitro::nitrojsdom {
 
 // ── Class IDs ────────────────────────────────────────────────────────────────
 
-static JSClassID js_element_class_id   = 0;
+JSClassID js_element_class_id   = 0;  // non-static: shared via DOMBindingsInternal.hpp
 static JSClassID js_classList_class_id = 0;
 
 static JSClassDef js_element_class   = { "Element",      .finalizer = nullptr };
@@ -37,7 +38,7 @@ static lxb_dom_element_t* unwrap_element(JSContext* ctx, JSValue val) {
   return static_cast<lxb_dom_element_t*>(JS_GetOpaque(val, js_element_class_id));
 }
 
-static JSValue make_element(JSContext* ctx, void* el) {
+JSValue make_element(JSContext* ctx, void* el) {
   if (!el) return JS_NULL;
   JSValue obj = JS_NewObjectClass(ctx, js_element_class_id);
   JS_SetOpaque(obj, el);
@@ -898,6 +899,19 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   // ── Event constructor ──────────────────────────────────────────────────────
   JSValue event_ctor = JS_NewCFunction2(ctx, js_Event_constructor, "Event", 1, JS_CFUNC_constructor, 0);
   JS_SetPropertyStr(ctx, global, "Event", event_ctor);
+
+  // ── MutationObserver ───────────────────────────────────────────────────────
+  {
+    RuntimeContext* rctx = get_ctx(ctx);
+    if (rctx && rctx->mutation_observers && rctx->document) {
+      // Pass the lxb_dom_document_t* root node as the doc_root for ancestry checks
+      void* html_doc = rctx->document->documentHtmlPtr();
+      void* doc_node = lxb_dom_interface_node(
+          lxb_dom_interface_document(
+              static_cast<lxb_html_document_t*>(html_doc)));
+      rctx->mutation_observers->install(ctx, doc_node);
+    }
+  }
 
   // ── console object ─────────────────────────────────────────────────────────
   JSValue console_obj = JS_NewObject(ctx);
