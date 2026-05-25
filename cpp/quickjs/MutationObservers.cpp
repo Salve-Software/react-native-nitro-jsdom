@@ -321,6 +321,7 @@ uint32_t MutationObservers::addObserver(void* target, ObserverInit options, void
   obs.dispatch_scheduled = false;
   obs.disconnected = false;
   _observers.push_back(std::move(obs));
+  _active_count++;
   return _observers.back().id;
 }
 
@@ -329,9 +330,13 @@ uint32_t MutationObservers::addObserver(void* target, ObserverInit options, void
 void MutationObservers::updateObserver(uint32_t id, void* target, ObserverInit options) {
   for (auto& obs : _observers) {
     if (obs.id == id) {
+      if (obs.disconnected) {
+        // Re-activating a previously disconnected observer
+        obs.disconnected = false;
+        _active_count++;
+      }
       obs.target = target;
       obs.options = std::move(options);
-      obs.disconnected = false;
       // EDGE-3: per WHATWG spec, re-observing the same target must NOT discard
       // pending records in the queue — only the options are replaced.
       return;
@@ -344,7 +349,10 @@ void MutationObservers::updateObserver(uint32_t id, void* target, ObserverInit o
 void MutationObservers::disconnect(uint32_t observer_id) {
   for (auto& obs : _observers) {
     if (obs.id == observer_id) {
-      obs.disconnected = true;
+      if (!obs.disconnected) {
+        obs.disconnected = true;
+        if (_active_count > 0) _active_count--;
+      }
       obs.queue.clear();
       obs.dispatch_scheduled = false;
       return;
@@ -507,6 +515,7 @@ void MutationObservers::disconnectDetachedTargets(const std::vector<void*>& /*de
     if (obs.disconnected || !obs.target) continue;
     if (!isInDocument(obs.target)) {
       obs.disconnected = true;
+      if (_active_count > 0) _active_count--;
       obs.dispatch_scheduled = false;
       // BUG-3 fix: also purge removedNodes from queued records to prevent UAF
       // when the trampoline later tries to materialize them.
@@ -544,6 +553,7 @@ void MutationObservers::clearAll(JSContext* ctx) {
     obs.queue.clear();
   }
   _observers.clear();
+  _active_count = 0;
 }
 
 // ── _observers_ref (used by trampoline) ──────────────────────────────────────

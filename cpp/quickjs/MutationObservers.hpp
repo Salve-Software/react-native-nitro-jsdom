@@ -74,8 +74,8 @@ public:
                        std::optional<std::string> old_value);
   void notifyCharacterData(JSContext* ctx, void* target, std::optional<std::string> old_value);
 
-  // True when no observers are registered (fast-path check)
-  bool empty() const { return _observers.empty(); }
+  // True when no active (non-disconnected) observers exist (fast-path check)
+  bool empty() const { return _active_count == 0; }
 
   // Free all held JSValue callbacks — must be called before JS_FreeContext
   void clearAll(JSContext* ctx);
@@ -96,6 +96,7 @@ public:
 private:
   std::vector<RegisteredObserver> _observers;
   uint32_t _next_id { 1 };
+  uint32_t _active_count { 0 };  // number of non-disconnected observers
   void* _doc_root { nullptr };
 
   // Returns true if node is still attached to _doc_root's tree
