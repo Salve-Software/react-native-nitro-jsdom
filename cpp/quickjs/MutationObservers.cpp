@@ -15,7 +15,6 @@ struct DispatchJob;
 // ── JS Class IDs ──────────────────────────────────────────────────────────────
 
 static JSClassID js_mutation_observer_class_id = 0;
-static JSClassID js_mutation_record_class_id   = 0;
 static JSClassID js_dispatch_carrier_class_id  = 0;
 
 static void mo_finalizer(JSRuntime*, JSValue val) {
@@ -30,7 +29,6 @@ static void carrier_finalizer(JSRuntime*, JSValue val) {
 }
 
 static JSClassDef js_mutation_observer_class = { "MutationObserver", .finalizer = mo_finalizer };
-static JSClassDef js_mutation_record_class   = { "MutationRecord",   .finalizer = nullptr };
 static JSClassDef js_dispatch_carrier_class  = { "_DispatchCarrier", .finalizer = carrier_finalizer };
 
 // ── MutationObserver opaque data ──────────────────────────────────────────────
@@ -292,8 +290,6 @@ void MutationObservers::install(JSContext* ctx, void* doc_root) {
   // Register JS classes
   JS_NewClassID(&js_mutation_observer_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_mutation_observer_class_id, &js_mutation_observer_class);
-  JS_NewClassID(&js_mutation_record_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_mutation_record_class_id, &js_mutation_record_class);
   JS_NewClassID(&js_dispatch_carrier_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_dispatch_carrier_class_id, &js_dispatch_carrier_class);
 
