@@ -585,10 +585,12 @@ static JSValue js_el_appendChild(JSContext* ctx, JSValue this_val, int argc, JSV
   if (!child) return JS_NULL;
 
   lxb_dom_node_t* child_node = lxb_dom_interface_node(child);
-  lxb_dom_node_t* prev_sib = child_node->prev;
-  lxb_dom_node_t* next_sib = child_node->next;
 
   lxb_dom_node_insert_child(lxb_dom_interface_node(parent), child_node);
+
+  // Capture siblings AFTER insertion so they reflect the node's new position
+  lxb_dom_node_t* prev_sib = child_node->prev;
+  lxb_dom_node_t* next_sib = child_node->next;
 
   // Notify childList observers
   auto* rctx = get_ctx(ctx);

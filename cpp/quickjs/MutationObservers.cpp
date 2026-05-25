@@ -109,7 +109,7 @@ static JSValue dispatch_trampoline(JSContext* ctx, int argc, JSValue* argv) {
     JS_SetPropertyStr(ctx, rec_obj, "nextSibling",
         r.nextSibling ? make_element(ctx, r.nextSibling) : JS_NULL);
     JS_SetPropertyStr(ctx, rec_obj, "attributeName",
-        JS_NewString(ctx, r.attributeName.c_str()));
+        r.attributeName.empty() ? JS_NULL : JS_NewString(ctx, r.attributeName.c_str()));
     JS_SetPropertyStr(ctx, rec_obj, "oldValue",
         r.oldValue.has_value() ? JS_NewString(ctx, r.oldValue->c_str()) : JS_NULL);
 
@@ -258,7 +258,7 @@ static JSValue js_MutationObserver_takeRecords(JSContext* ctx, JSValue this_val,
     JS_SetPropertyStr(ctx, rec_obj, "removedNodes", removed);
 
     JS_SetPropertyStr(ctx, rec_obj, "attributeName",
-        JS_NewString(ctx, r.attributeName.c_str()));
+        r.attributeName.empty() ? JS_NULL : JS_NewString(ctx, r.attributeName.c_str()));
     JS_SetPropertyStr(ctx, rec_obj, "oldValue",
         r.oldValue.has_value() ? JS_NewString(ctx, r.oldValue->c_str()) : JS_NULL);
 
