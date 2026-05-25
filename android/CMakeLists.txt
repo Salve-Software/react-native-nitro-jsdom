@@ -43,6 +43,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/lexbor/LexborDocument.cpp
   ../cpp/quickjs/QuickJSRuntime.cpp
   ../cpp/quickjs/DOMBindings.cpp
+  ../cpp/quickjs/MutationObservers.cpp
   ${QUICKJS_SOURCES}
 )
 

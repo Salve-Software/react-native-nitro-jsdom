@@ -193,5 +193,177 @@ export const runExamples = async (): Promise<IResult[]> => {
   }
   results.push({ label: 'dispose with pending timers — expect: true', value: String(disposeOk) });
 
+  // ── v0.5 MutationObserver ────────────────────────────────────────────────────
+
+  const moDom = JSDOM.create(`
+    <html>
+      <body>
+        <ul id="mo-list"></ul>
+        <div id="mo-target" class="initial" data-x="hello">text</div>
+      </body>
+    </html>
+  `);
+
+  // Criterion 1: MutationObserver constructor is defined
+  const moExists = await moDom.evaluate(`typeof MutationObserver`);
+  results.push({ label: 'MutationObserver defined — expect: function', value: moExists });
+
+  // Criterion 2: childList — detect child addition
+  const childListResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const list = document.getElementById('mo-list');
+      const observer = new MutationObserver((records) => {
+        const r = records[0];
+        resolve(r.type + ':' + r.addedNodes.length);
+      });
+      observer.observe(list, { childList: true });
+      const li = document.createElement('li');
+      li.textContent = 'item';
+      list.appendChild(li);
+    })
+  `);
+  results.push({ label: 'MutationObserver childList add — expect: childList:1', value: childListResult });
+
+  // Criterion 3: attributes — detect attribute change
+  const attrResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const el = document.getElementById('mo-target');
+      const observer = new MutationObserver((records) => {
+        const r = records[0];
+        resolve(r.type + ':' + r.attributeName);
+      });
+      observer.observe(el, { attributes: true });
+      el.setAttribute('data-x', 'world');
+    })
+  `);
+  results.push({ label: 'MutationObserver attributes — expect: attributes:data-x', value: attrResult });
+
+  // Criterion 7: attributeOldValue
+  const attrOldValResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const el = document.getElementById('mo-target');
+      const observer = new MutationObserver((records) => {
+        const r = records[0];
+        resolve(r.oldValue);
+      });
+      observer.observe(el, { attributes: true, attributeOldValue: true });
+      el.setAttribute('data-x', 'changed');
+    })
+  `);
+  results.push({ label: 'MutationObserver attributeOldValue — expect: world', value: attrOldValResult });
+
+  // Criterion 6: attributeFilter — only fires for listed attributes
+  const filterResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const el = document.getElementById('mo-target');
+      let fired = false;
+      const observer = new MutationObserver(() => { fired = true; });
+      observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+      el.setAttribute('data-x', 'ignored'); // should NOT fire (not in filter)
+      el.setAttribute('class', 'new-class'); // SHOULD fire
+      // Wait one microtask cycle
+      Promise.resolve().then(() => resolve(String(fired)));
+    })
+  `);
+  results.push({ label: 'MutationObserver attributeFilter — expect: true', value: filterResult });
+
+  // Criterion 5: subtree — observe body, mutate deep descendant
+  const subtreeResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const observer = new MutationObserver((records) => {
+        resolve('subtree:' + records[0].type);
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      const list = document.getElementById('mo-list');
+      const li = document.createElement('li');
+      list.appendChild(li);
+    })
+  `);
+  results.push({ label: 'MutationObserver subtree — expect: subtree:childList', value: subtreeResult });
+
+  // Criterion 10: disconnect — stops delivery and discards pending records
+  const disconnectResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const el = document.getElementById('mo-target');
+      let callCount = 0;
+      const observer = new MutationObserver(() => { callCount++; });
+      observer.observe(el, { attributes: true });
+      el.setAttribute('data-x', 'before-disconnect');
+      observer.disconnect();
+      el.setAttribute('data-x', 'after-disconnect');
+      // After microtask drain, callCount should still be 0
+      Promise.resolve().then(() => resolve(String(callCount)));
+    })
+  `);
+  results.push({ label: 'MutationObserver disconnect — expect: 0', value: disconnectResult });
+
+  // Criterion 11: takeRecords — flush and return without calling callback
+  const takeRecordsResult = await moDom.evaluate(`
+    (() => {
+      const el = document.getElementById('mo-target');
+      let callbackFired = false;
+      const observer = new MutationObserver(() => { callbackFired = true; });
+      observer.observe(el, { attributes: true });
+      el.setAttribute('data-x', 'snapshot');
+      const records = observer.takeRecords();
+      observer.disconnect();
+      // records should have 1 item; callback should NOT have fired
+      return records.length + ':' + String(callbackFired);
+    })()
+  `);
+  results.push({ label: 'MutationObserver takeRecords — expect: 1:false', value: takeRecordsResult });
+
+  // Criterion 9: multiple observers on same node
+  const multiObsResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const el = document.getElementById('mo-target');
+      let count = 0;
+      const obs1 = new MutationObserver(() => { count++; if (count === 2) resolve('both:' + count); });
+      const obs2 = new MutationObserver(() => { count++; if (count === 2) resolve('both:' + count); });
+      obs1.observe(el, { attributes: true });
+      obs2.observe(el, { attributes: true });
+      el.setAttribute('data-x', 'multi');
+    })
+  `);
+  results.push({ label: 'MutationObserver multi-observer — expect: both:2', value: multiObsResult });
+
+  // Criterion 8: characterDataOldValue
+  const charDataOldValResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const parent = document.getElementById('mo-target');
+      const textNode = document.createTextNode('original text');
+      parent.appendChild(textNode);
+      const observer = new MutationObserver((records) => {
+        const r = records[0];
+        resolve(r.type + ':' + (r.oldValue ?? 'null'));
+      });
+      observer.observe(textNode, { characterData: true, characterDataOldValue: true });
+      textNode.textContent = 'changed text';
+    })
+  `);
+  results.push({ label: 'MutationObserver characterDataOldValue — expect: characterData:original text', value: charDataOldValResult });
+
+  // Criterion 12: microtask ordering — MutationObserver fires before setTimeout
+  // GAP-2: add a fallback timeout so the test cannot hang if MO callback fails to fire
+  const orderResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const el = document.getElementById('mo-target');
+      let log = [];
+      const observer = new MutationObserver(() => { log.push('mo'); });
+      observer.observe(el, { attributes: true });
+      // Fallback: resolve after 1s in case MO callback never fires
+      const fallback = setTimeout(() => { resolve('timeout:' + log.join(',')); }, 1000);
+      setTimeout(() => {
+        clearTimeout(fallback);
+        log.push('timer');
+        resolve(log.join(','));
+      }, 0);
+      el.setAttribute('data-x', 'ordering');
+    })
+  `);
+  results.push({ label: 'MutationObserver fires before setTimeout — expect: mo,timer', value: orderResult });
+
+  moDom.dispose();
+
   return results;
 }

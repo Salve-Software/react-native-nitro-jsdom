@@ -12,6 +12,7 @@
 namespace margelo::nitro::nitrojsdom {
 
 class LexborDocument;
+class MutationObservers;
 
 // ── Timer ──────────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,9 @@ struct RuntimeContext {
 
   // Pending unhandled Promise rejection (stored as JSValue* heap-allocated)
   void* pending_rejection { nullptr }; // JSValue* or nullptr
+
+  // MutationObserver registry — lifetime owned here, torn down before JS_FreeContext
+  std::unique_ptr<MutationObservers> mutation_observers;
 
   ~RuntimeContext() = default;
 };

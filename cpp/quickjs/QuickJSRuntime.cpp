@@ -1,5 +1,6 @@
 #include "QuickJSRuntime.hpp"
 #include "DOMBindings.hpp"
+#include "MutationObservers.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "quickjs.h"
 #include <stdexcept>
@@ -80,6 +81,11 @@ QuickJSRuntime::~QuickJSRuntime() {
       delete stored;
       _ctxState->pending_rejection = nullptr;
     }
+
+    // Free MutationObserver callbacks — must happen before JS_FreeContext
+    if (_ctxState->mutation_observers) {
+      _ctxState->mutation_observers->clearAll(ctx);
+    }
   }
 
   if (_context) JS_FreeContext(reinterpret_cast<JSContext*>(_context));
@@ -141,6 +147,7 @@ void QuickJSRuntime::initialize(const std::string& url) {
   // Create RuntimeContext and attach to QuickJS context opaque
   _ctxState = std::make_unique<RuntimeContext>();
   _ctxState->runtime = this;
+  _ctxState->mutation_observers = std::make_unique<MutationObservers>();
   JS_SetContextOpaque(ctx, _ctxState.get());
 
   // Register promise rejection tracker

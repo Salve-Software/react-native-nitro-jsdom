@@ -1,4 +1,5 @@
 #include "DOMBindings.hpp"
+#include "MutationObservers.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "QuickJSRuntime.hpp"
 #include "quickjs.h"
@@ -16,7 +17,7 @@ namespace margelo::nitro::nitrojsdom {
 
 // ── Class IDs ────────────────────────────────────────────────────────────────
 
-static JSClassID js_element_class_id   = 0;
+JSClassID js_element_class_id   = 0;  // non-static: shared via DOMBindingsInternal.hpp
 static JSClassID js_classList_class_id = 0;
 
 static JSClassDef js_element_class   = { "Element",      .finalizer = nullptr };
@@ -37,7 +38,7 @@ static lxb_dom_element_t* unwrap_element(JSContext* ctx, JSValue val) {
   return static_cast<lxb_dom_element_t*>(JS_GetOpaque(val, js_element_class_id));
 }
 
-static JSValue make_element(JSContext* ctx, void* el) {
+JSValue make_element(JSContext* ctx, void* el) {
   if (!el) return JS_NULL;
   JSValue obj = JS_NewObjectClass(ctx, js_element_class_id);
   JS_SetOpaque(obj, el);
@@ -104,6 +105,13 @@ static lxb_dom_element_t* unwrap_classList(JSContext* ctx, JSValue val) {
 static JSValue js_classList_add(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* el = unwrap_classList(ctx, this_val);
   if (!el) return JS_UNDEFINED;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
+
   auto classes = split_classes(get_class_attr(el));
   for (int i = 0; i < argc; i++) {
     const char* cls = JS_ToCString(ctx, argv[i]);
@@ -113,18 +121,35 @@ static JSValue js_classList_add(JSContext* ctx, JSValue this_val, int argc, JSVa
     }
   }
   set_class_attr(el, join_classes(classes));
+
+  if (has_obs) {
+    rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+        "class", old_val);
+  }
   return JS_UNDEFINED;
 }
 
 static JSValue js_classList_remove(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* el = unwrap_classList(ctx, this_val);
   if (!el) return JS_UNDEFINED;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
+
   auto classes = split_classes(get_class_attr(el));
   for (int i = 0; i < argc; i++) {
     const char* cls = JS_ToCString(ctx, argv[i]);
     if (cls) { classes.erase(std::remove(classes.begin(), classes.end(), cls), classes.end()); JS_FreeCString(ctx, cls); }
   }
   set_class_attr(el, join_classes(classes));
+
+  if (has_obs) {
+    rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+        "class", old_val);
+  }
   return JS_UNDEFINED;
 }
 
@@ -144,6 +169,13 @@ static JSValue js_classList_toggle(JSContext* ctx, JSValue this_val, int argc, J
   if (!el || argc < 1) return JS_FALSE;
   const char* cls = JS_ToCString(ctx, argv[0]);
   if (!cls) return JS_FALSE;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
+
   auto classes = split_classes(get_class_attr(el));
   auto it = std::find(classes.begin(), classes.end(), cls);
   bool added;
@@ -151,6 +183,11 @@ static JSValue js_classList_toggle(JSContext* ctx, JSValue this_val, int argc, J
   else { classes.push_back(cls); added = true; }
   JS_FreeCString(ctx, cls);
   set_class_attr(el, join_classes(classes));
+
+  if (has_obs) {
+    rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+        "class", old_val);
+  }
   return JS_NewBool(ctx, added);
 }
 
@@ -161,9 +198,21 @@ static JSValue js_classList_replace(JSContext* ctx, JSValue this_val, int argc, 
   const char* newCls = JS_ToCString(ctx, argv[1]);
   bool replaced = false;
   if (oldCls && newCls) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+    std::optional<std::string> old_val;
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+      old_val = get_class_attr(el);
+
     auto classes = split_classes(get_class_attr(el));
     auto it = std::find(classes.begin(), classes.end(), oldCls);
-    if (it != classes.end()) { *it = newCls; replaced = true; set_class_attr(el, join_classes(classes)); }
+    if (it != classes.end()) {
+      *it = newCls; replaced = true; set_class_attr(el, join_classes(classes));
+      if (has_obs) {
+        rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+            "class", old_val);
+      }
+    }
   }
   if (oldCls) JS_FreeCString(ctx, oldCls);
   if (newCls) JS_FreeCString(ctx, newCls);
@@ -208,10 +257,26 @@ static JSValue js_el_set_id(JSContext* ctx, JSValue this_val, JSValue val) {
   if (!el) return JS_UNDEFINED;
   const char* str = JS_ToCString(ctx, val);
   if (str) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+
+    std::optional<std::string> old_val;
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+      size_t len = 0;
+      const lxb_char_t* v = lxb_dom_element_get_attribute(el,
+          reinterpret_cast<const lxb_char_t*>("id"), 2, &len);
+      if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+    }
+
     lxb_dom_element_set_attribute(el,
         reinterpret_cast<const lxb_char_t*>("id"), 2,
         reinterpret_cast<const lxb_char_t*>(str), strlen(str));
     JS_FreeCString(ctx, str);
+
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+          "id", old_val);
+    }
   }
   return JS_UNDEFINED;
 }
@@ -226,7 +291,21 @@ static JSValue js_el_set_className(JSContext* ctx, JSValue this_val, JSValue val
   auto* el = unwrap_element(ctx, this_val);
   if (!el) return JS_UNDEFINED;
   const char* str = JS_ToCString(ctx, val);
-  if (str) { set_class_attr(el, str); JS_FreeCString(ctx, str); }
+  if (str) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+    std::optional<std::string> old_val;
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+      old_val = get_class_attr(el);
+
+    set_class_attr(el, str);
+    JS_FreeCString(ctx, str);
+
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+          "class", old_val);
+    }
+  }
   return JS_UNDEFINED;
 }
 
@@ -246,7 +325,53 @@ static JSValue js_el_set_textContent(JSContext* ctx, JSValue this_val, JSValue v
   auto* el = unwrap_element(ctx, this_val);
   if (!el) return JS_UNDEFINED;
   const char* str = JS_ToCString(ctx, val);
-  if (str) { get_doc(ctx)->setTextContentOnEl(el, str); JS_FreeCString(ctx, str); }
+  if (!str) return JS_UNDEFINED;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_observers = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+
+  lxb_dom_node_t* node = lxb_dom_interface_node(el);
+
+  // Determine if this is an element node (childList) or text node (characterData)
+  if (node->type == LXB_DOM_NODE_TYPE_TEXT) {
+    // characterData mutation: capture old value before mutation
+    std::optional<std::string> old_val;
+    if (has_observers && rctx->mutation_observers->hasCharacterDataOldValueObserver()) {
+      size_t len = 0;
+      lxb_char_t* text = lxb_dom_node_text_content(node, &len);
+      if (text) {
+        old_val = std::string(reinterpret_cast<char*>(text), len);
+        lxb_dom_document_destroy_text(node->owner_document, text);
+      }
+    }
+    get_doc(ctx)->setTextContentOnEl(el, str);
+    if (has_observers) {
+      rctx->mutation_observers->notifyCharacterData(ctx, node, old_val);
+    }
+  } else {
+    // Element node: textContent replaces all children — fire childList
+    // Collect old children before mutation
+    std::vector<void*> old_children;
+    if (has_observers) {
+      lxb_dom_node_t* child = node->first_child;
+      while (child) { old_children.push_back(child); child = child->next; }
+    }
+    // Disconnect observers targeting the old children before they are destroyed
+    if (has_observers && !old_children.empty()) {
+      rctx->mutation_observers->disconnectDetachedTargets(old_children);
+    }
+    get_doc(ctx)->setTextContentOnEl(el, str);
+    if (has_observers) {
+      // Collect new text node children after mutation
+      std::vector<void*> new_children;
+      lxb_dom_node_t* child = node->first_child;
+      while (child) { new_children.push_back(child); child = child->next; }
+      rctx->mutation_observers->notifyChildList(ctx, node,
+          new_children, old_children, nullptr, nullptr);
+    }
+  }
+
+  JS_FreeCString(ctx, str);
   return JS_UNDEFINED;
 }
 
@@ -263,7 +388,37 @@ static JSValue js_el_set_innerHTML(JSContext* ctx, JSValue this_val, JSValue val
   auto* el = unwrap_element(ctx, this_val);
   if (!el) return JS_UNDEFINED;
   const char* html = JS_ToCString(ctx, val);
-  if (html) { get_doc(ctx)->setInnerHTMLOnEl(el, html); JS_FreeCString(ctx, html); }
+  if (!html) return JS_UNDEFINED;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_observers = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+
+  lxb_dom_node_t* parent = lxb_dom_interface_node(el);
+
+  // Collect old children before mutation
+  std::vector<void*> old_children;
+  if (has_observers) {
+    lxb_dom_node_t* child = parent->first_child;
+    while (child) { old_children.push_back(child); child = child->next; }
+  }
+
+  // Disconnect observers targeting old children before they are destroyed
+  if (has_observers && !old_children.empty()) {
+    rctx->mutation_observers->disconnectDetachedTargets(old_children);
+  }
+
+  get_doc(ctx)->setInnerHTMLOnEl(el, html);
+  JS_FreeCString(ctx, html);
+
+  if (has_observers) {
+    // Collect new children after mutation
+    std::vector<void*> new_children;
+    lxb_dom_node_t* child = parent->first_child;
+    while (child) { new_children.push_back(child); child = child->next; }
+    rctx->mutation_observers->notifyChildList(ctx, parent,
+        new_children, old_children, nullptr, nullptr);
+  }
+
   return JS_UNDEFINED;
 }
 
@@ -361,10 +516,27 @@ static JSValue js_el_setAttribute(JSContext* ctx, JSValue this_val, int argc, JS
   if (!el || argc < 2) return JS_UNDEFINED;
   const char* name  = JS_ToCString(ctx, argv[0]);
   const char* value = JS_ToCString(ctx, argv[1]);
-  if (name && value)
+  if (name && value) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+
+    std::optional<std::string> old_val;
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+      size_t len = 0;
+      const lxb_char_t* v = lxb_dom_element_get_attribute(el,
+          reinterpret_cast<const lxb_char_t*>(name), strlen(name), &len);
+      if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+    }
+
     lxb_dom_element_set_attribute(el,
         reinterpret_cast<const lxb_char_t*>(name),  strlen(name),
         reinterpret_cast<const lxb_char_t*>(value), strlen(value));
+
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+          std::string(name), old_val);
+    }
+  }
   if (name)  JS_FreeCString(ctx, name);
   if (value) JS_FreeCString(ctx, value);
   return JS_UNDEFINED;
@@ -375,8 +547,25 @@ static JSValue js_el_removeAttribute(JSContext* ctx, JSValue this_val, int argc,
   if (!el || argc < 1) return JS_UNDEFINED;
   const char* name = JS_ToCString(ctx, argv[0]);
   if (name) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+
+    std::optional<std::string> old_val;
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+      size_t len = 0;
+      const lxb_char_t* v = lxb_dom_element_get_attribute(el,
+          reinterpret_cast<const lxb_char_t*>(name), strlen(name), &len);
+      if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+    }
+
     lxb_dom_element_remove_attribute(el,
         reinterpret_cast<const lxb_char_t*>(name), strlen(name));
+
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+          std::string(name), old_val);
+    }
+
     JS_FreeCString(ctx, name);
   }
   return JS_UNDEFINED;
@@ -398,7 +587,22 @@ static JSValue js_el_appendChild(JSContext* ctx, JSValue this_val, int argc, JSV
   if (!parent || argc < 1) return JS_NULL;
   auto* child = unwrap_element(ctx, argv[0]);
   if (!child) return JS_NULL;
-  lxb_dom_node_insert_child(lxb_dom_interface_node(parent), lxb_dom_interface_node(child));
+
+  lxb_dom_node_t* child_node = lxb_dom_interface_node(child);
+
+  lxb_dom_node_insert_child(lxb_dom_interface_node(parent), child_node);
+
+  // Capture siblings AFTER insertion so they reflect the node's new position
+  lxb_dom_node_t* prev_sib = child_node->prev;
+  lxb_dom_node_t* next_sib = child_node->next;
+
+  // Notify childList observers
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, lxb_dom_interface_node(parent),
+        { child_node }, {}, prev_sib, next_sib);
+  }
+
   return JS_DupValue(ctx, argv[0]);
 }
 
@@ -408,7 +612,18 @@ static JSValue js_el_removeChild(JSContext* ctx, JSValue this_val, int argc, JSV
   auto* child = unwrap_element(ctx, argv[0]);
   if (!child) return JS_NULL;
   lxb_dom_node_t* cn = lxb_dom_interface_node(child);
-  if (cn->parent == lxb_dom_interface_node(parent)) lxb_dom_node_remove(cn);
+  if (cn->parent == lxb_dom_interface_node(parent)) {
+    lxb_dom_node_t* prev_sib = cn->prev;
+    lxb_dom_node_t* next_sib = cn->next;
+    lxb_dom_node_remove(cn);
+
+    // Notify childList observers
+    auto* rctx = get_ctx(ctx);
+    if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+      rctx->mutation_observers->notifyChildList(ctx, lxb_dom_interface_node(parent),
+          {}, { cn }, prev_sib, next_sib);
+    }
+  }
   return JS_DupValue(ctx, argv[0]);
 }
 
@@ -416,19 +631,53 @@ static JSValue js_el_insertBefore(JSContext* ctx, JSValue this_val, int argc, JS
   if (argc < 1) return JS_NULL;
   auto* newNode = unwrap_element(ctx, argv[0]);
   if (!newNode) return JS_NULL;
+
+  lxb_dom_node_t* new_node = lxb_dom_interface_node(newNode);
+  lxb_dom_node_t* parent_node = nullptr;
+
   if (argc < 2 || JS_IsNull(argv[1])) {
     auto* parent = unwrap_element(ctx, this_val);
-    if (parent) lxb_dom_node_insert_child(lxb_dom_interface_node(parent), lxb_dom_interface_node(newNode));
+    if (parent) {
+      parent_node = lxb_dom_interface_node(parent);
+      lxb_dom_node_insert_child(parent_node, new_node);
+    }
   } else {
     auto* refNode = unwrap_element(ctx, argv[1]);
-    if (refNode) lxb_dom_node_insert_before(lxb_dom_interface_node(refNode), lxb_dom_interface_node(newNode));
+    if (refNode) {
+      lxb_dom_node_t* ref = lxb_dom_interface_node(refNode);
+      parent_node = ref->parent;
+      lxb_dom_node_insert_before(ref, new_node);
+    }
   }
+
+  if (parent_node) {
+    auto* rctx = get_ctx(ctx);
+    if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+      rctx->mutation_observers->notifyChildList(ctx, parent_node,
+          { new_node }, {}, new_node->prev, new_node->next);
+    }
+  }
+
   return JS_DupValue(ctx, argv[0]);
 }
 
 static JSValue js_el_remove(JSContext* ctx, JSValue this_val, int, JSValue*) {
   auto* el = unwrap_element(ctx, this_val);
-  if (el) lxb_dom_node_remove(lxb_dom_interface_node(el));
+  if (el) {
+    lxb_dom_node_t* node = lxb_dom_interface_node(el);
+    lxb_dom_node_t* parent_node = node->parent;
+    lxb_dom_node_t* prev_sib = node->prev;
+    lxb_dom_node_t* next_sib = node->next;
+    lxb_dom_node_remove(node);
+
+    if (parent_node) {
+      auto* rctx = get_ctx(ctx);
+      if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+        rctx->mutation_observers->notifyChildList(ctx, parent_node,
+            {}, { node }, prev_sib, next_sib);
+      }
+    }
+  }
   return JS_UNDEFINED;
 }
 
@@ -898,6 +1147,19 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   // ── Event constructor ──────────────────────────────────────────────────────
   JSValue event_ctor = JS_NewCFunction2(ctx, js_Event_constructor, "Event", 1, JS_CFUNC_constructor, 0);
   JS_SetPropertyStr(ctx, global, "Event", event_ctor);
+
+  // ── MutationObserver ───────────────────────────────────────────────────────
+  {
+    RuntimeContext* rctx = get_ctx(ctx);
+    if (rctx && rctx->mutation_observers && rctx->document) {
+      // Pass the lxb_dom_document_t* root node as the doc_root for ancestry checks
+      void* html_doc = rctx->document->documentHtmlPtr();
+      void* doc_node = lxb_dom_interface_node(
+          lxb_dom_interface_document(
+              static_cast<lxb_html_document_t*>(html_doc)));
+      rctx->mutation_observers->install(ctx, doc_node);
+    }
+  }
 
   // ── console object ─────────────────────────────────────────────────────────
   JSValue console_obj = JS_NewObject(ctx);
