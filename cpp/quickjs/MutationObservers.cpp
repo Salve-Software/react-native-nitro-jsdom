@@ -332,9 +332,8 @@ void MutationObservers::updateObserver(uint32_t id, void* target, ObserverInit o
       obs.target = target;
       obs.options = std::move(options);
       obs.disconnected = false;
-      // Clear pending records when re-observing (spec: replace options)
-      obs.queue.clear();
-      obs.dispatch_scheduled = false;
+      // EDGE-3: per WHATWG spec, re-observing the same target must NOT discard
+      // pending records in the queue — only the options are replaced.
       return;
     }
   }
