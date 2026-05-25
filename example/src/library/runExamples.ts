@@ -327,14 +327,37 @@ export const runExamples = async (): Promise<IResult[]> => {
   `);
   results.push({ label: 'MutationObserver multi-observer — expect: both:2', value: multiObsResult });
 
+  // Criterion 8: characterDataOldValue
+  const charDataOldValResult = await moDom.evaluate(`
+    new Promise(resolve => {
+      const parent = document.getElementById('mo-target');
+      const textNode = document.createTextNode('original text');
+      parent.appendChild(textNode);
+      const observer = new MutationObserver((records) => {
+        const r = records[0];
+        resolve(r.type + ':' + (r.oldValue ?? 'null'));
+      });
+      observer.observe(textNode, { characterData: true, characterDataOldValue: true });
+      textNode.textContent = 'changed text';
+    })
+  `);
+  results.push({ label: 'MutationObserver characterDataOldValue — expect: characterData:original text', value: charDataOldValResult });
+
   // Criterion 12: microtask ordering — MutationObserver fires before setTimeout
+  // GAP-2: add a fallback timeout so the test cannot hang if MO callback fails to fire
   const orderResult = await moDom.evaluate(`
     new Promise(resolve => {
       const el = document.getElementById('mo-target');
       let log = [];
       const observer = new MutationObserver(() => { log.push('mo'); });
       observer.observe(el, { attributes: true });
-      setTimeout(() => { log.push('timer'); resolve(log.join(',')); }, 0);
+      // Fallback: resolve after 1s in case MO callback never fires
+      const fallback = setTimeout(() => { resolve('timeout:' + log.join(',')); }, 1000);
+      setTimeout(() => {
+        clearTimeout(fallback);
+        log.push('timer');
+        resolve(log.join(','));
+      }, 0);
       el.setAttribute('data-x', 'ordering');
     })
   `);
