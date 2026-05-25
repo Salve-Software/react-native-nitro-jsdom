@@ -483,17 +483,35 @@ void MutationObservers::notifyCharacterData(JSContext* ctx, void* target,
 
 // ── MutationObservers::disconnectDetachedTargets ──────────────────────────────
 
-void MutationObservers::disconnectDetachedTargets(const std::vector<void*>& destroyed_nodes) {
-  if (_observers.empty() || destroyed_nodes.empty()) return;
+void MutationObservers::disconnectDetachedTargets(const std::vector<void*>& /*destroyed_nodes*/) {
+  // EDGE-2 fix: instead of checking only direct equality with destroyed_nodes
+  // (which misses subtree descendants), use isInDocument to check every active
+  // observer's target. Any target no longer reachable from the document root
+  // is disconnected, which covers subtrees of any depth.
+  if (_observers.empty()) return;
   for (auto& obs : _observers) {
     if (obs.disconnected || !obs.target) continue;
-    // Check if this observer's target is in the destroyed set
-    for (void* dn : destroyed_nodes) {
-      if (obs.target == dn) {
-        obs.disconnected = true;
-        obs.queue.clear();
-        obs.dispatch_scheduled = false;
-        break;
+    if (!isInDocument(obs.target)) {
+      obs.disconnected = true;
+      obs.dispatch_scheduled = false;
+      // BUG-3 fix: also purge removedNodes from queued records to prevent UAF
+      // when the trampoline later tries to materialize them.
+      for (auto& rec : obs.queue) {
+        rec.removedNodes.clear();
+      }
+      obs.queue.clear();
+    }
+  }
+  // BUG-3 fix: for observers whose targets ARE still in the document,
+  // purge any removedNodes references that are now detached (dangling).
+  for (auto& obs : _observers) {
+    if (obs.disconnected) continue;
+    for (auto& rec : obs.queue) {
+      if (!rec.removedNodes.empty()) {
+        rec.removedNodes.erase(
+          std::remove_if(rec.removedNodes.begin(), rec.removedNodes.end(),
+            [this](void* n) { return !isInDocument(n); }),
+          rec.removedNodes.end());
       }
     }
   }
