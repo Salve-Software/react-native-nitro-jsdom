@@ -45,7 +45,7 @@ struct MutationObserverOpaque {
 struct DispatchJob {
   MutationObservers* registry { nullptr };
   uint32_t observer_id { 0 };
-  uint32_t generation { 0 };  // BUG-6: generation at time of scheduling
+  uint32_t generation { 0 };
 };
 
 static JSValue dispatch_trampoline(JSContext* ctx, int argc, JSValue* argv) {
@@ -63,7 +63,6 @@ static JSValue dispatch_trampoline(JSContext* ctx, int argc, JSValue* argv) {
     if (o.id == obs_id) { obs = &o; break; }
   }
 
-  // BUG-6: check generation to detect stale jobs enqueued before takeRecords()
   if (!obs || obs->disconnected || obs->queue.empty() ||
       obs->dispatch_generation != job->generation) {
     if (obs) obs->dispatch_scheduled = false;
@@ -214,15 +213,11 @@ static JSValue js_MutationObserver_observe(JSContext* ctx, JSValue this_val,
     JS_FreeValue(ctx, filterVal);
   }
 
-  // GAP-3: per WHATWG spec, attributeFilter or attributeOldValue implicitly
-  // enables attributes observation; characterDataOldValue implies characterData.
   if ((opts.attributeFilter.has_value() || opts.attributeOldValue) && !opts.attributes)
     opts.attributes = true;
   if (opts.characterDataOldValue && !opts.characterData)
     opts.characterData = true;
 
-  // GAP-4: per WHATWG spec, observe() must throw TypeError if none of the
-  // three mutation types is enabled after applying the implicit-enable rules.
   if (!opts.childList && !opts.attributes && !opts.characterData) {
     JS_ThrowTypeError(ctx,
         "The options object must set at least one of 'attributes', 'characterData', or 'childList' to true.");
@@ -335,8 +330,6 @@ void MutationObservers::updateObserver(uint32_t id, void* target, ObserverInit o
       }
       obs.target = target;
       obs.options = std::move(options);
-      // EDGE-3: per WHATWG spec, re-observing the same target must NOT discard
-      // pending records in the queue — only the options are replaced.
       return;
     }
   }
@@ -366,8 +359,6 @@ std::vector<MutationRecord> MutationObservers::takeRecords(uint32_t observer_id)
       auto records = std::move(obs.queue);
       obs.queue.clear();
       obs.dispatch_scheduled = false;
-      // BUG-6: bump generation so any already-enqueued job in the QuickJS
-      // job queue is recognized as stale and skipped in dispatch_trampoline.
       obs.dispatch_generation++;
       return records;
     }
@@ -410,10 +401,7 @@ void MutationObservers::scheduleDispatch(JSContext* ctx, RegisteredObserver& obs
   if (observer.dispatch_scheduled || observer.disconnected) return;
   observer.dispatch_scheduled = true;
 
-  // Create an opaque carrier object for the trampoline
   JSValue carrier = JS_NewObjectClass(ctx, js_dispatch_carrier_class_id);
-  // We store a DispatchJob as opaque — the carrier object owns it
-  // BUG-6: include current generation so stale jobs can be ignored
   auto* job = new DispatchJob{ this, observer.id, observer.dispatch_generation };
   JS_SetOpaque(carrier, job);
 
@@ -508,10 +496,6 @@ void MutationObservers::notifyCharacterData(JSContext* ctx, void* target,
 // ── MutationObservers::disconnectDetachedTargets ──────────────────────────────
 
 void MutationObservers::disconnectDetachedTargets(const std::vector<void*>& /*destroyed_nodes*/) {
-  // EDGE-2 fix: instead of checking only direct equality with destroyed_nodes
-  // (which misses subtree descendants), use isInDocument to check every active
-  // observer's target. Any target no longer reachable from the document root
-  // is disconnected, which covers subtrees of any depth.
   if (_observers.empty()) return;
   for (auto& obs : _observers) {
     if (obs.disconnected || !obs.target) continue;
@@ -519,16 +503,12 @@ void MutationObservers::disconnectDetachedTargets(const std::vector<void*>& /*de
       obs.disconnected = true;
       if (_active_count > 0) _active_count--;
       obs.dispatch_scheduled = false;
-      // BUG-3 fix: also purge removedNodes from queued records to prevent UAF
-      // when the trampoline later tries to materialize them.
       for (auto& rec : obs.queue) {
         rec.removedNodes.clear();
       }
       obs.queue.clear();
     }
   }
-  // BUG-3 fix: for observers whose targets ARE still in the document,
-  // purge any removedNodes references that are now detached (dangling).
   for (auto& obs : _observers) {
     if (obs.disconnected) continue;
     for (auto& rec : obs.queue) {
