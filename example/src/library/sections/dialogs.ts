@@ -1,4 +1,5 @@
 import type { ISection } from '../../types';
+import { Alert } from 'react-native';
 import { JSDOM } from '@salve-software/react-native-nitro-jsdom';
 
 export const dialogsSection = async (): Promise<ISection> => {
@@ -98,11 +99,12 @@ export const dialogsSection = async (): Promise<ISection> => {
     label: 'window.alert("Hello!") — press ▶ to trigger',
     value: 'tap to run',
     onPress: async () => {
-      let received: string | undefined;
-      const dom = JSDOM.create(html, { onAlert: (msg) => { received = msg; } });
+      const dom = JSDOM.create(html, {
+        onAlert: (msg) => Alert.alert('Alert (from sandbox)', msg),
+      });
       await dom.evaluate(`window.alert("Hello from sandbox!")`);
       dom.dispose();
-      return received !== undefined ? `✓ "${received}"` : '✗ callback not fired';
+      return '✓ fired — check the RN alert above';
     },
   });
 
@@ -110,7 +112,14 @@ export const dialogsSection = async (): Promise<ISection> => {
     label: 'window.confirm("Continue?") — press ▶',
     value: 'tap to run',
     onPress: async () => {
-      const dom = JSDOM.create(html, { onConfirm: () => true });
+      const dom = JSDOM.create(html, {
+        onConfirm: (msg) => new Promise<boolean>((resolve) => {
+          Alert.alert('Confirm (from sandbox)', msg, [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'OK', onPress: () => resolve(true) },
+          ]);
+        }),
+      });
       const raw = await dom.evaluate(`String(window.confirm("Continue?"))`);
       dom.dispose();
       return `✓ confirm returned: ${raw}`;
