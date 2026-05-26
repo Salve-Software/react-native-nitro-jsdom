@@ -44,6 +44,12 @@ export class JSDOM {
       sandbox.setConsoleCallback(null);
     }
 
+    sandbox.setDialogCallbacks(
+      options?.onAlert ?? null,
+      options?.onConfirm ?? null,
+      options?.onPrompt ?? null,
+    );
+
     return new JSDOM(sandbox);
   }
 
