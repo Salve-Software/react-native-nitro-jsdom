@@ -12,4 +12,12 @@ export interface HtmlSandbox extends HybridObject<{ ios: 'c++'; android: 'c++' }
 
   // Set (or clear) the console output callback. Pass null to silence console output.
   setConsoleCallback(callback: ((level: string, args: string[]) => void) | null): void;
+
+  // Set (or clear) the dialog callbacks for window.alert / confirm / prompt.
+  // Pass null for any callback to use the browser default (no-op / false / null).
+  setDialogCallbacks(
+    onAlert: ((message: string) => void) | null,
+    onConfirm: ((message: string) => boolean) | null,
+    onPrompt: ((message: string, defaultValue?: string) => string | null) | null,
+  ): void;
 }
