@@ -67,9 +67,9 @@ void HybridHtmlSandbox::setConsoleCallback(
 }
 
 void HybridHtmlSandbox::setDialogCallbacks(
-    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& message)>>>& onAlert,
-    const std::optional<std::variant<nitro::NullType, std::function<bool(const std::string& message)>>>& onConfirm,
-    const std::optional<std::variant<nitro::NullType, std::function<std::variant<nitro::NullType, std::string>(const std::string& message, const std::optional<std::string>& defaultValue)>>>& onPrompt) {
+    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string&)>>>& onAlert,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>>& onConfirm,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string&, const std::optional<std::string>&)>>>& onPrompt) {
   if (!_runtime) return;
 
   // ── onAlert ──────────────────────────────────────────────────────────────────
@@ -86,9 +86,14 @@ void HybridHtmlSandbox::setDialogCallbacks(
   if (!onConfirm.has_value() || std::holds_alternative<nitro::NullType>(onConfirm.value())) {
     _runtime->setConfirmCallback(nullptr);
   } else {
-    auto fn = std::get<std::function<bool(const std::string&)>>(onConfirm.value());
+    auto fn = std::get<std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>(onConfirm.value());
     _runtime->setConfirmCallback([fn](const std::string& message) -> bool {
-      return fn(message);
+      bool result = false;
+      auto promise = fn(message);
+      promise->addOnResolvedListener([&result](const bool& val) {
+        result = val;
+      });
+      return result;
     });
   }
 
@@ -96,13 +101,17 @@ void HybridHtmlSandbox::setDialogCallbacks(
   if (!onPrompt.has_value() || std::holds_alternative<nitro::NullType>(onPrompt.value())) {
     _runtime->setPromptCallback(nullptr);
   } else {
-    auto fn = std::get<std::function<std::variant<nitro::NullType, std::string>(const std::string&, const std::optional<std::string>&)>>(onPrompt.value());
+    using RetType = std::variant<nitro::NullType, std::string>;
+    auto fn = std::get<std::function<std::shared_ptr<Promise<RetType>>(const std::string&, const std::optional<std::string>&)>>(onPrompt.value());
     _runtime->setPromptCallback([fn](const std::string& message, const std::optional<std::string>& defaultValue) -> std::optional<std::string> {
-      auto result = fn(message, defaultValue);
-      if (std::holds_alternative<nitro::NullType>(result)) {
-        return std::nullopt;
-      }
-      return std::get<std::string>(result);
+      std::optional<std::string> result = std::nullopt;
+      auto promise = fn(message, defaultValue);
+      promise->addOnResolvedListener([&result](const RetType& val) {
+        if (std::holds_alternative<std::string>(val)) {
+          result = std::get<std::string>(val);
+        }
+      });
+      return result;
     });
   }
 }

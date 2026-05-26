@@ -29,9 +29,9 @@ public:
   ) override;
 
   void setDialogCallbacks(
-    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& message)>>>& onAlert,
-    const std::optional<std::variant<nitro::NullType, std::function<bool(const std::string& message)>>>& onConfirm,
-    const std::optional<std::variant<nitro::NullType, std::function<std::variant<nitro::NullType, std::string>(const std::string& message, const std::optional<std::string>& defaultValue)>>>& onPrompt
+    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& /* message */)>>>& onAlert,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<bool>>(const std::string& /* message */)>>>& onConfirm,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string& /* message */, const std::optional<std::string>& /* defaultValue */)>>>& onPrompt
   ) override;
 
 private:
