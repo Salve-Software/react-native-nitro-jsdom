@@ -462,6 +462,18 @@ export const runExamples = async (): Promise<IResult[]> => {
     dom.dispose();
   }
 
+  // prompt defaultValue null coercion — JS null is not undefined, so it is
+  // coerced to the string "null" and forwarded as a present defaultValue.
+  {
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onPrompt: (_m, d) => d === undefined ? '<absent>' : `<present:${d}>`,
+    });
+    // null is coerced via JS_ToString → "null" string, so defaultValue is present
+    const resNull = await dom.evaluate(`window.prompt('x', null)`);
+    results.push({ label: 'prompt defaultValue null coercion — expect: <present:null>', value: resNull });
+    dom.dispose();
+  }
+
   // synchronous ordering — callback fires during evaluate(), before resume
   // Uses a single evaluate() call: if onAlert fires synchronously during the
   // JS execution, order[0] will be 'alert' before the promise resolves.
