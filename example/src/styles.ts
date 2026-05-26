@@ -71,4 +71,45 @@ export const styles = StyleSheet.create({
     color: '#4ADE80',
     fontSize: 14,
   },
+
+  section: {
+    marginBottom: 16,
+  },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
+  },
+
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E8E8E8',
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+
+  sectionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  sectionCount: {
+    fontSize: 11,
+    color: '#555',
+    fontFamily: 'monospace',
+  },
+
+  sectionChevron: {
+    fontSize: 10,
+    color: '#555',
+  },
 })
