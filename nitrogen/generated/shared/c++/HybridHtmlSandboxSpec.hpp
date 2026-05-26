@@ -58,6 +58,7 @@ namespace margelo::nitro::nitrojsdom {
       virtual std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) = 0;
       virtual std::string serialize() = 0;
       virtual void setConsoleCallback(const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& /* level */, const std::vector<std::string>& /* args */)>>>& callback) = 0;
+      virtual void setDialogCallbacks(const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& /* message */)>>>& onAlert, const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<bool>>(const std::string& /* message */)>>>& onConfirm, const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string& /* message */, const std::optional<std::string>& /* defaultValue */)>>>& onPrompt) = 0;
 
     protected:
       // Hybrid Setup

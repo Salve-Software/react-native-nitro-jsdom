@@ -88,12 +88,11 @@ void HybridHtmlSandbox::setDialogCallbacks(
   } else {
     auto fn = std::get<std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>(onConfirm.value());
     _runtime->setConfirmCallback([fn](const std::string& message) -> bool {
-      bool result = false;
-      auto promise = fn(message);
-      promise->addOnResolvedListener([&result](const bool& val) {
-        result = val;
-      });
-      return result;
+      try {
+        return fn(message)->await().get();
+      } catch (...) {
+        return false;
+      }
     });
   }
 
@@ -104,14 +103,15 @@ void HybridHtmlSandbox::setDialogCallbacks(
     using RetType = std::variant<nitro::NullType, std::string>;
     auto fn = std::get<std::function<std::shared_ptr<Promise<RetType>>(const std::string&, const std::optional<std::string>&)>>(onPrompt.value());
     _runtime->setPromptCallback([fn](const std::string& message, const std::optional<std::string>& defaultValue) -> std::optional<std::string> {
-      std::optional<std::string> result = std::nullopt;
-      auto promise = fn(message, defaultValue);
-      promise->addOnResolvedListener([&result](const RetType& val) {
+      try {
+        auto val = fn(message, defaultValue)->await().get();
         if (std::holds_alternative<std::string>(val)) {
-          result = std::get<std::string>(val);
+          return std::get<std::string>(val);
         }
-      });
-      return result;
+        return std::nullopt;
+      } catch (...) {
+        return std::nullopt;
+      }
     });
   }
 }
