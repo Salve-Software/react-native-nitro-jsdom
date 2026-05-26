@@ -365,5 +365,134 @@ export const runExamples = async (): Promise<IResult[]> => {
 
   moDom.dispose();
 
+  // ── v0.5 window.alert / confirm / prompt ────────────────────────────────────
+
+  // alert with callback — captured message matches, result is "undefined"
+  {
+    let captured = '';
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onAlert: (m) => { captured = m; },
+    });
+    const res = await dom.evaluate(`window.alert('hello')`);
+    results.push({ label: 'alert with callback — captured — expect: hello', value: captured });
+    results.push({ label: 'alert returns undefined — expect: undefined', value: res });
+    dom.dispose();
+  }
+
+  // alert without callback — no throw, returns undefined
+  {
+    const dom = JSDOM.create('<html><body></body></html>');
+    let ok = true;
+    let res = '';
+    try {
+      res = await dom.evaluate(`window.alert('hello'); 1`);
+    } catch {
+      ok = false;
+    }
+    results.push({ label: 'alert without callback — no throw — expect: true', value: String(ok) });
+    results.push({ label: 'alert without callback — returns 1 — expect: 1', value: res });
+    dom.dispose();
+  }
+
+  // confirm with callback returning true
+  {
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onConfirm: () => true,
+    });
+    const res = await dom.evaluate(`window.confirm('ok?')`);
+    results.push({ label: 'confirm with callback true — expect: true', value: res });
+    dom.dispose();
+  }
+
+  // confirm with callback returning false
+  {
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onConfirm: () => false,
+    });
+    const res = await dom.evaluate(`window.confirm('ok?')`);
+    results.push({ label: 'confirm with callback false — expect: false', value: res });
+    dom.dispose();
+  }
+
+  // confirm without callback — returns false (browser default)
+  {
+    const dom = JSDOM.create('<html><body></body></html>');
+    const res = await dom.evaluate(`window.confirm('ok?')`);
+    results.push({ label: 'confirm without callback — expect: false', value: res });
+    dom.dispose();
+  }
+
+  // prompt with callback returning a string
+  {
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onPrompt: (_m, d) => (d ?? '') + '!',
+    });
+    const res = await dom.evaluate(`window.prompt('name?', 'default')`);
+    results.push({ label: 'prompt with callback — expect: default!', value: res });
+    dom.dispose();
+  }
+
+  // prompt with callback returning null
+  {
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onPrompt: () => null,
+    });
+    const res = await dom.evaluate(`window.prompt('x')`);
+    results.push({ label: 'prompt callback returning null — expect: null', value: res });
+    dom.dispose();
+  }
+
+  // prompt without callback — returns null (browser default)
+  {
+    const dom = JSDOM.create('<html><body></body></html>');
+    const res = await dom.evaluate(`window.prompt('x')`);
+    results.push({ label: 'prompt without callback — expect: null', value: res });
+    dom.dispose();
+  }
+
+  // prompt defaultValue forwarding — absent vs present
+  {
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onPrompt: (_m, d) => d === undefined ? '<none>' : d,
+    });
+    const resAbsent = await dom.evaluate(`window.prompt('x')`);
+    const resPresent = await dom.evaluate(`window.prompt('x', 'abc')`);
+    results.push({ label: 'prompt defaultValue absent — expect: <none>', value: resAbsent });
+    results.push({ label: 'prompt defaultValue present — expect: abc', value: resPresent });
+    dom.dispose();
+  }
+
+  // synchronous ordering — callback fires during evaluate(), before resume
+  {
+    const order: string[] = [];
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onAlert: () => order.push('alert'),
+    });
+    await dom.evaluate(`
+      (function() {
+        window.__order = [];
+        window.__order.push('before');
+      })()
+    `);
+    // We push 'before' inside the sandbox; alert callback pushes to outer array;
+    // then we push 'after' in another evaluate to verify ordering
+    order.push('before');
+    await dom.evaluate(`window.alert('x')`);
+    order.push('after');
+    results.push({ label: 'alert synchronous ordering — expect: before,alert,after', value: order.join(',') });
+    dom.dispose();
+  }
+
+  // onConsole regression — existing test still works
+  {
+    const consoleLogs2: string[] = [];
+    const dom = JSDOM.create('<html><body></body></html>', {
+      onConsole: (_level, args) => { consoleLogs2.push(args.join(' ')); },
+    });
+    await dom.evaluate(`console.log('regression', 'check')`);
+    results.push({ label: 'onConsole regression — expect: regression check', value: consoleLogs2[0] ?? '(none)' });
+    dom.dispose();
+  }
+
   return results;
 }
