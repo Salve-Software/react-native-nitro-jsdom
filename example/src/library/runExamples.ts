@@ -500,5 +500,48 @@ export const runExamples = async (): Promise<IResult[]> => {
     dom.dispose();
   }
 
+  // ── Interactive examples ──────────────────────────────────────────────────────
+
+  results.push({
+    label: 'window.alert("Hello!") — press ▶ to trigger',
+    value: 'tap to run',
+    onPress: async () => {
+      let received: string | undefined;
+      const dom = JSDOM.create('<html><body></body></html>', {
+        onAlert: (msg) => { received = msg; },
+      });
+      await dom.evaluate(`window.alert("Hello from sandbox!")`);
+      dom.dispose();
+      return received !== undefined ? `✓ "${received}"` : '✗ callback not fired';
+    },
+  });
+
+  results.push({
+    label: 'window.confirm("Continue?") — press ▶',
+    value: 'tap to run',
+    onPress: async () => {
+      let result: boolean | undefined;
+      const dom = JSDOM.create('<html><body></body></html>', {
+        onConfirm: () => true,
+      });
+      const raw = await dom.evaluate(`String(window.confirm("Continue?"))`);
+      dom.dispose();
+      return `✓ confirm returned: ${raw}`;
+    },
+  });
+
+  results.push({
+    label: 'window.prompt("Your name?") — press ▶',
+    value: 'tap to run',
+    onPress: async () => {
+      const dom = JSDOM.create('<html><body></body></html>', {
+        onPrompt: (_msg, def) => `Hello, ${def ?? 'stranger'}!`,
+      });
+      const res = await dom.evaluate(`window.prompt("Your name?", "World")`);
+      dom.dispose();
+      return `✓ prompt returned: "${res}"`;
+    },
+  });
+
   return results;
 }

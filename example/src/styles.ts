@@ -29,6 +29,12 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  cardContent: {
+    flex: 1,
   },
 
   label: {
@@ -43,5 +49,26 @@ export const styles = StyleSheet.create({
     color: '#4ADE80',
     fontWeight: '600',
     fontFamily: 'monospace',
+  },
+
+  pressButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#222',
+    borderWidth: 1,
+    borderColor: '#4ADE80',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+
+  pressButtonDisabled: {
+    borderColor: '#333',
+  },
+
+  pressButtonText: {
+    color: '#4ADE80',
+    fontSize: 14,
   },
 })
