@@ -66,4 +66,45 @@ void HybridHtmlSandbox::setConsoleCallback(
   }
 }
 
+void HybridHtmlSandbox::setDialogCallbacks(
+    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& message)>>>& onAlert,
+    const std::optional<std::variant<nitro::NullType, std::function<bool(const std::string& message)>>>& onConfirm,
+    const std::optional<std::variant<nitro::NullType, std::function<std::variant<nitro::NullType, std::string>(const std::string& message, const std::optional<std::string>& defaultValue)>>>& onPrompt) {
+  if (!_runtime) return;
+
+  // ── onAlert ──────────────────────────────────────────────────────────────────
+  if (!onAlert.has_value() || std::holds_alternative<nitro::NullType>(onAlert.value())) {
+    _runtime->setAlertCallback(nullptr);
+  } else {
+    auto fn = std::get<std::function<void(const std::string&)>>(onAlert.value());
+    _runtime->setAlertCallback([fn](const std::string& message) {
+      fn(message);
+    });
+  }
+
+  // ── onConfirm ────────────────────────────────────────────────────────────────
+  if (!onConfirm.has_value() || std::holds_alternative<nitro::NullType>(onConfirm.value())) {
+    _runtime->setConfirmCallback(nullptr);
+  } else {
+    auto fn = std::get<std::function<bool(const std::string&)>>(onConfirm.value());
+    _runtime->setConfirmCallback([fn](const std::string& message) -> bool {
+      return fn(message);
+    });
+  }
+
+  // ── onPrompt ─────────────────────────────────────────────────────────────────
+  if (!onPrompt.has_value() || std::holds_alternative<nitro::NullType>(onPrompt.value())) {
+    _runtime->setPromptCallback(nullptr);
+  } else {
+    auto fn = std::get<std::function<std::variant<nitro::NullType, std::string>(const std::string&, const std::optional<std::string>&)>>(onPrompt.value());
+    _runtime->setPromptCallback([fn](const std::string& message, const std::optional<std::string>& defaultValue) -> std::optional<std::string> {
+      auto result = fn(message, defaultValue);
+      if (std::holds_alternative<nitro::NullType>(result)) {
+        return std::nullopt;
+      }
+      return std::get<std::string>(result);
+    });
+  }
+}
+
 } // namespace margelo::nitro::nitrojsdom
