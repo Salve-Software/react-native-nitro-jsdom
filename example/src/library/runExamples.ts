@@ -463,23 +463,17 @@ export const runExamples = async (): Promise<IResult[]> => {
   }
 
   // synchronous ordering — callback fires during evaluate(), before resume
+  // Uses a single evaluate() call: if onAlert fires synchronously during the
+  // JS execution, order[0] will be 'alert' before the promise resolves.
   {
     const order: string[] = [];
     const dom = JSDOM.create('<html><body></body></html>', {
       onAlert: () => order.push('alert'),
     });
-    await dom.evaluate(`
-      (function() {
-        window.__order = [];
-        window.__order.push('before');
-      })()
-    `);
-    // We push 'before' inside the sandbox; alert callback pushes to outer array;
-    // then we push 'after' in another evaluate to verify ordering
-    order.push('before');
     await dom.evaluate(`window.alert('x')`);
-    order.push('after');
-    results.push({ label: 'alert synchronous ordering — expect: before,alert,after', value: order.join(',') });
+    // onAlert must have fired synchronously inside the evaluate() call.
+    // If it had fired asynchronously (after resolve), order would be empty here.
+    results.push({ label: 'alert sync ordering — expect: alert', value: order[0] ?? 'not-fired' });
     dom.dispose();
   }
 
