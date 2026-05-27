@@ -28,6 +28,12 @@ public:
     const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& level, const std::vector<std::string>& args)>>>& callback
   ) override;
 
+  void setDialogCallbacks(
+    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& /* message */)>>>& onAlert,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<bool>>(const std::string& /* message */)>>>& onConfirm,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string& /* message */, const std::optional<std::string>& /* defaultValue */)>>>& onPrompt
+  ) override;
+
 private:
   std::unique_ptr<LexborDocument> _document;
   std::unique_ptr<QuickJSRuntime> _runtime;

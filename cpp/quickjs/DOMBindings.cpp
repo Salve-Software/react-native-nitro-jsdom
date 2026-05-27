@@ -1069,6 +1069,65 @@ static JSValue js_console_method(JSContext* ctx, JSValue, int argc, JSValue* arg
   return JS_UNDEFINED;
 }
 
+// ── window.alert / confirm / prompt ──────────────────────────────────────────
+
+static JSValue js_window_alert(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !rctx->alert_callback) return JS_UNDEFINED;
+  std::string message;
+  if (argc >= 1) {
+    JSValue str_val = JS_ToString(ctx, argv[0]);
+    if (JS_IsException(str_val)) return JS_EXCEPTION;
+    const char* s = JS_ToCString(ctx, str_val);
+    if (s) { message = s; JS_FreeCString(ctx, s); }
+    JS_FreeValue(ctx, str_val);
+  }
+  rctx->alert_callback(message);
+  return JS_UNDEFINED;
+}
+
+static JSValue js_window_confirm(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !rctx->confirm_callback) return JS_FALSE;
+  std::string message;
+  if (argc >= 1) {
+    JSValue str_val = JS_ToString(ctx, argv[0]);
+    if (JS_IsException(str_val)) return JS_EXCEPTION;
+    const char* s = JS_ToCString(ctx, str_val);
+    if (s) { message = s; JS_FreeCString(ctx, s); }
+    JS_FreeValue(ctx, str_val);
+  }
+  bool result = rctx->confirm_callback(message);
+  return JS_NewBool(ctx, result);
+}
+
+static JSValue js_window_prompt(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !rctx->prompt_callback) return JS_NULL;
+  std::string message;
+  if (argc >= 1) {
+    JSValue str_val = JS_ToString(ctx, argv[0]);
+    if (JS_IsException(str_val)) return JS_EXCEPTION;
+    const char* s = JS_ToCString(ctx, str_val);
+    if (s) { message = s; JS_FreeCString(ctx, s); }
+    JS_FreeValue(ctx, str_val);
+  }
+  // argv[1] present and not undefined → forward as defaultValue
+  std::optional<std::string> defaultValue;
+  if (argc >= 2 && !JS_IsUndefined(argv[1])) {
+    JSValue str_val = JS_ToString(ctx, argv[1]);
+    if (JS_IsException(str_val)) return JS_EXCEPTION;
+    const char* s = JS_ToCString(ctx, str_val);
+    if (s) { defaultValue = std::string(s); JS_FreeCString(ctx, s); }
+    JS_FreeValue(ctx, str_val);
+  }
+  std::optional<std::string> result = rctx->prompt_callback(message, defaultValue);
+  if (result.has_value()) {
+    return JS_NewStringLen(ctx, result->c_str(), result->size());
+  }
+  return JS_NULL;
+}
+
 // ── DOMBindings::install ──────────────────────────────────────────────────────
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
@@ -1147,6 +1206,11 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   // ── Event constructor ──────────────────────────────────────────────────────
   JSValue event_ctor = JS_NewCFunction2(ctx, js_Event_constructor, "Event", 1, JS_CFUNC_constructor, 0);
   JS_SetPropertyStr(ctx, global, "Event", event_ctor);
+
+  // ── window.alert / confirm / prompt ───────────────────────────────────────
+  JS_SetPropertyStr(ctx, global, "alert",   JS_NewCFunction(ctx, js_window_alert,   "alert",   1));
+  JS_SetPropertyStr(ctx, global, "confirm", JS_NewCFunction(ctx, js_window_confirm, "confirm", 1));
+  JS_SetPropertyStr(ctx, global, "prompt",  JS_NewCFunction(ctx, js_window_prompt,  "prompt",  2));
 
   // ── MutationObserver ───────────────────────────────────────────────────────
   {

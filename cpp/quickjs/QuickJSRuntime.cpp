@@ -181,6 +181,21 @@ void QuickJSRuntime::setConsoleCallback(
   if (_ctxState) _ctxState->console_callback = std::move(cb);
 }
 
+// ── Dialog callbacks ──────────────────────────────────────────────────────────
+
+void QuickJSRuntime::setAlertCallback(std::function<void(const std::string&)> cb) {
+  if (_ctxState) _ctxState->alert_callback = std::move(cb);
+}
+
+void QuickJSRuntime::setConfirmCallback(std::function<bool(const std::string&)> cb) {
+  if (_ctxState) _ctxState->confirm_callback = std::move(cb);
+}
+
+void QuickJSRuntime::setPromptCallback(
+    std::function<std::optional<std::string>(const std::string&, const std::optional<std::string>&)> cb) {
+  if (_ctxState) _ctxState->prompt_callback = std::move(cb);
+}
+
 // ── Event loop drain ──────────────────────────────────────────────────────────
 
 void QuickJSRuntime::drainEventLoop() {

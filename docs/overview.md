@@ -135,6 +135,9 @@ const dom = JSDOM.create('<html><body><p id="x">hello</p></body></html>', {
   url: 'about:blank',     // window.location.href — default: 'about:blank'
   pretendToBeVisual: false, // document.hidden = false — default: false
   onConsole: (level, args) => console.log(`[sandbox ${level}]`, ...args),
+  onAlert: (message) => console.log('[alert]', message),          // default: no-op
+  onConfirm: (message) => true,                                    // default: false
+  onPrompt: (message, defaultValue) => defaultValue ?? null,       // default: null
 })
 ```
 
@@ -225,6 +228,7 @@ dom.dispose() // ← always pair with create()
 - [ ] Full jsdom API parity audit
 - [ ] `window.location`
 - [x] `MutationObserver`
+- [x] `window.alert` / `window.confirm` / `window.prompt`
 - [ ] `CustomEvent`
 
 ---

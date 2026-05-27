@@ -8,6 +8,7 @@
 #include <queue>
 #include <unordered_map>
 #include <chrono>
+#include <optional>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -57,6 +58,11 @@ struct RuntimeContext {
   // Console callback (nullptr = silent)
   std::function<void(std::string level, std::vector<std::string> args)> console_callback;
 
+  // Dialog callbacks (empty = use browser defaults)
+  std::function<void(const std::string& message)> alert_callback;
+  std::function<bool(const std::string& message)> confirm_callback;
+  std::function<std::optional<std::string>(const std::string& message, const std::optional<std::string>& defaultValue)> prompt_callback;
+
   // Pending unhandled Promise rejection (stored as JSValue* heap-allocated)
   void* pending_rejection { nullptr }; // JSValue* or nullptr
 
@@ -78,6 +84,10 @@ public:
   std::string evaluate(const std::string& script);
 
   void setConsoleCallback(std::function<void(std::string level, std::vector<std::string> args)> cb);
+
+  void setAlertCallback(std::function<void(const std::string&)> cb);
+  void setConfirmCallback(std::function<bool(const std::string&)> cb);
+  void setPromptCallback(std::function<std::optional<std::string>(const std::string&, const std::optional<std::string>&)> cb);
 
   void* context() const { return _context; }
   RuntimeContext* contextState() const { return _ctxState.get(); }

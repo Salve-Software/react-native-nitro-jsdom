@@ -66,4 +66,54 @@ void HybridHtmlSandbox::setConsoleCallback(
   }
 }
 
+void HybridHtmlSandbox::setDialogCallbacks(
+    const std::optional<std::variant<nitro::NullType, std::function<void(const std::string&)>>>& onAlert,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>>& onConfirm,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string&, const std::optional<std::string>&)>>>& onPrompt) {
+  if (!_runtime) return;
+
+  // ── onAlert ──────────────────────────────────────────────────────────────────
+  if (!onAlert.has_value() || std::holds_alternative<nitro::NullType>(onAlert.value())) {
+    _runtime->setAlertCallback(nullptr);
+  } else {
+    auto fn = std::get<std::function<void(const std::string&)>>(onAlert.value());
+    _runtime->setAlertCallback([fn](const std::string& message) {
+      fn(message);
+    });
+  }
+
+  // ── onConfirm ────────────────────────────────────────────────────────────────
+  if (!onConfirm.has_value() || std::holds_alternative<nitro::NullType>(onConfirm.value())) {
+    _runtime->setConfirmCallback(nullptr);
+  } else {
+    auto fn = std::get<std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>(onConfirm.value());
+    _runtime->setConfirmCallback([fn](const std::string& message) -> bool {
+      try {
+        return fn(message)->await().get();
+      } catch (...) {
+        return false;
+      }
+    });
+  }
+
+  // ── onPrompt ─────────────────────────────────────────────────────────────────
+  if (!onPrompt.has_value() || std::holds_alternative<nitro::NullType>(onPrompt.value())) {
+    _runtime->setPromptCallback(nullptr);
+  } else {
+    using RetType = std::variant<nitro::NullType, std::string>;
+    auto fn = std::get<std::function<std::shared_ptr<Promise<RetType>>(const std::string&, const std::optional<std::string>&)>>(onPrompt.value());
+    _runtime->setPromptCallback([fn](const std::string& message, const std::optional<std::string>& defaultValue) -> std::optional<std::string> {
+      try {
+        auto val = fn(message, defaultValue)->await().get();
+        if (std::holds_alternative<std::string>(val)) {
+          return std::get<std::string>(val);
+        }
+        return std::nullopt;
+      } catch (...) {
+        return std::nullopt;
+      }
+    });
+  }
+}
+
 } // namespace margelo::nitro::nitrojsdom
