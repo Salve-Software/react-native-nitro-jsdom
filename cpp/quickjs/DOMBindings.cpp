@@ -888,6 +888,37 @@ static JSValue js_Event_constructor(JSContext* ctx, JSValue, int argc, JSValue* 
   return obj;
 }
 
+static JSValue js_CustomEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  JSValue obj = JS_NewObjectClass(ctx, js_event_class_id);
+  const char* type_str = (argc >= 1) ? JS_ToCString(ctx, argv[0]) : nullptr;
+  JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, type_str ? type_str : ""));
+  if (type_str) JS_FreeCString(ctx, type_str);
+
+  JSValue detail = JS_UNDEFINED;
+  bool bubbles = false;
+  bool cancelable = false;
+
+  if (argc >= 2 && JS_IsObject(argv[1])) {
+    JSValue d = JS_GetPropertyStr(ctx, argv[1], "detail");
+    if (JS_IsException(d)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { detail = d; }
+
+    JSValue b = JS_GetPropertyStr(ctx, argv[1], "bubbles");
+    if (JS_IsException(b)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { bubbles = JS_ToBool(ctx, b) > 0; JS_FreeValue(ctx, b); }
+
+    JSValue c = JS_GetPropertyStr(ctx, argv[1], "cancelable");
+    if (JS_IsException(c)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { cancelable = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
+  }
+
+  JS_SetPropertyStr(ctx, obj, "detail",           detail);
+  JS_SetPropertyStr(ctx, obj, "bubbles",          JS_NewBool(ctx, bubbles));
+  JS_SetPropertyStr(ctx, obj, "cancelable",       JS_NewBool(ctx, cancelable));
+  JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
+  return obj;
+}
+
 static JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
@@ -1500,6 +1531,35 @@ static const char* kLocationBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── document.title ─────────────────────────────────────────────────────────
+// Pure JS shim on top of the already-exposed document.head/createElement/
+// appendChild/querySelector/textContent — no new native bindings needed.
+
+static const char* kDocumentTitleBootstrapScript = R"JS(
+(function() {
+  Object.defineProperty(document, 'title', {
+    get: function() {
+      var head = document.head;
+      if (!head) return '';
+      var titleEl = head.querySelector('title');
+      return titleEl ? titleEl.textContent : '';
+    },
+    set: function(value) {
+      var head = document.head;
+      if (!head) return;
+      var titleEl = head.querySelector('title');
+      if (!titleEl) {
+        titleEl = document.createElement('title');
+        head.appendChild(titleEl);
+      }
+      titleEl.textContent = String(value);
+    },
+    enumerable: true,
+    configurable: true,
+  });
+})();
+)JS";
+
 // ── DOMBindings::install ──────────────────────────────────────────────────────
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
@@ -1577,6 +1637,10 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSValue event_ctor = JS_NewCFunction2(ctx, js_Event_constructor, "Event", 1, JS_CFUNC_constructor, 0);
   JS_SetPropertyStr(ctx, global, "Event", event_ctor);
 
+  // ── CustomEvent constructor ────────────────────────────────────────────────
+  JSValue custom_event_ctor = JS_NewCFunction2(ctx, js_CustomEvent_constructor, "CustomEvent", 2, JS_CFUNC_constructor, 0);
+  JS_SetPropertyStr(ctx, global, "CustomEvent", custom_event_ctor);
+
   // ── window.alert / confirm / prompt ───────────────────────────────────────
   JS_SetPropertyStr(ctx, global, "alert",   JS_NewCFunction(ctx, js_window_alert,   "alert",   1));
   JS_SetPropertyStr(ctx, global, "confirm", JS_NewCFunction(ctx, js_window_confirm, "confirm", 1));
@@ -1633,6 +1697,14 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, location_result);
+
+  // ── JS-level document.title bootstrap ──────────────────────────────────────
+  JSValue title_result = JS_Eval(ctx, kDocumentTitleBootstrapScript, strlen(kDocumentTitleBootstrapScript),
+                                  "<document-title-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(title_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, title_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom
