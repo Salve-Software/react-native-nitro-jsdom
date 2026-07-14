@@ -20,9 +20,9 @@ const config = {
   runners: [
     androidPlatform({
       name: 'android',
-      device: androidEmulator('Pixel_8_API_35', {
+      device: androidEmulator('Pixel_7_API_35', {
         apiLevel: 35,
-        profile: 'pixel_8',
+        profile: 'pixel_7',
         diskSize: '6G',
         heapSize: '1G',
       }),
