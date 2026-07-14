@@ -229,11 +229,22 @@ dom.dispose() // ← always pair with create()
 - [x] `XMLHttpRequest` stub
 
 ### v0.5 — jsdom Compatibility
-- [ ] Full jsdom API parity audit
+- [x] Full jsdom API parity audit
 - [x] `window.location`
 - [x] `MutationObserver`
 - [x] `window.alert` / `window.confirm` / `window.prompt`
 - [x] `CustomEvent`
+
+### v0.6 — Node & Style API
+> Gaps identified by the v0.5 jsdom API parity audit, prioritized by how often
+> real-world HTML/JS embedded scripts hit them.
+- [ ] Generic Node traversal (`childNodes`, `nodeType`, `nodeName`, `nodeValue`, `firstChild` / `lastChild` / `nextSibling` / `previousSibling`, `parentNode`)
+- [ ] `document.getElementsByClassName` / `document.getElementsByTagName`
+- [ ] `element.cloneNode()`
+- [ ] `element.dataset` (mirrors `data-*` attributes)
+- [ ] `element.style` (`CSSStyleDeclaration`-like object)
+- [ ] `document.title`
+- [ ] Real event bubbling (`dispatchEvent` walks ancestors; `stopPropagation()` / `preventDefault()` take effect)
 
 ---
 
