@@ -10,6 +10,8 @@
 #include <chrono>
 #include <optional>
 
+#include "Storage.hpp"
+
 namespace margelo::nitro::nitrojsdom {
 
 class LexborDocument;
@@ -61,6 +63,9 @@ struct RuntimeContext {
 
   void* pending_rejection { nullptr };
   std::unique_ptr<MutationObservers> mutation_observers;
+
+  Storage local_storage;
+  Storage session_storage;
 
   ~RuntimeContext() = default;
 };

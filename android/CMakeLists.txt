@@ -44,6 +44,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/QuickJSRuntime.cpp
   ../cpp/quickjs/DOMBindings.cpp
   ../cpp/quickjs/MutationObservers.cpp
+  ../cpp/quickjs/Storage.cpp
   ${QUICKJS_SOURCES}
 )
 
