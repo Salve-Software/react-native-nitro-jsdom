@@ -1268,6 +1268,165 @@ static const char* kFetchBootstrapScript = R"JS(
       }
     });
   };
+
+  // ── XMLHttpRequest ──────────────────────────────────────────────────────
+  // send() is fully synchronous: __nativeFetchSync blocks the calling thread
+  // until the response arrives, so all readyState transitions and events
+  // fire within the same call frame, before send() returns.
+
+  function XMLHttpRequest() {
+    this.readyState = XMLHttpRequest.UNSENT;
+    this.status = 0;
+    this.statusText = '';
+    this.responseText = '';
+    this.responseURL = '';
+    this._method = null;
+    this._url = null;
+    this._requestHeaders = {};
+    this._responseHeaders = {};
+    this._listeners = {};
+    this.onreadystatechange = null;
+    this.onload = null;
+    this.onerror = null;
+    this.onabort = null;
+    this.onloadend = null;
+  }
+
+  XMLHttpRequest.UNSENT = 0;
+  XMLHttpRequest.OPENED = 1;
+  XMLHttpRequest.HEADERS_RECEIVED = 2;
+  XMLHttpRequest.LOADING = 3;
+  XMLHttpRequest.DONE = 4;
+
+  XMLHttpRequest.prototype.UNSENT = 0;
+  XMLHttpRequest.prototype.OPENED = 1;
+  XMLHttpRequest.prototype.HEADERS_RECEIVED = 2;
+  XMLHttpRequest.prototype.LOADING = 3;
+  XMLHttpRequest.prototype.DONE = 4;
+
+  Object.defineProperty(XMLHttpRequest.prototype, 'response', {
+    get: function() { return this.responseText; }
+  });
+
+  XMLHttpRequest.prototype._setReadyState = function(state) {
+    this.readyState = state;
+    this._dispatch('readystatechange');
+  };
+
+  XMLHttpRequest.prototype._dispatch = function(type) {
+    var evt = new Event(type);
+    evt.target = this;
+    var handlerName = 'on' + type;
+    if (typeof this[handlerName] === 'function') {
+      try { this[handlerName](evt); } catch (e) {}
+    }
+    var listeners = this._listeners[type];
+    if (listeners) {
+      listeners.slice().forEach(function(cb) {
+        try { cb(evt); } catch (e) {}
+      });
+    }
+  };
+
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._method = String(method || 'GET').toUpperCase();
+    this._url = String(url || '');
+    this._requestHeaders = {};
+    this._responseHeaders = {};
+    this.status = 0;
+    this.statusText = '';
+    this.responseText = '';
+    this.responseURL = '';
+    this._setReadyState(XMLHttpRequest.OPENED);
+  };
+
+  XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+    if (this.readyState !== XMLHttpRequest.OPENED) {
+      var err = new Error('InvalidStateError: setRequestHeader() requires open() to have been called first');
+      err.name = 'InvalidStateError';
+      throw err;
+    }
+    this._requestHeaders[String(name).toLowerCase()] = String(value);
+  };
+
+  XMLHttpRequest.prototype.send = function(body) {
+    if (this.readyState !== XMLHttpRequest.OPENED) {
+      var err = new Error('InvalidStateError: send() requires open() to have been called first');
+      err.name = 'InvalidStateError';
+      throw err;
+    }
+
+    var headersJson = JSON.stringify(this._requestHeaders);
+    var bodyArg = (body === undefined || body === null) ? undefined : String(body);
+
+    var raw = __nativeFetchSync(this._url, this._method, headersJson, bodyArg);
+
+    if (raw.error) {
+      this.status = 0;
+      this.statusText = '';
+      this.responseText = '';
+      this.responseURL = '';
+      this._responseHeaders = {};
+      this._setReadyState(XMLHttpRequest.DONE);
+      this._dispatch('error');
+      this._dispatch('loadend');
+      return;
+    }
+
+    var respHeaders = {};
+    try { respHeaders = JSON.parse(raw.headersJson || '{}'); } catch (e) {}
+    var normalized = {};
+    for (var k in respHeaders) normalized[String(k).toLowerCase()] = String(respHeaders[k]);
+    this._responseHeaders = normalized;
+    this.status = raw.status;
+    this.statusText = raw.statusText || '';
+    this.responseURL = this._url;
+
+    this._setReadyState(XMLHttpRequest.HEADERS_RECEIVED);
+    this._setReadyState(XMLHttpRequest.LOADING);
+    this.responseText = raw.body || '';
+    this._setReadyState(XMLHttpRequest.DONE);
+    this._dispatch('load');
+    this._dispatch('loadend');
+  };
+
+  XMLHttpRequest.prototype.abort = function() {
+    if (this.readyState === XMLHttpRequest.UNSENT || this.readyState === XMLHttpRequest.DONE) {
+      return;
+    }
+    this.status = 0;
+    this.statusText = '';
+    this.responseText = '';
+    this._setReadyState(XMLHttpRequest.DONE);
+    this._dispatch('abort');
+    this._dispatch('loadend');
+  };
+
+  XMLHttpRequest.prototype.getAllResponseHeaders = function() {
+    var lines = [];
+    for (var k in this._responseHeaders) lines.push(k + ': ' + this._responseHeaders[k]);
+    return lines.join('\r\n');
+  };
+
+  XMLHttpRequest.prototype.getResponseHeader = function(name) {
+    var v = this._responseHeaders[String(name).toLowerCase()];
+    return v === undefined ? null : v;
+  };
+
+  XMLHttpRequest.prototype.addEventListener = function(type, cb) {
+    if (typeof cb !== 'function') return;
+    if (!this._listeners[type]) this._listeners[type] = [];
+    this._listeners[type].push(cb);
+  };
+
+  XMLHttpRequest.prototype.removeEventListener = function(type, cb) {
+    var arr = this._listeners[type];
+    if (!arr) return;
+    var idx = arr.indexOf(cb);
+    if (idx !== -1) arr.splice(idx, 1);
+  };
+
+  globalThis.XMLHttpRequest = XMLHttpRequest;
 })();
 )JS";
 
