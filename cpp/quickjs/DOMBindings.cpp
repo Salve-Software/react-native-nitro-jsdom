@@ -100,8 +100,6 @@ static std::string join_classes(const std::vector<std::string>& v) {
   return r;
 }
 
-// Builds a CSS selector matching elements that have every class in `names`
-// (a space-separated list), e.g. "foo bar" -> ".foo.bar".
 static std::string classNames_to_selector(const std::string& names) {
   std::string sel;
   for (const auto& cls : split_classes(names)) { sel += '.'; sel += cls; }
