@@ -23,6 +23,8 @@ const config = {
       device: androidEmulator('Pixel_8_API_35', {
         apiLevel: 35,
         profile: 'pixel_8',
+        diskSize: '6G',
+        heapSize: '1G',
       }),
       bundleId: 'com.nitrojsdomexample',
     }),

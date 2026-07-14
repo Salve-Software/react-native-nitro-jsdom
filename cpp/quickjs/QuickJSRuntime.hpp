@@ -7,8 +7,9 @@
 #include <memory>
 #include <queue>
 #include <unordered_map>
-#include <chrono>
 #include <optional>
+
+#include "Storage.hpp"
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -61,6 +62,9 @@ struct RuntimeContext {
 
   void* pending_rejection { nullptr };
   std::unique_ptr<MutationObservers> mutation_observers;
+
+  Storage local_storage;
+  Storage session_storage;
 
   ~RuntimeContext() = default;
 };

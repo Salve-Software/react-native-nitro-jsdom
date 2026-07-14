@@ -37,6 +37,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -64,9 +65,6 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: example/ios
-
-      - name: Install xcpretty
-        run: gem install xcpretty
 
       - name: Install ccache
         run: brew install ccache
@@ -104,7 +102,7 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             build \
-            CODE_SIGNING_ALLOWED=NO | xcpretty
+            CODE_SIGNING_ALLOWED=NO | bundle exec xcpretty
 
       - name: Run React Native Harness
         uses: callstackincubator/react-native-harness@v1.2.0

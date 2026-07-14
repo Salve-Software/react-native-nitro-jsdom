@@ -1,5 +1,6 @@
 #include "DOMBindings.hpp"
 #include "MutationObservers.hpp"
+#include "Storage.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "QuickJSRuntime.hpp"
 #include "quickjs.h"
@@ -1354,6 +1355,15 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
 
   // ── fetch() ────────────────────────────────────────────────────────────────
   JS_SetPropertyStr(ctx, global, "__nativeFetchSync", JS_NewCFunction(ctx, js_fetch_native, "__nativeFetchSync", 4));
+
+  // ── localStorage / sessionStorage ──────────────────────────────────────────
+  {
+    RuntimeContext* rctx = get_ctx(ctx);
+    if (rctx) {
+      installStorage(ctx, "localStorage", &rctx->local_storage);
+      installStorage(ctx, "sessionStorage", &rctx->session_storage);
+    }
+  }
 
   // ── MutationObserver ───────────────────────────────────────────────────────
   {
