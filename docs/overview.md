@@ -226,7 +226,7 @@ dom.dispose() // ← always pair with create()
 ### v0.4 — Network & Storage
 - [x] `fetch` (bridged through RN's network stack)
 - [x] `localStorage` / `sessionStorage` stubs
-- [ ] `XMLHttpRequest` stub
+- [x] `XMLHttpRequest` stub
 
 ### v0.5 — jsdom Compatibility
 - [ ] Full jsdom API parity audit

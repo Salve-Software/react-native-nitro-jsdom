@@ -6,6 +6,7 @@ import { mutationObserverSection } from './sections/mutationObserver';
 import { dialogsSection } from './sections/dialogs';
 import { fetchSection } from './sections/fetch';
 import { storageSection } from './sections/storage';
+import { xhrSection } from './sections/xhr';
 
 export const runExamples = async (): Promise<ISection[]> => {
   return Promise.all([
@@ -16,5 +17,6 @@ export const runExamples = async (): Promise<ISection[]> => {
     dialogsSection(),
     fetchSection(),
     storageSection(),
+    xhrSection(),
   ]);
 };
