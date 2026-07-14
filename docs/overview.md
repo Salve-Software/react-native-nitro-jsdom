@@ -138,6 +138,10 @@ const dom = JSDOM.create('<html><body><p id="x">hello</p></body></html>', {
   onAlert: (message) => console.log('[alert]', message),          // default: no-op
   onConfirm: (message) => true,                                    // default: false
   onPrompt: (message, defaultValue) => defaultValue ?? null,       // default: null
+  onFetch: async (url, init) => {                                  // default: fetch() rejects
+    const res = await fetch(url, init)
+    return { status: res.status, statusText: res.statusText, headers: Object.fromEntries(res.headers), body: await res.text() }
+  },
 })
 ```
 
@@ -220,7 +224,7 @@ dom.dispose() // ← always pair with create()
 - [x] `evaluate()` drains the event loop completely before returning
 
 ### v0.4 — Network & Storage
-- [ ] `fetch` (bridged through RN's network stack)
+- [x] `fetch` (bridged through RN's network stack)
 - [ ] `localStorage` / `sessionStorage` stubs
 - [ ] `XMLHttpRequest` stub
 

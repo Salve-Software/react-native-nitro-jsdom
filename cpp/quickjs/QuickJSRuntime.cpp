@@ -196,6 +196,11 @@ void QuickJSRuntime::setPromptCallback(
   if (_ctxState) _ctxState->prompt_callback = std::move(cb);
 }
 
+void QuickJSRuntime::setFetchCallback(
+    std::function<std::string(const std::string&, const std::string&, const std::string&, const std::optional<std::string>&)> cb) {
+  if (_ctxState) _ctxState->fetch_callback = std::move(cb);
+}
+
 // ── Event loop drain ──────────────────────────────────────────────────────────
 
 void QuickJSRuntime::drainEventLoop() {

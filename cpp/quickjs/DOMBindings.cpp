@@ -12,6 +12,8 @@
 #include <cctype>
 #include <functional>
 #include <chrono>
+#include <cstring>
+#include <optional>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -1128,13 +1130,151 @@ static JSValue js_window_prompt(JSContext* ctx, JSValue, int argc, JSValue* argv
   return JS_NULL;
 }
 
+// ── fetch() bridge ──────────────────────────────────────────────────────────
+
+static JSValue js_fetch_native(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !rctx->fetch_callback) {
+    JSValue result = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, result, "error", JS_NewString(ctx, "fetch is not available: no onFetch handler configured"));
+    return result;
+  }
+
+  auto toStr = [&](JSValue v) -> std::string {
+    JSValue s = JS_ToString(ctx, v);
+    std::string out;
+    const char* c = JS_ToCString(ctx, s);
+    if (c) { out = c; JS_FreeCString(ctx, c); }
+    JS_FreeValue(ctx, s);
+    return out;
+  };
+
+  std::string url    = argc >= 1 ? toStr(argv[0]) : "";
+  std::string method = argc >= 2 ? toStr(argv[1]) : "GET";
+  std::string headersJson = argc >= 3 ? toStr(argv[2]) : "{}";
+  std::optional<std::string> body;
+  if (argc >= 4 && !JS_IsUndefined(argv[3]) && !JS_IsNull(argv[3])) {
+    body = toStr(argv[3]);
+  }
+
+  std::string response = rctx->fetch_callback(url, method, headersJson, body);
+
+  JSValue parsed = JS_ParseJSON(ctx, response.c_str(), response.size(), "<fetch-response>");
+  if (JS_IsException(parsed)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+    JSValue result = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, result, "error", JS_NewString(ctx, "fetch: invalid response from native layer"));
+    return result;
+  }
+  return parsed;
+}
+
+static const char* kFetchBootstrapScript = R"JS(
+(function() {
+  function normalizeHeaders(h) {
+    var out = {};
+    if (!h) return out;
+    if (typeof h.entries === 'function') {
+      for (var pair of h.entries()) out[pair[0]] = pair[1];
+    } else {
+      for (var k in h) out[k] = h[k];
+    }
+    return out;
+  }
+
+  function Headers(init) {
+    this._map = {};
+    var norm = normalizeHeaders(init);
+    for (var k in norm) this._map[String(k).toLowerCase()] = String(norm[k]);
+  }
+  Headers.prototype.get = function(name) {
+    var v = this._map[String(name).toLowerCase()];
+    return v === undefined ? null : v;
+  };
+  Headers.prototype.has = function(name) {
+    return Object.prototype.hasOwnProperty.call(this._map, String(name).toLowerCase());
+  };
+  Headers.prototype.set = function(name, value) {
+    this._map[String(name).toLowerCase()] = String(value);
+  };
+  Headers.prototype.forEach = function(cb) {
+    for (var k in this._map) cb(this._map[k], k, this);
+  };
+  Headers.prototype.entries = function() {
+    var self = this;
+    var keys = Object.keys(this._map);
+    var i = 0;
+    var iter = {
+      next: function() {
+        if (i >= keys.length) return { done: true, value: undefined };
+        var k = keys[i++];
+        return { done: false, value: [k, self._map[k]] };
+      }
+    };
+    iter[Symbol.iterator] = function() { return iter; };
+    return iter;
+  };
+  globalThis.Headers = Headers;
+
+  function Response(bodyText, init) {
+    init = init || {};
+    this._bodyText = (bodyText === undefined || bodyText === null) ? '' : bodyText;
+    this.status = init.status !== undefined ? init.status : 200;
+    this.statusText = init.statusText !== undefined ? init.statusText : '';
+    this.ok = this.status >= 200 && this.status < 300;
+    this.headers = init.headers instanceof Headers ? init.headers : new Headers(init.headers);
+    this.bodyUsed = false;
+  }
+  Response.prototype.text = function() {
+    this.bodyUsed = true;
+    return Promise.resolve(this._bodyText);
+  };
+  Response.prototype.json = function() {
+    this.bodyUsed = true;
+    return Promise.resolve(JSON.parse(this._bodyText));
+  };
+  Response.prototype.clone = function() {
+    return new Response(this._bodyText, { status: this.status, statusText: this.statusText, headers: this.headers });
+  };
+  globalThis.Response = Response;
+
+  globalThis.fetch = function(input, init) {
+    return new Promise(function(resolve, reject) {
+      try {
+        var url = typeof input === 'string' ? input : (input && input.url);
+        init = init || {};
+        var method = (init.method || 'GET').toUpperCase();
+        var headers = normalizeHeaders(init.headers);
+        var headersJson = JSON.stringify(headers);
+        var body = (init.body === undefined || init.body === null) ? undefined : String(init.body);
+
+        var raw = __nativeFetchSync(url, method, headersJson, body);
+        if (raw.error) {
+          reject(new TypeError(String(raw.error)));
+          return;
+        }
+
+        var respHeaders = {};
+        try { respHeaders = JSON.parse(raw.headersJson || '{}'); } catch (e) {}
+
+        resolve(new Response(raw.body, {
+          status: raw.status,
+          statusText: raw.statusText,
+          headers: respHeaders,
+        }));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  };
+})();
+)JS";
+
 // ── DOMBindings::install ──────────────────────────────────────────────────────
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSContext* ctx = static_cast<JSContext*>(runtime->context());
-  // Note: JS_SetContextOpaque is now set in QuickJSRuntime::initialize to RuntimeContext*.
-  // document is already set on RuntimeContext by QuickJSRuntime::bindDocument before calling here.
-  (void)document; // RuntimeContext already holds the document pointer
+  (void)document;
 
   // Register JS classes
   JS_NewClassID(&js_element_class_id);
@@ -1212,6 +1352,9 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, global, "confirm", JS_NewCFunction(ctx, js_window_confirm, "confirm", 1));
   JS_SetPropertyStr(ctx, global, "prompt",  JS_NewCFunction(ctx, js_window_prompt,  "prompt",  2));
 
+  // ── fetch() ────────────────────────────────────────────────────────────────
+  JS_SetPropertyStr(ctx, global, "__nativeFetchSync", JS_NewCFunction(ctx, js_fetch_native, "__nativeFetchSync", 4));
+
   // ── MutationObserver ───────────────────────────────────────────────────────
   {
     RuntimeContext* rctx = get_ctx(ctx);
@@ -1235,6 +1378,14 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, global, "console", console_obj);
 
   JS_FreeValue(ctx, global);
+
+  // ── JS-level fetch()/Headers/Response bootstrap ────────────────────────────
+  JSValue bootstrap_result = JS_Eval(ctx, kFetchBootstrapScript, strlen(kFetchBootstrapScript),
+                                      "<fetch-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(bootstrap_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, bootstrap_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom
