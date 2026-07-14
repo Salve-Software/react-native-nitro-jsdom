@@ -249,4 +249,43 @@ describe('JSDOM native module', () => {
     `);
     expect(JSON.parse(result)).toEqual({ parentId: 'd', grandparentTag: 'BODY' });
   });
+
+  it('document.getElementsByTagName finds all matching elements in document order', async () => {
+    dom = JSDOM.create('<html><body><p>a</p><div><p>b</p></div></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify(Array.from(document.getElementsByTagName('p')).map((p) => p.textContent));
+    `);
+    expect(JSON.parse(result)).toEqual(['a', 'b']);
+  });
+
+  it('document.getElementsByClassName finds elements having all listed classes', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <p class="foo bar">a</p>
+        <p class="foo">b</p>
+        <p class="foo bar baz">c</p>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(Array.from(document.getElementsByClassName('foo bar')).map((p) => p.textContent));
+    `);
+    expect(JSON.parse(result)).toEqual(['a', 'c']);
+  });
+
+  it('element.getElementsByTagName/getElementsByClassName scope to a subtree', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <div id="scope"><p class="hit">a</p></div>
+        <p class="hit">outside</p>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const scope = document.getElementById('scope');
+      JSON.stringify({
+        byTag: Array.from(scope.getElementsByTagName('p')).map((p) => p.textContent),
+        byClass: Array.from(scope.getElementsByClassName('hit')).map((p) => p.textContent),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ byTag: ['a'], byClass: ['a'] });
+  });
 });

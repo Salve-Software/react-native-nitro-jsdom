@@ -239,7 +239,7 @@ dom.dispose() // ← always pair with create()
 > Gaps identified by the v0.5 jsdom API parity audit, prioritized by how often
 > real-world HTML/JS embedded scripts hit them.
 - [x] Generic Node traversal (`childNodes`, `nodeType`, `nodeName`, `nodeValue`, `firstChild` / `lastChild` / `nextSibling` / `previousSibling`, `parentNode`)
-- [ ] `document.getElementsByClassName` / `document.getElementsByTagName`
+- [x] `document.getElementsByClassName` / `document.getElementsByTagName`
 - [ ] `element.cloneNode()`
 - [ ] `element.dataset` (mirrors `data-*` attributes)
 - [ ] `element.style` (`CSSStyleDeclaration`-like object)

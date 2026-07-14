@@ -100,6 +100,14 @@ static std::string join_classes(const std::vector<std::string>& v) {
   return r;
 }
 
+// Builds a CSS selector matching elements that have every class in `names`
+// (a space-separated list), e.g. "foo bar" -> ".foo.bar".
+static std::string classNames_to_selector(const std::string& names) {
+  std::string sel;
+  for (const auto& cls : split_classes(names)) { sel += '.'; sel += cls; }
+  return sel;
+}
+
 // ── classList methods ─────────────────────────────────────────────────────────
 
 static lxb_dom_element_t* unwrap_classList(JSContext* ctx, JSValue val) {
@@ -807,6 +815,26 @@ static JSValue js_el_querySelectorAll(JSContext* ctx, JSValue this_val, int argc
   return make_element_array(ctx, results);
 }
 
+static JSValue js_el_getElementsByClassName(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 1) return JS_NewArray(ctx);
+  const char* names = JS_ToCString(ctx, argv[0]);
+  if (!names) return JS_NewArray(ctx);
+  auto results = get_doc(ctx)->querySelectorAllFromEl(el, classNames_to_selector(names));
+  JS_FreeCString(ctx, names);
+  return make_element_array(ctx, results);
+}
+
+static JSValue js_el_getElementsByTagName(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 1) return JS_NewArray(ctx);
+  const char* tag = JS_ToCString(ctx, argv[0]);
+  if (!tag) return JS_NewArray(ctx);
+  auto results = get_doc(ctx)->querySelectorAllFromEl(el, tag);
+  JS_FreeCString(ctx, tag);
+  return make_element_array(ctx, results);
+}
+
 // ── Document methods ──────────────────────────────────────────────────────────
 
 static JSValue js_doc_getElementById(JSContext* ctx, JSValue, int argc, JSValue* argv) {
@@ -833,6 +861,24 @@ static JSValue js_doc_querySelectorAll(JSContext* ctx, JSValue, int argc, JSValu
   if (!sel) return JS_NewArray(ctx);
   auto results = get_doc(ctx)->querySelectorAll_el(sel);
   JS_FreeCString(ctx, sel);
+  return make_element_array(ctx, results);
+}
+
+static JSValue js_doc_getElementsByClassName(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_NewArray(ctx);
+  const char* names = JS_ToCString(ctx, argv[0]);
+  if (!names) return JS_NewArray(ctx);
+  auto results = get_doc(ctx)->querySelectorAll_el(classNames_to_selector(names));
+  JS_FreeCString(ctx, names);
+  return make_element_array(ctx, results);
+}
+
+static JSValue js_doc_getElementsByTagName(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_NewArray(ctx);
+  const char* tag = JS_ToCString(ctx, argv[0]);
+  if (!tag) return JS_NewArray(ctx);
+  auto results = get_doc(ctx)->querySelectorAll_el(tag);
+  JS_FreeCString(ctx, tag);
   return make_element_array(ctx, results);
 }
 
@@ -1681,6 +1727,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, proto, "matches",               JS_NewCFunction(ctx, js_el_matches,               "matches",               1));
   JS_SetPropertyStr(ctx, proto, "querySelector",         JS_NewCFunction(ctx, js_el_querySelector,         "querySelector",         1));
   JS_SetPropertyStr(ctx, proto, "querySelectorAll",      JS_NewCFunction(ctx, js_el_querySelectorAll,      "querySelectorAll",      1));
+  JS_SetPropertyStr(ctx, proto, "getElementsByClassName", JS_NewCFunction(ctx, js_el_getElementsByClassName, "getElementsByClassName", 1));
+  JS_SetPropertyStr(ctx, proto, "getElementsByTagName",   JS_NewCFunction(ctx, js_el_getElementsByTagName,   "getElementsByTagName",   1));
   JS_SetPropertyStr(ctx, proto, "addEventListener",      JS_NewCFunction(ctx, js_el_addEventListener,      "addEventListener",      2));
   JS_SetPropertyStr(ctx, proto, "removeEventListener",   JS_NewCFunction(ctx, js_el_removeEventListener,   "removeEventListener",   2));
   JS_SetPropertyStr(ctx, proto, "dispatchEvent",         JS_NewCFunction(ctx, js_el_dispatchEvent,         "dispatchEvent",         1));
@@ -1719,6 +1767,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, doc, "getElementById",    JS_NewCFunction(ctx, js_doc_getElementById,    "getElementById",    1));
   JS_SetPropertyStr(ctx, doc, "querySelector",     JS_NewCFunction(ctx, js_doc_querySelector,     "querySelector",     1));
   JS_SetPropertyStr(ctx, doc, "querySelectorAll",  JS_NewCFunction(ctx, js_doc_querySelectorAll,  "querySelectorAll",  1));
+  JS_SetPropertyStr(ctx, doc, "getElementsByClassName", JS_NewCFunction(ctx, js_doc_getElementsByClassName, "getElementsByClassName", 1));
+  JS_SetPropertyStr(ctx, doc, "getElementsByTagName",   JS_NewCFunction(ctx, js_doc_getElementsByTagName,   "getElementsByTagName",   1));
   JS_SetPropertyStr(ctx, doc, "createElement",     JS_NewCFunction(ctx, js_doc_createElement,     "createElement",     1));
   JS_SetPropertyStr(ctx, doc, "createTextNode",      JS_NewCFunction(ctx, js_doc_createTextNode,     "createTextNode",      1));
   JS_SetPropertyStr(ctx, doc, "addEventListener",    JS_NewCFunction(ctx, js_doc_addEventListener,   "addEventListener",    2));
