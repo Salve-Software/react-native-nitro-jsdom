@@ -233,7 +233,7 @@ dom.dispose() // ← always pair with create()
 - [x] `window.location`
 - [x] `MutationObserver`
 - [x] `window.alert` / `window.confirm` / `window.prompt`
-- [ ] `CustomEvent`
+- [x] `CustomEvent`
 
 ---
 
