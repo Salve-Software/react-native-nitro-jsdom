@@ -19,6 +19,7 @@ namespace margelo::nitro::nitrojsdom {
       prototype.registerHybridMethod("serialize", &HybridHtmlSandboxSpec::serialize);
       prototype.registerHybridMethod("setConsoleCallback", &HybridHtmlSandboxSpec::setConsoleCallback);
       prototype.registerHybridMethod("setDialogCallbacks", &HybridHtmlSandboxSpec::setDialogCallbacks);
+      prototype.registerHybridMethod("setFetchCallback", &HybridHtmlSandboxSpec::setFetchCallback);
     });
   }
 

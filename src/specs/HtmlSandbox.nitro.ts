@@ -20,4 +20,14 @@ export interface HtmlSandbox extends HybridObject<{ ios: 'c++'; android: 'c++' }
     onConfirm: ((message: string) => boolean) | null,
     onPrompt: ((message: string, defaultValue?: string) => string | null) | null,
   ): void;
+
+  // Set (or clear) the fetch() bridge. Pass null to disable fetch() inside the sandbox
+  // (calling it will reject). The callback receives (url, method, headersJson, body) and
+  // must resolve with a JSON-encoded response: {ok, status, statusText, headersJson, body}.
+  // Declared as returning Promise<string> (not `string`) so Nitro's JSIConverter for
+  // Promise<T> properly chains `.then()` on the real async JS callback — a plain `string`
+  // return type is only auto-dispatched across threads, it does NOT await a returned Promise.
+  setFetchCallback(
+    callback: ((url: string, method: string, headersJson: string, body?: string) => Promise<string>) | null,
+  ): void;
 }
