@@ -240,6 +240,346 @@ static JSValue make_classList(JSContext* ctx, lxb_dom_element_t* el) {
   return obj;
 }
 
+// ── dataset (DOMStringMap, mirrors data-* attributes) ─────────────────────────
+
+static JSClassID js_dataset_class_id = 0;
+
+static lxb_dom_element_t* unwrap_dataset(JSContext* ctx, JSValue val) {
+  return static_cast<lxb_dom_element_t*>(JS_GetOpaque(val, js_dataset_class_id));
+}
+
+// data-foo-bar -> fooBar
+static std::string attr_suffix_to_camel(const std::string& suffix) {
+  std::string out;
+  bool upper_next = false;
+  for (char c : suffix) {
+    if (c == '-') { upper_next = true; continue; }
+    out += upper_next ? (char)std::toupper((unsigned char)c) : c;
+    upper_next = false;
+  }
+  return out;
+}
+
+// fooBar -> foo-bar
+static std::string camel_to_attr_suffix(const std::string& camel) {
+  std::string out;
+  for (char c : camel) {
+    if (std::isupper((unsigned char)c)) { out += '-'; out += (char)std::tolower((unsigned char)c); }
+    else out += c;
+  }
+  return out;
+}
+
+static std::string dataset_prop_to_attr(JSContext* ctx, JSAtom prop) {
+  JSValue key_val = JS_AtomToString(ctx, prop);
+  const char* key = JS_ToCString(ctx, key_val);
+  JS_FreeValue(ctx, key_val);
+  std::string attr_name = key ? ("data-" + camel_to_attr_suffix(key)) : "";
+  if (key) JS_FreeCString(ctx, key);
+  return attr_name;
+}
+
+static int js_dataset_get_own_property(JSContext* ctx, JSPropertyDescriptor* desc, JSValue obj, JSAtom prop) {
+  auto* el = unwrap_dataset(ctx, obj);
+  if (!el) return 0;
+  std::string attr_name = dataset_prop_to_attr(ctx, prop);
+  if (attr_name.empty()) return 0;
+
+  size_t len = 0;
+  const lxb_char_t* val = lxb_dom_element_get_attribute(el,
+      reinterpret_cast<const lxb_char_t*>(attr_name.data()), attr_name.size(), &len);
+  if (!val) return 0;
+
+  if (desc) {
+    desc->flags = JS_PROP_ENUMERABLE | JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE;
+    desc->value = JS_NewStringLen(ctx, reinterpret_cast<const char*>(val), len);
+    desc->getter = JS_UNDEFINED;
+    desc->setter = JS_UNDEFINED;
+  }
+  return 1;
+}
+
+static int js_dataset_define_own_property(JSContext* ctx, JSValue this_obj, JSAtom prop, JSValue val,
+                                           JSValue, JSValue, int) {
+  auto* el = unwrap_dataset(ctx, this_obj);
+  if (!el) return 0;
+  std::string attr_name = dataset_prop_to_attr(ctx, prop);
+  if (attr_name.empty()) return 0;
+
+  const char* str = JS_ToCString(ctx, val);
+  if (str) {
+    lxb_dom_element_set_attribute(el,
+        reinterpret_cast<const lxb_char_t*>(attr_name.data()), attr_name.size(),
+        reinterpret_cast<const lxb_char_t*>(str), strlen(str));
+    JS_FreeCString(ctx, str);
+  }
+  return 1;
+}
+
+static int js_dataset_delete_property(JSContext* ctx, JSValue obj, JSAtom prop) {
+  auto* el = unwrap_dataset(ctx, obj);
+  if (!el) return 1;
+  std::string attr_name = dataset_prop_to_attr(ctx, prop);
+  if (!attr_name.empty()) {
+    lxb_dom_element_remove_attribute(el,
+        reinterpret_cast<const lxb_char_t*>(attr_name.data()), attr_name.size());
+  }
+  return 1;
+}
+
+static int js_dataset_get_own_property_names(JSContext* ctx, JSPropertyEnum** ptab, uint32_t* plen, JSValue obj) {
+  *ptab = nullptr;
+  *plen = 0;
+  auto* el = unwrap_dataset(ctx, obj);
+  if (!el) return 0;
+
+  std::vector<std::string> keys;
+  for (lxb_dom_attr_t* attr = lxb_dom_element_first_attribute(el); attr; attr = lxb_dom_element_next_attribute(attr)) {
+    size_t len = 0;
+    const lxb_char_t* name = lxb_dom_attr_qualified_name(attr, &len);
+    std::string n(reinterpret_cast<const char*>(name), len);
+    if (n.rfind("data-", 0) == 0) keys.push_back(attr_suffix_to_camel(n.substr(5)));
+  }
+
+  auto* tab = static_cast<JSPropertyEnum*>(js_malloc(ctx, sizeof(JSPropertyEnum) * (keys.empty() ? 1 : keys.size())));
+  if (!tab) return -1;
+  for (size_t i = 0; i < keys.size(); i++) {
+    tab[i].is_enumerable = 1;
+    tab[i].atom = JS_NewAtom(ctx, keys[i].c_str());
+  }
+  *ptab = tab;
+  *plen = (uint32_t)keys.size();
+  return 0;
+}
+
+static JSClassExoticMethods js_dataset_exotic = {
+  .get_own_property       = js_dataset_get_own_property,
+  .get_own_property_names = js_dataset_get_own_property_names,
+  .delete_property        = js_dataset_delete_property,
+  .define_own_property    = js_dataset_define_own_property,
+};
+
+static JSClassDef js_dataset_class = { "DOMStringMap", .finalizer = nullptr, .exotic = &js_dataset_exotic };
+
+static JSValue make_dataset(JSContext* ctx, lxb_dom_element_t* el) {
+  JSValue obj = JS_NewObjectClass(ctx, js_dataset_class_id);
+  JS_SetOpaque(obj, el);
+  return obj;
+}
+
+// ── style (CSSStyleDeclaration-like, mirrors the `style` attribute) ──────────
+
+static JSClassID js_style_class_id = 0;
+
+static lxb_dom_element_t* unwrap_style(JSContext* ctx, JSValue val) {
+  return static_cast<lxb_dom_element_t*>(JS_GetOpaque(val, js_style_class_id));
+}
+
+static std::string get_style_attr(lxb_dom_element_t* el) {
+  size_t len = 0;
+  const lxb_char_t* val = lxb_dom_element_get_attribute(el,
+      reinterpret_cast<const lxb_char_t*>("style"), 5, &len);
+  return val ? std::string(reinterpret_cast<const char*>(val), len) : "";
+}
+
+static void set_style_attr(lxb_dom_element_t* el, const std::string& css) {
+  if (css.empty()) {
+    lxb_dom_element_remove_attribute(el, reinterpret_cast<const lxb_char_t*>("style"), 5);
+  } else {
+    lxb_dom_element_set_attribute(el,
+        reinterpret_cast<const lxb_char_t*>("style"), 5,
+        reinterpret_cast<const lxb_char_t*>(css.data()), css.size());
+  }
+}
+
+static std::string trim_ws(const std::string& s) {
+  size_t a = s.find_first_not_of(" \t\n\r");
+  if (a == std::string::npos) return "";
+  size_t b = s.find_last_not_of(" \t\n\r");
+  return s.substr(a, b - a + 1);
+}
+
+static std::vector<std::pair<std::string, std::string>> parse_style_decls(const std::string& css) {
+  std::vector<std::pair<std::string, std::string>> decls;
+  size_t pos = 0;
+  while (pos < css.size()) {
+    size_t semi = css.find(';', pos);
+    std::string decl = css.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
+    pos = (semi == std::string::npos) ? css.size() : semi + 1;
+
+    size_t colon = decl.find(':');
+    if (colon == std::string::npos) continue;
+    std::string name = trim_ws(decl.substr(0, colon));
+    std::string value = trim_ws(decl.substr(colon + 1));
+    if (!name.empty()) decls.emplace_back(name, value);
+  }
+  return decls;
+}
+
+static std::string serialize_style_decls(const std::vector<std::pair<std::string, std::string>>& decls) {
+  std::string out;
+  for (auto& kv : decls) { out += kv.first; out += ": "; out += kv.second; out += "; "; }
+  if (!out.empty()) out.pop_back();
+  return out;
+}
+
+static int js_style_get_own_property(JSContext* ctx, JSPropertyDescriptor* desc, JSValue obj, JSAtom prop) {
+  auto* el = unwrap_style(ctx, obj);
+  if (!el) return 0;
+  JSValue key_val = JS_AtomToString(ctx, prop);
+  const char* key = JS_ToCString(ctx, key_val);
+  JS_FreeValue(ctx, key_val);
+  if (!key) return 0;
+  std::string prop_name = camel_to_attr_suffix(key);
+  JS_FreeCString(ctx, key);
+
+  auto decls = parse_style_decls(get_style_attr(el));
+  for (auto& kv : decls) {
+    if (kv.first == prop_name) {
+      if (desc) {
+        desc->flags = JS_PROP_ENUMERABLE | JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE;
+        desc->value = JS_NewStringLen(ctx, kv.second.data(), kv.second.size());
+        desc->getter = JS_UNDEFINED;
+        desc->setter = JS_UNDEFINED;
+      }
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int js_style_define_own_property(JSContext* ctx, JSValue this_obj, JSAtom prop, JSValue val,
+                                         JSValue, JSValue, int) {
+  auto* el = unwrap_style(ctx, this_obj);
+  if (!el) return 0;
+  JSValue key_val = JS_AtomToString(ctx, prop);
+  const char* key = JS_ToCString(ctx, key_val);
+  JS_FreeValue(ctx, key_val);
+  if (!key) return 0;
+  std::string prop_name = camel_to_attr_suffix(key);
+  JS_FreeCString(ctx, key);
+
+  const char* str = JS_ToCString(ctx, val);
+  if (str) {
+    auto decls = parse_style_decls(get_style_attr(el));
+    bool found = false;
+    for (auto& kv : decls) { if (kv.first == prop_name) { kv.second = str; found = true; break; } }
+    if (!found) decls.emplace_back(prop_name, str);
+    set_style_attr(el, serialize_style_decls(decls));
+    JS_FreeCString(ctx, str);
+  }
+  return 1;
+}
+
+static int js_style_delete_property(JSContext* ctx, JSValue obj, JSAtom prop) {
+  auto* el = unwrap_style(ctx, obj);
+  if (!el) return 1;
+  JSValue key_val = JS_AtomToString(ctx, prop);
+  const char* key = JS_ToCString(ctx, key_val);
+  JS_FreeValue(ctx, key_val);
+  if (!key) return 1;
+  std::string prop_name = camel_to_attr_suffix(key);
+  JS_FreeCString(ctx, key);
+
+  auto decls = parse_style_decls(get_style_attr(el));
+  decls.erase(std::remove_if(decls.begin(), decls.end(),
+      [&](auto& kv) { return kv.first == prop_name; }), decls.end());
+  set_style_attr(el, serialize_style_decls(decls));
+  return 1;
+}
+
+static int js_style_get_own_property_names(JSContext* ctx, JSPropertyEnum** ptab, uint32_t* plen, JSValue obj) {
+  *ptab = nullptr;
+  *plen = 0;
+  auto* el = unwrap_style(ctx, obj);
+  if (!el) return 0;
+  auto decls = parse_style_decls(get_style_attr(el));
+
+  auto* tab = static_cast<JSPropertyEnum*>(js_malloc(ctx, sizeof(JSPropertyEnum) * (decls.empty() ? 1 : decls.size())));
+  if (!tab) return -1;
+  for (size_t i = 0; i < decls.size(); i++) {
+    tab[i].is_enumerable = 1;
+    tab[i].atom = JS_NewAtom(ctx, attr_suffix_to_camel(decls[i].first).c_str());
+  }
+  *ptab = tab;
+  *plen = (uint32_t)decls.size();
+  return 0;
+}
+
+static JSClassExoticMethods js_style_exotic = {
+  .get_own_property       = js_style_get_own_property,
+  .get_own_property_names = js_style_get_own_property_names,
+  .delete_property        = js_style_delete_property,
+  .define_own_property    = js_style_define_own_property,
+};
+
+static JSClassDef js_style_class = { "CSSStyleDeclaration", .finalizer = nullptr, .exotic = &js_style_exotic };
+
+static JSValue js_style_get_cssText(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_style(ctx, this_val);
+  if (!el) return JS_NewString(ctx, "");
+  return JS_NewString(ctx, get_style_attr(el).c_str());
+}
+
+static JSValue js_style_set_cssText(JSContext* ctx, JSValue this_val, JSValue val) {
+  auto* el = unwrap_style(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+  const char* str = JS_ToCString(ctx, val);
+  if (str) { set_style_attr(el, str); JS_FreeCString(ctx, str); }
+  return JS_UNDEFINED;
+}
+
+static JSValue js_style_setProperty(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_style(ctx, this_val);
+  if (!el || argc < 2) return JS_UNDEFINED;
+  const char* name  = JS_ToCString(ctx, argv[0]);
+  const char* value = JS_ToCString(ctx, argv[1]);
+  if (name && value) {
+    auto decls = parse_style_decls(get_style_attr(el));
+    bool found = false;
+    for (auto& kv : decls) { if (kv.first == name) { kv.second = value; found = true; break; } }
+    if (!found) decls.emplace_back(name, value);
+    set_style_attr(el, serialize_style_decls(decls));
+  }
+  if (name)  JS_FreeCString(ctx, name);
+  if (value) JS_FreeCString(ctx, value);
+  return JS_UNDEFINED;
+}
+
+static JSValue js_style_getPropertyValue(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_style(ctx, this_val);
+  if (!el || argc < 1) return JS_NewString(ctx, "");
+  const char* name = JS_ToCString(ctx, argv[0]);
+  if (!name) return JS_NewString(ctx, "");
+  auto decls = parse_style_decls(get_style_attr(el));
+  std::string result;
+  for (auto& kv : decls) { if (kv.first == name) { result = kv.second; break; } }
+  JS_FreeCString(ctx, name);
+  return JS_NewString(ctx, result.c_str());
+}
+
+static JSValue js_style_removeProperty(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_style(ctx, this_val);
+  if (!el || argc < 1) return JS_NewString(ctx, "");
+  const char* name = JS_ToCString(ctx, argv[0]);
+  if (!name) return JS_NewString(ctx, "");
+  auto decls = parse_style_decls(get_style_attr(el));
+  std::string removed;
+  decls.erase(std::remove_if(decls.begin(), decls.end(), [&](auto& kv) {
+    if (kv.first == name) { removed = kv.second; return true; }
+    return false;
+  }), decls.end());
+  set_style_attr(el, serialize_style_decls(decls));
+  JS_FreeCString(ctx, name);
+  return JS_NewString(ctx, removed.c_str());
+}
+
+static JSValue make_style(JSContext* ctx, lxb_dom_element_t* el) {
+  JSValue obj = JS_NewObjectClass(ctx, js_style_class_id);
+  JS_SetOpaque(obj, el);
+  return obj;
+}
+
 // ── Element property getters/setters ─────────────────────────────────────────
 
 static JSValue js_el_get_tagName(JSContext* ctx, JSValue this_val) {
@@ -412,7 +752,6 @@ static JSValue js_el_set_innerHTML(JSContext* ctx, JSValue this_val, JSValue val
     while (child) { old_children.push_back(child); child = child->next; }
   }
 
-  // Disconnect observers targeting old children before they are destroyed
   if (has_observers && !old_children.empty()) {
     rctx->mutation_observers->disconnectDetachedTargets(old_children);
   }
@@ -421,7 +760,6 @@ static JSValue js_el_set_innerHTML(JSContext* ctx, JSValue this_val, JSValue val
   JS_FreeCString(ctx, html);
 
   if (has_observers) {
-    // Collect new children after mutation
     std::vector<void*> new_children;
     lxb_dom_node_t* child = parent->first_child;
     while (child) { new_children.push_back(child); child = child->next; }
@@ -496,6 +834,18 @@ static JSValue js_el_get_classList(JSContext* ctx, JSValue this_val) {
   auto* el = unwrap_element(ctx, this_val);
   if (!el) return JS_NULL;
   return make_classList(ctx, el);
+}
+
+static JSValue js_el_get_dataset(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_dataset(ctx, el);
+}
+
+static JSValue js_el_get_style(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_style(ctx, el);
 }
 
 static JSValue js_el_get_childElementCount(JSContext* ctx, JSValue this_val) {
@@ -694,11 +1044,9 @@ static JSValue js_el_appendChild(JSContext* ctx, JSValue this_val, int argc, JSV
 
   lxb_dom_node_insert_child(lxb_dom_interface_node(parent), child_node);
 
-  // Capture siblings AFTER insertion so they reflect the node's new position
   lxb_dom_node_t* prev_sib = child_node->prev;
   lxb_dom_node_t* next_sib = child_node->next;
 
-  // Notify childList observers
   auto* rctx = get_ctx(ctx);
   if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
     rctx->mutation_observers->notifyChildList(ctx, lxb_dom_interface_node(parent),
@@ -719,7 +1067,6 @@ static JSValue js_el_removeChild(JSContext* ctx, JSValue this_val, int argc, JSV
     lxb_dom_node_t* next_sib = cn->next;
     lxb_dom_node_remove(cn);
 
-    // Notify childList observers
     auto* rctx = get_ctx(ctx);
     if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
       rctx->mutation_observers->notifyChildList(ctx, lxb_dom_interface_node(parent),
@@ -781,6 +1128,14 @@ static JSValue js_el_remove(JSContext* ctx, JSValue this_val, int, JSValue*) {
     }
   }
   return JS_UNDEFINED;
+}
+
+static JSValue js_el_cloneNode(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  bool deep = argc >= 1 && JS_ToBool(ctx, argv[0]) > 0;
+  lxb_dom_node_t* clone = lxb_dom_node_clone(lxb_dom_interface_node(el), deep);
+  return make_element(ctx, clone);
 }
 
 static JSValue js_el_matches(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
@@ -1003,7 +1358,6 @@ static JSValue js_clearTimer(JSContext* ctx, JSValue, int argc, JSValue* argv) {
       it->second->callback = nullptr;
     }
     rctx->timer_map.erase(it);
-    // The Timer object itself will be cleaned up when the heap pops it
   }
   return JS_UNDEFINED;
 }
@@ -1013,15 +1367,27 @@ static JSValue js_clearTimer(JSContext* ctx, JSValue, int argc, JSValue* argv) {
 static JSClassID js_event_class_id = 0;
 static JSClassDef js_event_class = { "Event", .finalizer = nullptr };
 
-// new Event('type') constructor
 static JSValue js_Event_constructor(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   JSValue obj = JS_NewObjectClass(ctx, js_event_class_id);
   const char* type_str = (argc >= 1) ? JS_ToCString(ctx, argv[0]) : nullptr;
-  JS_SetPropertyStr(ctx, obj, "type",             JS_NewString(ctx, type_str ? type_str : ""));
-  JS_SetPropertyStr(ctx, obj, "defaultPrevented",  JS_NewBool(ctx, false));
-  JS_SetPropertyStr(ctx, obj, "bubbles",           JS_NewBool(ctx, false));
-  JS_SetPropertyStr(ctx, obj, "cancelable",        JS_NewBool(ctx, false));
+  JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, type_str ? type_str : ""));
   if (type_str) JS_FreeCString(ctx, type_str);
+
+  bool bubbles = false;
+  bool cancelable = false;
+  if (argc >= 2 && JS_IsObject(argv[1])) {
+    JSValue b = JS_GetPropertyStr(ctx, argv[1], "bubbles");
+    if (JS_IsException(b)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { bubbles = JS_ToBool(ctx, b) > 0; JS_FreeValue(ctx, b); }
+
+    JSValue c = JS_GetPropertyStr(ctx, argv[1], "cancelable");
+    if (JS_IsException(c)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { cancelable = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
+  }
+
+  JS_SetPropertyStr(ctx, obj, "defaultPrevented",  JS_NewBool(ctx, false));
+  JS_SetPropertyStr(ctx, obj, "bubbles",           JS_NewBool(ctx, bubbles));
+  JS_SetPropertyStr(ctx, obj, "cancelable",        JS_NewBool(ctx, cancelable));
   return obj;
 }
 
@@ -1054,6 +1420,32 @@ static JSValue js_CustomEvent_constructor(JSContext* ctx, JSValue, int argc, JSV
   JS_SetPropertyStr(ctx, obj, "cancelable",       JS_NewBool(ctx, cancelable));
   JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
   return obj;
+}
+
+// ── Event prototype methods ───────────────────────────────────────────────────
+
+static bool get_bool_prop(JSContext* ctx, JSValue obj, const char* name) {
+  JSValue v = JS_GetPropertyStr(ctx, obj, name);
+  bool b = JS_ToBool(ctx, v) > 0;
+  JS_FreeValue(ctx, v);
+  return b;
+}
+
+static JSValue js_event_preventDefault(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  if (get_bool_prop(ctx, this_val, "cancelable"))
+    JS_SetPropertyStr(ctx, this_val, "defaultPrevented", JS_NewBool(ctx, true));
+  return JS_UNDEFINED;
+}
+
+static JSValue js_event_stopPropagation(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  JS_SetPropertyStr(ctx, this_val, "__propagationStopped", JS_NewBool(ctx, true));
+  return JS_UNDEFINED;
+}
+
+static JSValue js_event_stopImmediatePropagation(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  JS_SetPropertyStr(ctx, this_val, "__propagationStopped", JS_NewBool(ctx, true));
+  JS_SetPropertyStr(ctx, this_val, "__immediatePropagationStopped", JS_NewBool(ctx, true));
+  return JS_UNDEFINED;
 }
 
 static JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
@@ -1106,53 +1498,80 @@ static JSValue js_el_removeEventListener(JSContext* ctx, JSValue this_val, int a
   return JS_UNDEFINED;
 }
 
-static JSValue js_el_dispatchEvent(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
-  auto* rctx = get_ctx(ctx);
-  if (!rctx || argc < 1) return JS_TRUE;
-  auto* el = unwrap_element(ctx, this_val);
-  if (!el) return JS_TRUE;
-
-  void* node = lxb_dom_interface_node(el);
-  JSValue type_val = JS_GetPropertyStr(ctx, argv[0], "type");
+static JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue event_obj, lxb_dom_node_t* target_node) {
+  JSValue type_val = JS_GetPropertyStr(ctx, event_obj, "type");
   const char* type_str = JS_ToCString(ctx, type_val);
   JS_FreeValue(ctx, type_val);
   if (!type_str) return JS_TRUE;
   std::string event_type(type_str);
   JS_FreeCString(ctx, type_str);
 
-  // Snapshot the listeners to avoid invalidation during iteration
-  std::vector<JSValue> cbs_to_fire;
-  for (auto& listener : rctx->listeners) {
-    if (listener.node == node && listener.event_type == event_type) {
-      JSValue* cb = static_cast<JSValue*>(listener.callback);
-      cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
-    }
+  bool bubbles = get_bool_prop(ctx, event_obj, "bubbles");
+
+  JS_SetPropertyStr(ctx, event_obj, "target", make_element(ctx, target_node));
+  JS_SetPropertyStr(ctx, event_obj, "__propagationStopped", JS_NewBool(ctx, false));
+
+  std::vector<lxb_dom_node_t*> chain;
+  chain.push_back(target_node);
+  if (bubbles) {
+    for (lxb_dom_node_t* p = target_node->parent; p; p = p->parent) chain.push_back(p);
   }
 
-  for (auto& cb : cbs_to_fire) {
-    JSValue ret = JS_Call(ctx, cb, this_val, 1, argv);
-    JS_FreeValue(ctx, cb);
-    if (JS_IsException(ret)) {
-      JS_FreeValue(ctx, ret);
-      // Free remaining dup'd callbacks
-      for (size_t i = (&cb - cbs_to_fire.data()) + 1; i < cbs_to_fire.size(); i++) {
-        JS_FreeValue(ctx, cbs_to_fire[i]);
+  for (lxb_dom_node_t* level : chain) {
+    if (get_bool_prop(ctx, event_obj, "__propagationStopped")) break;
+
+    JSValue current_target = make_element(ctx, level);
+    JS_SetPropertyStr(ctx, event_obj, "currentTarget", JS_DupValue(ctx, current_target));
+    JS_SetPropertyStr(ctx, event_obj, "__immediatePropagationStopped", JS_NewBool(ctx, false));
+
+    // Snapshot the listeners to avoid invalidation during iteration
+    std::vector<JSValue> cbs_to_fire;
+    for (auto& listener : rctx->listeners) {
+      if (listener.node == level && listener.event_type == event_type) {
+        JSValue* cb = static_cast<JSValue*>(listener.callback);
+        cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
       }
-      JSValue ex = JS_GetException(ctx);
-      std::string err = "Event callback error";
-      JSValue msg_prop = JS_GetPropertyStr(ctx, ex, "message");
-      if (!JS_IsException(msg_prop) && !JS_IsUndefined(msg_prop)) {
-        const char* s = JS_ToCString(ctx, msg_prop);
-        if (s) { err = s; JS_FreeCString(ctx, s); }
-      }
-      JS_FreeValue(ctx, msg_prop);
-      JS_FreeValue(ctx, ex);
-      JS_ThrowInternalError(ctx, "%s", err.c_str());
-      return JS_EXCEPTION;
     }
-    JS_FreeValue(ctx, ret);
+
+    for (size_t i = 0; i < cbs_to_fire.size(); i++) {
+      if (get_bool_prop(ctx, event_obj, "__immediatePropagationStopped")) {
+        JS_FreeValue(ctx, cbs_to_fire[i]);
+        continue;
+      }
+      JSValue ret = JS_Call(ctx, cbs_to_fire[i], current_target, 1, &event_obj);
+      JS_FreeValue(ctx, cbs_to_fire[i]);
+      if (JS_IsException(ret)) {
+        JS_FreeValue(ctx, ret);
+        for (size_t j = i + 1; j < cbs_to_fire.size(); j++) JS_FreeValue(ctx, cbs_to_fire[j]);
+        JS_FreeValue(ctx, current_target);
+
+        JSValue ex = JS_GetException(ctx);
+        std::string err = "Event callback error";
+        JSValue msg_prop = JS_GetPropertyStr(ctx, ex, "message");
+        if (!JS_IsException(msg_prop) && !JS_IsUndefined(msg_prop)) {
+          const char* s = JS_ToCString(ctx, msg_prop);
+          if (s) { err = s; JS_FreeCString(ctx, s); }
+        }
+        JS_FreeValue(ctx, msg_prop);
+        JS_FreeValue(ctx, ex);
+        JS_ThrowInternalError(ctx, "%s", err.c_str());
+        return JS_EXCEPTION;
+      }
+      JS_FreeValue(ctx, ret);
+    }
+    JS_FreeValue(ctx, current_target);
   }
-  return JS_TRUE;
+
+  bool defaultPrevented = get_bool_prop(ctx, event_obj, "defaultPrevented");
+  return JS_NewBool(ctx, !defaultPrevented);
+}
+
+static JSValue js_el_dispatchEvent(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 1) return JS_TRUE;
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_TRUE;
+  return dispatch_event_on_target(ctx, rctx, argv[0], lxb_dom_interface_node(el));
 }
 
 // ── document.addEventListener / dispatchEvent ─────────────────────────────────
@@ -1184,37 +1603,10 @@ static JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* 
   if (!rctx || argc < 1) return JS_TRUE;
   if (!rctx->document) return JS_TRUE;
 
-  void* node = lxb_dom_interface_node(
+  lxb_dom_node_t* node = lxb_dom_interface_node(
       lxb_dom_interface_document(
           static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
-  JSValue type_val = JS_GetPropertyStr(ctx, argv[0], "type");
-  const char* type_str = JS_ToCString(ctx, type_val);
-  JS_FreeValue(ctx, type_val);
-  if (!type_str) return JS_TRUE;
-  std::string event_type(type_str);
-  JS_FreeCString(ctx, type_str);
-
-  std::vector<JSValue> cbs_to_fire;
-  for (auto& listener : rctx->listeners) {
-    if (listener.node == node && listener.event_type == event_type) {
-      JSValue* cb = static_cast<JSValue*>(listener.callback);
-      cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
-    }
-  }
-
-  for (auto& cb : cbs_to_fire) {
-    JSValue ret = JS_Call(ctx, cb, JS_UNDEFINED, 1, argv);
-    JS_FreeValue(ctx, cb);
-    if (JS_IsException(ret)) {
-      JS_FreeValue(ctx, ret);
-      for (size_t i = (&cb - cbs_to_fire.data()) + 1; i < cbs_to_fire.size(); i++) {
-        JS_FreeValue(ctx, cbs_to_fire[i]);
-      }
-      return JS_EXCEPTION;
-    }
-    JS_FreeValue(ctx, ret);
-  }
-  return JS_TRUE;
+  return dispatch_event_on_target(ctx, rctx, argv[0], node);
 }
 
 // ── Console bindings ──────────────────────────────────────────────────────────
@@ -1283,7 +1675,6 @@ static JSValue js_window_prompt(JSContext* ctx, JSValue, int argc, JSValue* argv
     if (s) { message = s; JS_FreeCString(ctx, s); }
     JS_FreeValue(ctx, str_val);
   }
-  // argv[1] present and not undefined → forward as defaultValue
   std::optional<std::string> defaultValue;
   if (argc >= 2 && !JS_IsUndefined(argv[1])) {
     JSValue str_val = JS_ToString(ctx, argv[1]);
@@ -1669,8 +2060,6 @@ static const char* kLocationBootstrapScript = R"JS(
 )JS";
 
 // ── document.title ─────────────────────────────────────────────────────────
-// Pure JS shim on top of the already-exposed document.head/createElement/
-// appendChild/querySelector/textContent — no new native bindings needed.
 
 static const char* kDocumentTitleBootstrapScript = R"JS(
 (function() {
@@ -1708,8 +2097,27 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_NewClass(JS_GetRuntime(ctx), js_element_class_id, &js_element_class);
   JS_NewClassID(&js_classList_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_classList_class_id, &js_classList_class);
+  JS_NewClassID(&js_dataset_class_id);
+  JS_NewClass(JS_GetRuntime(ctx), js_dataset_class_id, &js_dataset_class);
+  JS_NewClassID(&js_style_class_id);
+  JS_NewClass(JS_GetRuntime(ctx), js_style_class_id, &js_style_class);
+
+  // ── style prototype (cssText accessor + setProperty/getPropertyValue/removeProperty) ──
+  JSValue style_proto = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, style_proto, "setProperty",      JS_NewCFunction(ctx, js_style_setProperty,      "setProperty",      2));
+  JS_SetPropertyStr(ctx, style_proto, "getPropertyValue", JS_NewCFunction(ctx, js_style_getPropertyValue, "getPropertyValue", 1));
+  JS_SetPropertyStr(ctx, style_proto, "removeProperty",   JS_NewCFunction(ctx, js_style_removeProperty,   "removeProperty",   1));
+  define_prop(ctx, style_proto, "cssText", js_style_get_cssText, js_style_set_cssText);
+  JS_SetClassProto(ctx, js_style_class_id, style_proto);
   JS_NewClassID(&js_event_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
+
+  // ── Event prototype ────────────────────────────────────────────────────────
+  JSValue event_proto = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, event_proto, "preventDefault",            JS_NewCFunction(ctx, js_event_preventDefault,            "preventDefault",            0));
+  JS_SetPropertyStr(ctx, event_proto, "stopPropagation",           JS_NewCFunction(ctx, js_event_stopPropagation,           "stopPropagation",           0));
+  JS_SetPropertyStr(ctx, event_proto, "stopImmediatePropagation",  JS_NewCFunction(ctx, js_event_stopImmediatePropagation,  "stopImmediatePropagation",  0));
+  JS_SetClassProto(ctx, js_event_class_id, event_proto);
 
   // ── Element prototype ──────────────────────────────────────────────────────
   JSValue proto = JS_NewObject(ctx);
@@ -1722,6 +2130,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JS_SetPropertyStr(ctx, proto, "removeChild",      JS_NewCFunction(ctx, js_el_removeChild,      "removeChild",      1));
   JS_SetPropertyStr(ctx, proto, "insertBefore",     JS_NewCFunction(ctx, js_el_insertBefore,     "insertBefore",     2));
   JS_SetPropertyStr(ctx, proto, "remove",           JS_NewCFunction(ctx, js_el_remove,           "remove",           0));
+  JS_SetPropertyStr(ctx, proto, "cloneNode",        JS_NewCFunction(ctx, js_el_cloneNode,        "cloneNode",        1));
   JS_SetPropertyStr(ctx, proto, "matches",               JS_NewCFunction(ctx, js_el_matches,               "matches",               1));
   JS_SetPropertyStr(ctx, proto, "querySelector",         JS_NewCFunction(ctx, js_el_querySelector,         "querySelector",         1));
   JS_SetPropertyStr(ctx, proto, "querySelectorAll",      JS_NewCFunction(ctx, js_el_querySelectorAll,      "querySelectorAll",      1));
@@ -1744,6 +2153,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   define_prop(ctx, proto, "nextElementSibling",     js_el_get_nextElementSibling,  nullptr);
   define_prop(ctx, proto, "previousElementSibling", js_el_get_prevElementSibling,  nullptr);
   define_prop(ctx, proto, "classList",              js_el_get_classList,           nullptr);
+  define_prop(ctx, proto, "dataset",                js_el_get_dataset,             nullptr);
+  define_prop(ctx, proto, "style",                  js_el_get_style,                nullptr);
   define_prop(ctx, proto, "childElementCount",      js_el_get_childElementCount,   nullptr);
 
   define_prop(ctx, proto, "nodeType",               js_el_get_nodeType,            nullptr);

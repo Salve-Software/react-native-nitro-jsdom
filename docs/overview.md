@@ -240,11 +240,11 @@ dom.dispose() // ← always pair with create()
 > real-world HTML/JS embedded scripts hit them.
 - [x] Generic Node traversal (`childNodes`, `nodeType`, `nodeName`, `nodeValue`, `firstChild` / `lastChild` / `nextSibling` / `previousSibling`, `parentNode`)
 - [x] `document.getElementsByClassName` / `document.getElementsByTagName`
-- [ ] `element.cloneNode()`
-- [ ] `element.dataset` (mirrors `data-*` attributes)
-- [ ] `element.style` (`CSSStyleDeclaration`-like object)
+- [x] `element.cloneNode()`
+- [x] `element.dataset` (mirrors `data-*` attributes)
+- [x] `element.style` (`CSSStyleDeclaration`-like object)
 - [x] `document.title`
-- [ ] Real event bubbling (`dispatchEvent` walks ancestors; `stopPropagation()` / `preventDefault()` take effect)
+- [x] Real event bubbling (`dispatchEvent` walks ancestors; `stopPropagation()` / `preventDefault()` take effect)
 
 ---
 
