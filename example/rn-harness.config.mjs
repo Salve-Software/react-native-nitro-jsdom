@@ -30,7 +30,7 @@ const config = {
     }),
     applePlatform({
       name: 'ios',
-      device: appleSimulator('iPhone 16 Pro', '18.0'),
+      device: appleSimulator('iPhone 16 Pro', '18.5'),
       bundleId: 'com.nitrojsdomexample',
     }),
   ],
