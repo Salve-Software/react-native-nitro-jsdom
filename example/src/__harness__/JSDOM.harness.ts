@@ -155,4 +155,98 @@ describe('JSDOM native module', () => {
     `);
     expect(result).toBe('null');
   });
+
+  it('nodeType/nodeName report the correct values for element, text, and document nodes', async () => {
+    dom = JSDOM.create('<html><body><p id="p">hi</p></body></html>');
+    const result = await dom.evaluate(`
+      const p = document.getElementById('p');
+      const text = p.firstChild;
+      JSON.stringify({
+        elNodeType: p.nodeType,
+        elNodeName: p.nodeName,
+        textNodeType: text.nodeType,
+        textNodeName: text.nodeName,
+        docNodeType: document.documentElement.parentNode.nodeType,
+        docNodeName: document.documentElement.parentNode.nodeName,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      elNodeType: 1,
+      elNodeName: 'P',
+      textNodeType: 3,
+      textNodeName: '#text',
+      docNodeType: 9,
+      docNodeName: '#document',
+    });
+  });
+
+  it('nodeValue reads and writes text node data', async () => {
+    dom = JSDOM.create('<html><body><p id="p">hi</p></body></html>');
+    const result = await dom.evaluate(`
+      const text = document.getElementById('p').firstChild;
+      const before = text.nodeValue;
+      text.nodeValue = 'bye';
+      JSON.stringify({ before, after: text.nodeValue, textContent: document.getElementById('p').textContent });
+    `);
+    expect(JSON.parse(result)).toEqual({ before: 'hi', after: 'bye', textContent: 'bye' });
+  });
+
+  it('nodeValue is null for element nodes', async () => {
+    dom = JSDOM.create('<html><body><p id="p">hi</p></body></html>');
+    const result = await dom.evaluate(`String(document.getElementById('p').nodeValue)`);
+    expect(result).toBe('null');
+  });
+
+  it('childNodes includes all child node types in document order', async () => {
+    dom = JSDOM.create('<html><body><div id="d">a<span>b</span>c</div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      JSON.stringify(Array.from(div.childNodes).map((n) => ({ type: n.nodeType, name: n.nodeName })));
+    `);
+    expect(JSON.parse(result)).toEqual([
+      { type: 3, name: '#text' },
+      { type: 1, name: 'SPAN' },
+      { type: 3, name: '#text' },
+    ]);
+  });
+
+  it('firstChild/lastChild/nextSibling/previousSibling walk the node tree', async () => {
+    dom = JSDOM.create('<html><body><div id="d">a<span>b</span>c</div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const first = div.firstChild;
+      const span = first.nextSibling;
+      const last = div.lastChild;
+      JSON.stringify({
+        firstNodeValue: first.nodeValue,
+        spanNodeName: span.nodeName,
+        lastNodeValue: last.nodeValue,
+        spanPrevNodeValue: span.previousSibling.nodeValue,
+        lastPrevNodeName: last.previousSibling.nodeName,
+        noNextOnLast: last.nextSibling === null,
+        noPrevOnFirst: first.previousSibling === null,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      firstNodeValue: 'a',
+      spanNodeName: 'SPAN',
+      lastNodeValue: 'c',
+      spanPrevNodeValue: 'a',
+      lastPrevNodeName: 'SPAN',
+      noNextOnLast: true,
+      noPrevOnFirst: true,
+    });
+  });
+
+  it('parentNode walks up to the parent element', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span id="s">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const span = document.getElementById('s');
+      JSON.stringify({
+        parentId: span.parentNode.id,
+        grandparentTag: span.parentNode.parentNode.tagName,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ parentId: 'd', grandparentTag: 'BODY' });
+  });
 });

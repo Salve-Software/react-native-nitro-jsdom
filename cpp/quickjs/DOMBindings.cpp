@@ -6,6 +6,7 @@
 #include "quickjs.h"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
+#include <lexbor/dom/interfaces/character_data.h>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -498,6 +499,98 @@ static JSValue js_el_get_childElementCount(JSContext* ctx, JSValue this_val) {
   lxb_dom_node_t* child = lxb_dom_interface_node(el)->first_child;
   while (child) { if (child->type == LXB_DOM_NODE_TYPE_ELEMENT) count++; child = child->next; }
   return JS_NewInt32(ctx, count);
+}
+
+// ── Generic Node traversal getters ─────────────────────────────────
+
+static JSValue js_el_get_nodeType(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NewInt32(ctx, 0);
+  return JS_NewInt32(ctx, (int32_t)lxb_dom_interface_node(el)->type);
+}
+
+static JSValue js_el_get_nodeName(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NewString(ctx, "");
+  switch (lxb_dom_interface_node(el)->type) {
+    case LXB_DOM_NODE_TYPE_ELEMENT:           return js_el_get_tagName(ctx, this_val);
+    case LXB_DOM_NODE_TYPE_TEXT:              return JS_NewString(ctx, "#text");
+    case LXB_DOM_NODE_TYPE_COMMENT:           return JS_NewString(ctx, "#comment");
+    case LXB_DOM_NODE_TYPE_DOCUMENT:          return JS_NewString(ctx, "#document");
+    case LXB_DOM_NODE_TYPE_DOCUMENT_FRAGMENT: return JS_NewString(ctx, "#document-fragment");
+    default:                                  return JS_NewString(ctx, "");
+  }
+}
+
+static JSValue js_el_get_nodeValue(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  lxb_dom_node_t* node = lxb_dom_interface_node(el);
+  if (node->type != LXB_DOM_NODE_TYPE_TEXT && node->type != LXB_DOM_NODE_TYPE_COMMENT) return JS_NULL;
+  auto* cd = reinterpret_cast<lxb_dom_character_data_t*>(node);
+  return JS_NewStringLen(ctx, reinterpret_cast<const char*>(cd->data.data), cd->data.length);
+}
+
+static JSValue js_el_set_nodeValue(JSContext* ctx, JSValue this_val, JSValue val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+  lxb_dom_node_t* node = lxb_dom_interface_node(el);
+  if (node->type != LXB_DOM_NODE_TYPE_TEXT && node->type != LXB_DOM_NODE_TYPE_COMMENT) return JS_UNDEFINED;
+  const char* str = JS_ToCString(ctx, val);
+  if (!str) return JS_UNDEFINED;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_observers = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  auto* cd = reinterpret_cast<lxb_dom_character_data_t*>(node);
+  if (has_observers && rctx->mutation_observers->hasCharacterDataOldValueObserver())
+    old_val = std::string(reinterpret_cast<const char*>(cd->data.data), cd->data.length);
+
+  lxb_dom_character_data_replace(cd, reinterpret_cast<const lxb_char_t*>(str), strlen(str), 0, cd->data.length);
+  JS_FreeCString(ctx, str);
+
+  if (has_observers) rctx->mutation_observers->notifyCharacterData(ctx, node, old_val);
+  return JS_UNDEFINED;
+}
+
+static JSValue js_el_get_childNodes(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  JSValue arr = JS_NewArray(ctx);
+  if (!el) return arr;
+  uint32_t idx = 0;
+  lxb_dom_node_t* child = lxb_dom_interface_node(el)->first_child;
+  while (child) { JS_SetPropertyUint32(ctx, arr, idx++, make_element(ctx, child)); child = child->next; }
+  return arr;
+}
+
+static JSValue js_el_get_firstChild(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_element(ctx, lxb_dom_interface_node(el)->first_child);
+}
+
+static JSValue js_el_get_lastChild(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_element(ctx, lxb_dom_interface_node(el)->last_child);
+}
+
+static JSValue js_el_get_nextSibling(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_element(ctx, lxb_dom_interface_node(el)->next);
+}
+
+static JSValue js_el_get_previousSibling(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_element(ctx, lxb_dom_interface_node(el)->prev);
+}
+
+static JSValue js_el_get_parentNode(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  return make_element(ctx, lxb_dom_interface_node(el)->parent);
 }
 
 // ── Element methods ───────────────────────────────────────────────────────────
@@ -1606,6 +1699,16 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   define_prop(ctx, proto, "previousElementSibling", js_el_get_prevElementSibling,  nullptr);
   define_prop(ctx, proto, "classList",              js_el_get_classList,           nullptr);
   define_prop(ctx, proto, "childElementCount",      js_el_get_childElementCount,   nullptr);
+
+  define_prop(ctx, proto, "nodeType",               js_el_get_nodeType,            nullptr);
+  define_prop(ctx, proto, "nodeName",               js_el_get_nodeName,            nullptr);
+  define_prop(ctx, proto, "nodeValue",              js_el_get_nodeValue,           js_el_set_nodeValue);
+  define_prop(ctx, proto, "childNodes",             js_el_get_childNodes,          nullptr);
+  define_prop(ctx, proto, "firstChild",             js_el_get_firstChild,          nullptr);
+  define_prop(ctx, proto, "lastChild",              js_el_get_lastChild,           nullptr);
+  define_prop(ctx, proto, "nextSibling",            js_el_get_nextSibling,         nullptr);
+  define_prop(ctx, proto, "previousSibling",        js_el_get_previousSibling,     nullptr);
+  define_prop(ctx, proto, "parentNode",             js_el_get_parentNode,          nullptr);
 
   JS_SetClassProto(ctx, js_element_class_id, proto);
 
