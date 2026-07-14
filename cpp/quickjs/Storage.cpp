@@ -50,19 +50,21 @@ static Storage* unwrap_storage(JSValue this_val) {
   return static_cast<Storage*>(JS_GetOpaque(this_val, js_storage_class_id));
 }
 
-static std::string js_to_std_string(JSContext* ctx, JSValue v) {
+static bool js_to_std_string(JSContext* ctx, JSValue v, std::string& out) {
   JSValue str_val = JS_ToString(ctx, v);
-  std::string out;
+  if (JS_IsException(str_val)) return false;
   const char* s = JS_ToCString(ctx, str_val);
   if (s) { out = s; JS_FreeCString(ctx, s); }
   JS_FreeValue(ctx, str_val);
-  return out;
+  return true;
 }
 
 static JSValue js_storage_getItem(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   Storage* storage = unwrap_storage(this_val);
   if (!storage || argc < 1) return JS_NULL;
-  auto value = storage->getItem(js_to_std_string(ctx, argv[0]));
+  std::string key;
+  if (!js_to_std_string(ctx, argv[0], key)) return JS_EXCEPTION;
+  auto value = storage->getItem(key);
   if (!value.has_value()) return JS_NULL;
   return JS_NewStringLen(ctx, value->c_str(), value->size());
 }
@@ -70,14 +72,19 @@ static JSValue js_storage_getItem(JSContext* ctx, JSValue this_val, int argc, JS
 static JSValue js_storage_setItem(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   Storage* storage = unwrap_storage(this_val);
   if (!storage || argc < 2) return JS_UNDEFINED;
-  storage->setItem(js_to_std_string(ctx, argv[0]), js_to_std_string(ctx, argv[1]));
+  std::string key, value;
+  if (!js_to_std_string(ctx, argv[0], key)) return JS_EXCEPTION;
+  if (!js_to_std_string(ctx, argv[1], value)) return JS_EXCEPTION;
+  storage->setItem(key, value);
   return JS_UNDEFINED;
 }
 
 static JSValue js_storage_removeItem(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   Storage* storage = unwrap_storage(this_val);
   if (!storage || argc < 1) return JS_UNDEFINED;
-  storage->removeItem(js_to_std_string(ctx, argv[0]));
+  std::string key;
+  if (!js_to_std_string(ctx, argv[0], key)) return JS_EXCEPTION;
+  storage->removeItem(key);
   return JS_UNDEFINED;
 }
 
@@ -91,7 +98,8 @@ static JSValue js_storage_key(JSContext* ctx, JSValue this_val, int argc, JSValu
   Storage* storage = unwrap_storage(this_val);
   if (!storage || argc < 1) return JS_NULL;
   int32_t index = 0;
-  if (JS_ToInt32(ctx, &index, argv[0]) < 0 || index < 0) return JS_NULL;
+  if (JS_ToInt32(ctx, &index, argv[0]) < 0) return JS_EXCEPTION;
+  if (index < 0) return JS_NULL;
   auto k = storage->key(static_cast<size_t>(index));
   if (!k.has_value()) return JS_NULL;
   return JS_NewStringLen(ctx, k->c_str(), k->size());
