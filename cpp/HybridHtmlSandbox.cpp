@@ -5,8 +5,34 @@
 #include <functional>
 #include <vector>
 #include <string>
+#include <cstdio>
 
 namespace margelo::nitro::nitrojsdom {
+
+namespace {
+std::string jsonQuote(const std::string& s) {
+  std::string out = "\"";
+  for (char c : s) {
+    switch (c) {
+      case '"':  out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          char buf[8];
+          snprintf(buf, sizeof(buf), "\\u%04x", c);
+          out += buf;
+        } else {
+          out += c;
+        }
+    }
+  }
+  out += "\"";
+  return out;
+}
+} // namespace
 
 void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, const std::string& url) {
   _document = std::make_unique<LexborDocument>();
@@ -114,6 +140,32 @@ void HybridHtmlSandbox::setDialogCallbacks(
       }
     });
   }
+}
+
+void HybridHtmlSandbox::setFetchCallback(
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::shared_ptr<Promise<std::string>>>>(const std::string&, const std::string&, const std::string&, const std::optional<std::string>&)>>>& callback) {
+  if (!_runtime) return;
+
+  if (!callback.has_value() || std::holds_alternative<nitro::NullType>(callback.value())) {
+    _runtime->setFetchCallback(nullptr);
+    return;
+  }
+
+  auto fn = std::get<std::function<std::shared_ptr<Promise<std::shared_ptr<Promise<std::string>>>>(const std::string&, const std::string&, const std::string&, const std::optional<std::string>&)>>(callback.value());
+  _runtime->setFetchCallback(
+    [fn](const std::string& url, const std::string& method, const std::string& headersJson, const std::optional<std::string>& body) -> std::string {
+      try {
+        // Outer await(): dispatches the JS callback call itself onto the JS thread and
+        // waits for it to return — resolves almost immediately with the inner Promise object.
+        // Inner await(): waits for that inner Promise (the real async onFetch() call) to settle.
+        return fn(url, method, headersJson, body)->await().get()->await().get();
+      } catch (const std::exception& e) {
+        return std::string("{\"error\":") + jsonQuote(e.what()) + "}";
+      } catch (...) {
+        return "{\"error\":\"fetch failed\"}";
+      }
+    }
+  );
 }
 
 } // namespace margelo::nitro::nitrojsdom

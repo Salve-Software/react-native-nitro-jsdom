@@ -34,6 +34,10 @@ public:
     const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string& /* message */, const std::optional<std::string>& /* defaultValue */)>>>& onPrompt
   ) override;
 
+  void setFetchCallback(
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::shared_ptr<Promise<std::string>>>>(const std::string& /* url */, const std::string& /* method */, const std::string& /* headersJson */, const std::optional<std::string>& /* body */)>>>& callback
+  ) override;
+
 private:
   std::unique_ptr<LexborDocument> _document;
   std::unique_ptr<QuickJSRuntime> _runtime;
