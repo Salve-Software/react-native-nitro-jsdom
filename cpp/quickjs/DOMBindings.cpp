@@ -501,9 +501,7 @@ static JSValue js_el_get_childElementCount(JSContext* ctx, JSValue this_val) {
   return JS_NewInt32(ctx, count);
 }
 
-// ── Generic Node traversal getters ────────────────────────────────────────────
-// These operate on any lxb_dom_node_t-derived pointer (element, text, comment,
-// document), since every such struct starts with an lxb_dom_node_t member.
+// ── Generic Node traversal getters ─────────────────────────────────
 
 static JSValue js_el_get_nodeType(JSContext* ctx, JSValue this_val) {
   auto* el = unwrap_element(ctx, this_val);
