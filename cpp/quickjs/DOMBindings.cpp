@@ -904,12 +904,12 @@ static JSValue js_CustomEvent_constructor(JSContext* ctx, JSValue, int argc, JSV
     else { detail = d; }
 
     JSValue b = JS_GetPropertyStr(ctx, argv[1], "bubbles");
-    if (!JS_IsException(b)) bubbles = JS_ToBool(ctx, b) > 0;
-    JS_FreeValue(ctx, b);
+    if (JS_IsException(b)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { bubbles = JS_ToBool(ctx, b) > 0; JS_FreeValue(ctx, b); }
 
     JSValue c = JS_GetPropertyStr(ctx, argv[1], "cancelable");
-    if (!JS_IsException(c)) cancelable = JS_ToBool(ctx, c) > 0;
-    JS_FreeValue(ctx, c);
+    if (JS_IsException(c)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { cancelable = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
   }
 
   JS_SetPropertyStr(ctx, obj, "detail",           detail);
