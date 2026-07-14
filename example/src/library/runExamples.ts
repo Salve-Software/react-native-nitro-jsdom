@@ -7,6 +7,7 @@ import { dialogsSection } from './sections/dialogs';
 import { fetchSection } from './sections/fetch';
 import { storageSection } from './sections/storage';
 import { xhrSection } from './sections/xhr';
+import { locationSection } from './sections/location';
 
 export const runExamples = async (): Promise<ISection[]> => {
   return Promise.all([
@@ -18,5 +19,6 @@ export const runExamples = async (): Promise<ISection[]> => {
     fetchSection(),
     storageSection(),
     xhrSection(),
+    locationSection(),
   ]);
 };
