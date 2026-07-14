@@ -2,6 +2,15 @@ import type { HtmlSandbox } from "../../specs/HtmlSandbox.nitro";
 import type { IJSDOMOptions } from "./types";
 import { NitroModules } from "react-native-nitro-modules";
 
+function safeParseHeaders(headersJson: string): Record<string, string> {
+  try {
+    const parsed = JSON.parse(headersJson);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export class JSDOM {
   private sandbox: HtmlSandbox | null;
   private _disposed: boolean = false;
@@ -50,6 +59,22 @@ export class JSDOM {
         options.onConfirm ?? null,
         options.onPrompt ?? null,
       );
+    }
+
+    if (options?.onFetch) {
+      const onFetch = options.onFetch;
+      sandbox.setFetchCallback(async (url, method, headersJson, body) => {
+        const headers = safeParseHeaders(headersJson);
+        return onFetch(url, { method, headers, body })
+          .then((res) => JSON.stringify({
+            ok: (res.status ?? 200) >= 200 && (res.status ?? 200) < 300,
+            status: res.status ?? 200,
+            statusText: res.statusText ?? '',
+            headersJson: JSON.stringify(res.headers ?? {}),
+            body: res.body ?? '',
+          }))
+          .catch((err) => JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+      });
     }
 
     return new JSDOM(sandbox);

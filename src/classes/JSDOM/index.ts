@@ -1,1 +1,2 @@
-export { JSDOM } from './JSDOM.class';
+export type * from './types';
+export * from './JSDOM.class';
