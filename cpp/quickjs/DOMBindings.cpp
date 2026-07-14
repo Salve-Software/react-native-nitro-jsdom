@@ -1430,6 +1430,76 @@ static const char* kFetchBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── window.location ─────────────────────────────────────────────────────────
+
+static const char* kLocationBootstrapScript = R"JS(
+(function() {
+  function parseUrl(str) {
+    str = String(str === undefined || str === null ? '' : str);
+    var m = /^([^:\/?#]+:)(?:\/\/(?:[^\/?#@]*@)?([^\/?#:]*)(?::(\d+))?)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(str);
+    if (!m) {
+      return { protocol: '', hostname: '', port: '', pathname: '', search: '', hash: '' };
+    }
+    var protocol = m[1] || '';
+    var hostname = m[2] || '';
+    var port = m[3] || '';
+    var pathname = m[4] || '';
+    var search = m[5] || '';
+    var hash = m[6] || '';
+    if (!pathname && hostname) pathname = '/';
+    return { protocol: protocol, hostname: hostname, port: port, pathname: pathname, search: search, hash: hash };
+  }
+
+  function Location(initialHref) {
+    this._href = String(initialHref || 'about:blank');
+  }
+
+  function defineParsedProp(name) {
+    Object.defineProperty(Location.prototype, name, {
+      get: function() { return parseUrl(this._href)[name]; },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  ['protocol', 'hostname', 'port', 'pathname', 'search', 'hash'].forEach(defineParsedProp);
+
+  Object.defineProperty(Location.prototype, 'host', {
+    get: function() {
+      var p = parseUrl(this._href);
+      return p.hostname + (p.port ? ':' + p.port : '');
+    },
+    enumerable: true,
+    configurable: true,
+  });
+
+  Object.defineProperty(Location.prototype, 'origin', {
+    get: function() {
+      var p = parseUrl(this._href);
+      if (!p.hostname) return 'null';
+      return p.protocol + '//' + p.hostname + (p.port ? ':' + p.port : '');
+    },
+    enumerable: true,
+    configurable: true,
+  });
+
+  Object.defineProperty(Location.prototype, 'href', {
+    get: function() { return this._href; },
+    set: function(v) { this._href = String(v); },
+    enumerable: true,
+    configurable: true,
+  });
+
+  Location.prototype.toString = function() { return this._href; };
+  Location.prototype.assign = function(url) { this._href = String(url); };
+  Location.prototype.replace = function(url) { this._href = String(url); };
+  Location.prototype.reload = function() {};
+
+  globalThis.Location = Location;
+  globalThis.location = new Location(globalThis.__initialHref);
+  delete globalThis.__initialHref;
+})();
+)JS";
+
 // ── DOMBindings::install ──────────────────────────────────────────────────────
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
@@ -1555,6 +1625,14 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, bootstrap_result);
+
+  // ── JS-level window.location bootstrap ─────────────────────────────────────
+  JSValue location_result = JS_Eval(ctx, kLocationBootstrapScript, strlen(kLocationBootstrapScript),
+                                     "<location-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(location_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, location_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom

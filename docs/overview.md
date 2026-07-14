@@ -230,7 +230,7 @@ dom.dispose() // ← always pair with create()
 
 ### v0.5 — jsdom Compatibility
 - [ ] Full jsdom API parity audit
-- [ ] `window.location`
+- [x] `window.location`
 - [x] `MutationObserver`
 - [x] `window.alert` / `window.confirm` / `window.prompt`
 - [ ] `CustomEvent`

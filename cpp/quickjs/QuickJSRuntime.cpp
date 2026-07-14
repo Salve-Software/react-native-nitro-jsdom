@@ -158,10 +158,9 @@ void QuickJSRuntime::initialize(const std::string& url) {
   // window = globalThis
   JS_SetPropertyStr(ctx, global, "window", JS_DupValue(ctx, global));
 
-  // location.href
-  JSValue location = JS_NewObject(ctx);
-  JS_SetPropertyStr(ctx, location, "href", JS_NewString(ctx, url.c_str()));
-  JS_SetPropertyStr(ctx, global, "location", location);
+  // Seed the initial URL — the full window.location object (with protocol,
+  // host, pathname, etc.) is built as a JS shim in DOMBindings::install().
+  JS_SetPropertyStr(ctx, global, "__initialHref", JS_NewString(ctx, url.c_str()));
 
   JS_FreeValue(ctx, global);
 }
