@@ -1531,6 +1531,35 @@ static const char* kLocationBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── document.title ─────────────────────────────────────────────────────────
+// Pure JS shim on top of the already-exposed document.head/createElement/
+// appendChild/querySelector/textContent — no new native bindings needed.
+
+static const char* kDocumentTitleBootstrapScript = R"JS(
+(function() {
+  Object.defineProperty(document, 'title', {
+    get: function() {
+      var head = document.head;
+      if (!head) return '';
+      var titleEl = head.querySelector('title');
+      return titleEl ? titleEl.textContent : '';
+    },
+    set: function(value) {
+      var head = document.head;
+      if (!head) return;
+      var titleEl = head.querySelector('title');
+      if (!titleEl) {
+        titleEl = document.createElement('title');
+        head.appendChild(titleEl);
+      }
+      titleEl.textContent = String(value);
+    },
+    enumerable: true,
+    configurable: true,
+  });
+})();
+)JS";
+
 // ── DOMBindings::install ──────────────────────────────────────────────────────
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
@@ -1668,6 +1697,14 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, location_result);
+
+  // ── JS-level document.title bootstrap ──────────────────────────────────────
+  JSValue title_result = JS_Eval(ctx, kDocumentTitleBootstrapScript, strlen(kDocumentTitleBootstrapScript),
+                                  "<document-title-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(title_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, title_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom

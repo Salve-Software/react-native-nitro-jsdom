@@ -243,7 +243,7 @@ dom.dispose() // ← always pair with create()
 - [ ] `element.cloneNode()`
 - [ ] `element.dataset` (mirrors `data-*` attributes)
 - [ ] `element.style` (`CSSStyleDeclaration`-like object)
-- [ ] `document.title`
+- [x] `document.title`
 - [ ] Real event bubbling (`dispatchEvent` walks ancestors; `stopPropagation()` / `preventDefault()` take effect)
 
 ---
