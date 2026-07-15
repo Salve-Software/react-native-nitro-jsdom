@@ -43,8 +43,18 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/lexbor/LexborDocument.cpp
   ../cpp/quickjs/QuickJSRuntime.cpp
   ../cpp/quickjs/DOMBindings.cpp
+  ../cpp/quickjs/DOMBindingsInternal.cpp
   ../cpp/quickjs/MutationObservers.cpp
   ../cpp/quickjs/Storage.cpp
+  ../cpp/quickjs/bindings/ClassListBindings.cpp
+  ../cpp/quickjs/bindings/DatasetBindings.cpp
+  ../cpp/quickjs/bindings/StyleBindings.cpp
+  ../cpp/quickjs/bindings/ElementBindings.cpp
+  ../cpp/quickjs/bindings/DocumentBindings.cpp
+  ../cpp/quickjs/bindings/EventBindings.cpp
+  ../cpp/quickjs/bindings/TimerBindings.cpp
+  ../cpp/quickjs/bindings/WindowBindings.cpp
+  ../cpp/quickjs/bindings/FetchBindings.cpp
   ${QUICKJS_SOURCES}
 )
 
