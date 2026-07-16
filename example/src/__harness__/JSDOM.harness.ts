@@ -288,4 +288,156 @@ describe('JSDOM native module', () => {
     `);
     expect(JSON.parse(result)).toEqual({ byTag: ['a'], byClass: ['a'] });
   });
+
+  it('cloneNode() shallow-clones by default and deep-clones with deep=true', async () => {
+    dom = JSDOM.create('<html><body><div id="d" class="x"><span>hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const shallow = div.cloneNode();
+      const deep = div.cloneNode(true);
+      JSON.stringify({
+        shallowClass: shallow.className,
+        shallowChildCount: shallow.childNodes.length,
+        deepChildCount: deep.childNodes.length,
+        deepFirstChildTag: deep.firstChild.tagName,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      shallowClass: 'x',
+      shallowChildCount: 0,
+      deepChildCount: 1,
+      deepFirstChildTag: 'SPAN',
+    });
+  });
+
+  it('dataset reads and writes data-* attributes with camelCase mapping', async () => {
+    dom = JSDOM.create('<html><body><div id="d" data-user-id="42" data-role="admin"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const before = { userId: div.dataset.userId, role: div.dataset.role };
+      div.dataset.userId = '99';
+      div.dataset.newFlag = 'yes';
+      delete div.dataset.role;
+      JSON.stringify({
+        before,
+        after: {
+          userId: div.dataset.userId,
+          newFlag: div.dataset.newFlag,
+          role: div.dataset.role,
+        },
+        attrUserId: div.getAttribute('data-user-id'),
+        attrNewFlag: div.getAttribute('data-new-flag'),
+        attrRole: div.getAttribute('data-role'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: { userId: '42', role: 'admin' },
+      after: { userId: '99', newFlag: 'yes', role: undefined },
+      attrUserId: '99',
+      attrNewFlag: 'yes',
+      attrRole: null,
+    });
+  });
+
+  it('style reads/writes inline CSS via camelCase properties and cssText', async () => {
+    dom = JSDOM.create('<html><body><div id="d" style="color: red; font-size: 12px;"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const before = { color: div.style.color, fontSize: div.style.fontSize };
+      div.style.backgroundColor = 'blue';
+      div.style.setProperty('margin-top', '4px');
+      const afterGetPropertyValue = div.style.getPropertyValue('margin-top');
+      div.style.removeProperty('color');
+      JSON.stringify({
+        before,
+        backgroundColor: div.style.backgroundColor,
+        afterGetPropertyValue,
+        colorAfterRemove: div.style.color === undefined,
+        cssText: div.style.cssText,
+        attrStyle: div.getAttribute('style'),
+      });
+    `);
+    const parsed = JSON.parse(result);
+    expect(parsed.before).toEqual({ color: 'red', fontSize: '12px' });
+    expect(parsed.backgroundColor).toBe('blue');
+    expect(parsed.afterGetPropertyValue).toBe('4px');
+    expect(parsed.colorAfterRemove).toBe(true);
+    expect(parsed.cssText).toBe(parsed.attrStyle);
+    expect(parsed.cssText).not.toContain('color: red');
+    expect(parsed.cssText).toContain('background-color: blue');
+    expect(parsed.cssText).toContain('margin-top: 4px');
+  });
+
+  it('dispatchEvent bubbles from target through ancestors to document', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const order = [];
+      const child = document.getElementById('child');
+      const parent = document.getElementById('parent');
+      child.addEventListener('click', () => order.push('child'));
+      parent.addEventListener('click', () => order.push('parent'));
+      document.addEventListener('click', () => order.push('document'));
+
+      const event = new Event('click', { bubbles: true });
+      child.dispatchEvent(event);
+      JSON.stringify(order);
+    `);
+    expect(JSON.parse(result)).toEqual(['child', 'parent', 'document']);
+  });
+
+  it('dispatchEvent does not bubble when bubbles is false', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const order = [];
+      const child = document.getElementById('child');
+      const parent = document.getElementById('parent');
+      child.addEventListener('click', () => order.push('child'));
+      parent.addEventListener('click', () => order.push('parent'));
+
+      const event = new Event('click', { bubbles: false });
+      child.dispatchEvent(event);
+      JSON.stringify(order);
+    `);
+    expect(JSON.parse(result)).toEqual(['child']);
+  });
+
+  it('stopPropagation() halts bubbling to ancestors', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const order = [];
+      const child = document.getElementById('child');
+      const parent = document.getElementById('parent');
+      child.addEventListener('click', (e) => { order.push('child'); e.stopPropagation(); });
+      parent.addEventListener('click', () => order.push('parent'));
+
+      const event = new Event('click', { bubbles: true });
+      child.dispatchEvent(event);
+      JSON.stringify(order);
+    `);
+    expect(JSON.parse(result)).toEqual(['child']);
+  });
+
+  it('preventDefault() sets defaultPrevented and dispatchEvent returns false when cancelable', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      div.addEventListener('click', (e) => e.preventDefault());
+      const event = new Event('click', { cancelable: true });
+      const returnValue = div.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: false, defaultPrevented: true });
+  });
+
+  it('preventDefault() has no effect when the event is not cancelable', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      div.addEventListener('click', (e) => e.preventDefault());
+      const event = new Event('click', { cancelable: false });
+      const returnValue = div.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
+  });
 });

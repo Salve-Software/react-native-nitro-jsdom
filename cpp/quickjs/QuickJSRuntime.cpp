@@ -1,5 +1,6 @@
 #include "QuickJSRuntime.hpp"
 #include "DOMBindings.hpp"
+#include "DOMBindingsInternal.hpp"
 #include "MutationObservers.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "quickjs.h"
@@ -86,6 +87,9 @@ QuickJSRuntime::~QuickJSRuntime() {
     if (_ctxState->mutation_observers) {
       _ctxState->mutation_observers->clearAll(ctx);
     }
+
+    // Free node wrapper cache
+    clear_node_cache(ctx, _ctxState.get());
   }
 
   if (_context) JS_FreeContext(reinterpret_cast<JSContext*>(_context));

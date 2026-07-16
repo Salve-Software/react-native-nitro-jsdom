@@ -66,6 +66,10 @@ struct RuntimeContext {
   Storage local_storage;
   Storage session_storage;
 
+  // node pointer → heap-allocated JSValue* (DupValue'd strong ref)
+  // Ensures the same native node always returns the same JS wrapper object.
+  std::unordered_map<void*, void*> node_wrapper_cache;
+
   ~RuntimeContext() = default;
 };
 
