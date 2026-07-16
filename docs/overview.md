@@ -246,6 +246,20 @@ dom.dispose() // ← always pair with create()
 - [x] `document.title`
 - [x] Real event bubbling (`dispatchEvent` walks ancestors; `stopPropagation()` / `preventDefault()` take effect)
 
+### v0.7 — Node Identity & DOM Ergonomics
+> Gaps identified comparing against jsdom for real-world embedded scripts:
+> stable node identity plus the traversal/mutation methods those scripts
+> reach for most often. Layout-dependent APIs (`getComputedStyle`,
+> `getBoundingClientRect`, full CSSOM) are out of scope — there's no
+> rendering to back them.
+- [x] Stable node identity (`el.firstChild === el.firstChild`) via a per-runtime wrapper cache
+- [x] `node.contains(other)`
+- [x] `element.closest(selector)`
+- [x] `node.replaceChild(newChild, oldChild)`
+- [x] `node.before(...nodes)` / `after(...nodes)` / `replaceWith(...nodes)`
+- [x] `element.append(...nodes)` / `prepend(...nodes)`
+- [x] `element.insertAdjacentHTML(position, html)`
+
 ---
 
 ## Repository Structure
