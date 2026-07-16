@@ -174,9 +174,8 @@ static JSValue js_MutationObserver_observe(JSContext* ctx, JSValue this_val,
   if (!opaque || !opaque->registry) return JS_UNDEFINED;
   if (argc < 1) return JS_UNDEFINED;
 
-  // Resolve target node
-  void* target = JS_GetOpaque(argv[0], js_element_class_id);
-  if (!target) return JS_UNDEFINED; // not an element — no-op
+  void* target = unwrap_node(ctx, argv[0]);
+  if (!target) return JS_UNDEFINED;
 
   ObserverInit opts;
   if (argc >= 2 && JS_IsObject(argv[1])) {

@@ -25,16 +25,25 @@ namespace margelo::nitro::nitrojsdom {
 struct RuntimeContext;
 class LexborDocument;
 
-// ── Element class + wrapping ──────────────────────────────────────────────────
-// The "Element" JS class wraps any lxb_dom_node_t-derived pointer (element, text,
-// comment, document node): every such lexbor struct starts with an lxb_dom_node_t
-// member, so a single opaque-pointer class covers generic Node traversal too.
+// ── Element / Node class IDs + wrapping ──────────────────────────────────────
+// js_element_class_id wraps lxb_dom_element_t* — real element nodes only.
+// js_node_class_id    wraps lxb_dom_node_t*    — text, comment, document, etc.
+//
+// make_element() dispatches on the node type: Element nodes get the element
+// class (which exposes getAttribute, classList, etc.); all other nodes get the
+// node class (Node traversal only). This prevents non-element nodes from
+// reaching lxb_dom_element_* calls.
+//
+// unwrap_element() returns non-null only for element-class objects.
+// unwrap_node()    returns non-null for either class (shared Node methods).
 
 extern JSClassID js_element_class_id;
+extern JSClassID js_node_class_id;
 
-JSValue make_element(JSContext* ctx, void* el);
+JSValue make_element(JSContext* ctx, void* node_or_el);
 JSValue make_element_array(JSContext* ctx, const std::vector<void*>& elements);
 lxb_dom_element_t* unwrap_element(JSContext* ctx, JSValue val);
+lxb_dom_node_t*    unwrap_node(JSContext* ctx, JSValue val);
 std::string serialize_node(lxb_dom_node_t* node);
 
 // ── RuntimeContext access ─────────────────────────────────────────────────────

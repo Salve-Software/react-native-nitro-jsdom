@@ -95,8 +95,9 @@ JSValue js_event_stopImmediatePropagation(JSContext* ctx, JSValue this_val, int,
 JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
-  auto* el = unwrap_element(ctx, this_val);
-  if (!el) return JS_UNDEFINED;
+  auto* node_ptr = unwrap_node(ctx, this_val);
+  if (!node_ptr) return JS_UNDEFINED;
+  auto* el = reinterpret_cast<lxb_dom_element_t*>(node_ptr);
 
   const char* type_str = JS_ToCString(ctx, argv[0]);
   if (!type_str) return JS_UNDEFINED;
@@ -124,8 +125,9 @@ JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSVal
 JSValue js_el_removeEventListener(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
-  auto* el = unwrap_element(ctx, this_val);
-  if (!el) return JS_UNDEFINED;
+  auto* node_ptr = unwrap_node(ctx, this_val);
+  if (!node_ptr) return JS_UNDEFINED;
+  auto* el = reinterpret_cast<lxb_dom_element_t*>(node_ptr);
 
   const char* type_str = JS_ToCString(ctx, argv[0]);
   if (!type_str) return JS_UNDEFINED;
@@ -260,9 +262,9 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
 JSValue js_el_dispatchEvent(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 1) return JS_TRUE;
-  auto* el = unwrap_element(ctx, this_val);
-  if (!el) return JS_TRUE;
-  return dispatch_event_on_target(ctx, rctx, argv[0], lxb_dom_interface_node(el));
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node) return JS_TRUE;
+  return dispatch_event_on_target(ctx, rctx, argv[0], node);
 }
 
 // ── document.addEventListener / dispatchEvent ─────────────────────────────────
@@ -329,13 +331,13 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, global, "CustomEvent",
       JS_NewCFunction2(ctx, js_CustomEvent_constructor, "CustomEvent", 2, JS_CFUNC_constructor, 0));
 
-  // ── addEventListener/removeEventListener/dispatchEvent on Element ─────────
-  // ElementBindings::install() must have already run so this class proto exists.
-  JSValue element_proto = JS_GetClassProto(ctx, js_element_class_id);
-  JS_SetPropertyStr(ctx, element_proto, "addEventListener",    JS_NewCFunction(ctx, js_el_addEventListener,    "addEventListener",    2));
-  JS_SetPropertyStr(ctx, element_proto, "removeEventListener", JS_NewCFunction(ctx, js_el_removeEventListener, "removeEventListener", 2));
-  JS_SetPropertyStr(ctx, element_proto, "dispatchEvent",       JS_NewCFunction(ctx, js_el_dispatchEvent,       "dispatchEvent",       1));
-  JS_FreeValue(ctx, element_proto);
+  // ── addEventListener/removeEventListener/dispatchEvent on Node + Element ──
+  // Added to the Node proto so text/comment nodes can also receive events.
+  JSValue node_proto = JS_GetClassProto(ctx, js_node_class_id);
+  JS_SetPropertyStr(ctx, node_proto, "addEventListener",    JS_NewCFunction(ctx, js_el_addEventListener,    "addEventListener",    2));
+  JS_SetPropertyStr(ctx, node_proto, "removeEventListener", JS_NewCFunction(ctx, js_el_removeEventListener, "removeEventListener", 2));
+  JS_SetPropertyStr(ctx, node_proto, "dispatchEvent",       JS_NewCFunction(ctx, js_el_dispatchEvent,       "dispatchEvent",       1));
+  JS_FreeValue(ctx, node_proto);
 
   // ── addEventListener/dispatchEvent on document ─────────────────────────────
   // DocumentBindings::install() must have already run so globalThis.document exists.

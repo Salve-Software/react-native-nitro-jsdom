@@ -8,16 +8,23 @@
 
 namespace margelo::nitro::nitrojsdom {
 
-JSClassID js_element_class_id = 0; // non-static: shared via this header
+JSClassID js_element_class_id = 0;
+JSClassID js_node_class_id    = 0;
 
 namespace {
 JSClassDef js_element_class = { "Element", .finalizer = nullptr };
 } // namespace
 
-JSValue make_element(JSContext* ctx, void* el) {
-  if (!el) return JS_NULL;
-  JSValue obj = JS_NewObjectClass(ctx, js_element_class_id);
-  JS_SetOpaque(obj, el);
+JSValue make_element(JSContext* ctx, void* ptr) {
+  if (!ptr) return JS_NULL;
+  lxb_dom_node_t* node = static_cast<lxb_dom_node_t*>(ptr);
+  if (node->type == LXB_DOM_NODE_TYPE_ELEMENT) {
+    JSValue obj = JS_NewObjectClass(ctx, js_element_class_id);
+    JS_SetOpaque(obj, ptr);
+    return obj;
+  }
+  JSValue obj = JS_NewObjectClass(ctx, js_node_class_id);
+  JS_SetOpaque(obj, ptr);
   return obj;
 }
 
@@ -30,6 +37,13 @@ JSValue make_element_array(JSContext* ctx, const std::vector<void*>& elements) {
 
 lxb_dom_element_t* unwrap_element(JSContext* ctx, JSValue val) {
   return static_cast<lxb_dom_element_t*>(JS_GetOpaque(val, js_element_class_id));
+}
+
+lxb_dom_node_t* unwrap_node(JSContext* ctx, JSValue val) {
+  void* p = JS_GetOpaque(val, js_element_class_id);
+  if (p) return static_cast<lxb_dom_node_t*>(p);
+  p = JS_GetOpaque(val, js_node_class_id);
+  return static_cast<lxb_dom_node_t*>(p);
 }
 
 std::string serialize_node(lxb_dom_node_t* node) {
