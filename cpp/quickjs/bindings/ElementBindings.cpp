@@ -636,7 +636,7 @@ JSValue js_el_getElementsByTagName(JSContext* ctx, JSValue this_val, int argc, J
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
-  JS_NewClassID(&js_element_class_id);
+  if (js_element_class_id == 0) JS_NewClassID(&js_element_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_element_class_id, &js_element_class);
 
   ClassListBindings::install(ctx);

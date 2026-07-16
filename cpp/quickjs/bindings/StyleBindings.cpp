@@ -218,7 +218,7 @@ JSValue js_style_removeProperty(JSContext* ctx, JSValue this_val, int argc, JSVa
 } // namespace
 
 void StyleBindings::install(JSContext* ctx) {
-  JS_NewClassID(&js_style_class_id);
+  if (js_style_class_id == 0) JS_NewClassID(&js_style_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_style_class_id, &js_style_class);
 
   JSValue proto = JS_NewObject(ctx);

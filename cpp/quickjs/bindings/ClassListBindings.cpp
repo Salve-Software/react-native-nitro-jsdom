@@ -171,7 +171,7 @@ void set_class_attr(lxb_dom_element_t* el, const std::string& classes) {
 }
 
 void ClassListBindings::install(JSContext* ctx) {
-  JS_NewClassID(&js_classList_class_id);
+  if (js_classList_class_id == 0) JS_NewClassID(&js_classList_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_classList_class_id, &js_classList_class);
 }
 

@@ -264,7 +264,7 @@ JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
 } // namespace
 
 void EventBindings::install(JSContext* ctx) {
-  JS_NewClassID(&js_event_class_id);
+  if (js_event_class_id == 0) JS_NewClassID(&js_event_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
 
   // ── Event prototype ────────────────────────────────────────────────────────
