@@ -100,13 +100,23 @@ JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSVal
 
   const char* type_str = JS_ToCString(ctx, argv[0]);
   if (!type_str) return JS_UNDEFINED;
-
-  EventListener listener;
-  listener.node = lxb_dom_interface_node(el);
-  listener.event_type = type_str;
-  listener.callback = new JSValue(JS_DupValue(ctx, argv[1]));
+  std::string event_type(type_str);
   JS_FreeCString(ctx, type_str);
 
+  void* node = lxb_dom_interface_node(el);
+  for (auto& l : rctx->listeners) {
+    if (l.node == node && l.event_type == event_type) {
+      JSValue* stored = static_cast<JSValue*>(l.callback);
+      if (JS_VALUE_GET_TAG(*stored) == JS_VALUE_GET_TAG(argv[1]) &&
+          JS_VALUE_GET_PTR(*stored) == JS_VALUE_GET_PTR(argv[1]))
+        return JS_UNDEFINED;
+    }
+  }
+
+  EventListener listener;
+  listener.node = node;
+  listener.event_type = event_type;
+  listener.callback = new JSValue(JS_DupValue(ctx, argv[1]));
   rctx->listeners.push_back(std::move(listener));
   return JS_UNDEFINED;
 }
@@ -160,6 +170,12 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
 
   bool bubbles = get_bool_prop(ctx, event_obj, "bubbles");
 
+  lxb_dom_node_t* doc_node = nullptr;
+  if (rctx->document) {
+    doc_node = lxb_dom_interface_node(lxb_dom_interface_document(
+        static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
+  }
+
   JS_SetPropertyStr(ctx, event_obj, "target", make_element(ctx, target_node));
   JS_SetPropertyStr(ctx, event_obj, "__propagationStopped", JS_NewBool(ctx, false));
 
@@ -172,21 +188,44 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
   for (lxb_dom_node_t* level : chain) {
     if (get_bool_prop(ctx, event_obj, "__propagationStopped")) break;
 
-    JSValue current_target = make_element(ctx, level);
+    JSValue current_target;
+    if (level == doc_node) {
+      JSValue global = JS_GetGlobalObject(ctx);
+      current_target = JS_GetPropertyStr(ctx, global, "document");
+      JS_FreeValue(ctx, global);
+    } else {
+      current_target = make_element(ctx, level);
+    }
+
     JS_SetPropertyStr(ctx, event_obj, "currentTarget", JS_DupValue(ctx, current_target));
     JS_SetPropertyStr(ctx, event_obj, "__immediatePropagationStopped", JS_NewBool(ctx, false));
 
-    // Snapshot the listeners to avoid invalidation during iteration
     std::vector<JSValue> cbs_to_fire;
+    std::vector<JSValue*> cb_ptrs;
     for (auto& listener : rctx->listeners) {
       if (listener.node == level && listener.event_type == event_type) {
         JSValue* cb = static_cast<JSValue*>(listener.callback);
         cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
+        cb_ptrs.push_back(cb);
       }
     }
 
     for (size_t i = 0; i < cbs_to_fire.size(); i++) {
       if (get_bool_prop(ctx, event_obj, "__immediatePropagationStopped")) {
+        JS_FreeValue(ctx, cbs_to_fire[i]);
+        continue;
+      }
+      bool still_registered = false;
+      for (auto& l : rctx->listeners) {
+        if (l.node == level && l.event_type == event_type) {
+          JSValue* stored = static_cast<JSValue*>(l.callback);
+          if (JS_VALUE_GET_PTR(*stored) == JS_VALUE_GET_PTR(cbs_to_fire[i])) {
+            still_registered = true;
+            break;
+          }
+        }
+      }
+      if (!still_registered) {
         JS_FreeValue(ctx, cbs_to_fire[i]);
         continue;
       }
@@ -235,17 +274,26 @@ JSValue js_doc_addEventListener(JSContext* ctx, JSValue, int argc, JSValue* argv
 
   const char* type_str = JS_ToCString(ctx, argv[0]);
   if (!type_str) return JS_UNDEFINED;
+  std::string event_type(type_str);
+  JS_FreeCString(ctx, type_str);
 
   void* doc_node = lxb_dom_interface_node(
       lxb_dom_interface_document(
           static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
 
+  for (auto& l : rctx->listeners) {
+    if (l.node == doc_node && l.event_type == event_type) {
+      JSValue* stored = static_cast<JSValue*>(l.callback);
+      if (JS_VALUE_GET_TAG(*stored) == JS_VALUE_GET_TAG(argv[1]) &&
+          JS_VALUE_GET_PTR(*stored) == JS_VALUE_GET_PTR(argv[1]))
+        return JS_UNDEFINED;
+    }
+  }
+
   EventListener listener;
   listener.node = doc_node;
-  listener.event_type = type_str;
+  listener.event_type = event_type;
   listener.callback = new JSValue(JS_DupValue(ctx, argv[1]));
-  JS_FreeCString(ctx, type_str);
-
   rctx->listeners.push_back(std::move(listener));
   return JS_UNDEFINED;
 }
