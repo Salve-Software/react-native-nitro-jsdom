@@ -575,6 +575,245 @@ JSValue js_el_cloneNode(JSContext* ctx, JSValue this_val, int argc, JSValue* arg
   return make_element(ctx, clone);
 }
 
+JSValue js_el_contains(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || argc < 1) return JS_FALSE;
+  auto* other = unwrap_node(ctx, argv[0]);
+  if (!other) return JS_FALSE;
+  for (lxb_dom_node_t* n = other; n; n = n->parent) {
+    if (n == node) return JS_TRUE;
+  }
+  return JS_FALSE;
+}
+
+JSValue js_el_replaceChild(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* parent_node = unwrap_node(ctx, this_val);
+  if (!parent_node || argc < 2) return JS_NULL;
+  auto* new_node = unwrap_node(ctx, argv[0]);
+  auto* old_node = unwrap_node(ctx, argv[1]);
+  if (!new_node || !old_node) return JS_NULL;
+  if (old_node->parent != parent_node) {
+    JS_ThrowTypeError(ctx, "NotFoundError: the node to be replaced is not a child of this node");
+    return JS_EXCEPTION;
+  }
+
+  lxb_dom_node_t* prev_sib = old_node->prev;
+  lxb_dom_node_t* next_sib = old_node->next;
+
+  lxb_dom_node_insert_before(old_node, new_node);
+  auto* rctx = get_ctx(ctx);
+  invalidate_node_cache(ctx, rctx, old_node);
+  lxb_dom_node_remove(old_node);
+
+  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent_node,
+        { new_node }, { old_node }, prev_sib, next_sib);
+  }
+
+  return JS_DupValue(ctx, argv[1]); // returns the replaced (old) child, per spec
+}
+
+lxb_dom_node_t* js_to_node_or_text(JSContext* ctx, JSValue val) {
+  auto* node = unwrap_node(ctx, val);
+  if (node) return node;
+  const char* str = JS_ToCString(ctx, val);
+  if (!str) return nullptr;
+  void* text = get_doc(ctx)->createTextNode(str);
+  JS_FreeCString(ctx, str);
+  return static_cast<lxb_dom_node_t*>(text);
+}
+
+JSValue js_el_before(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || !node->parent) return JS_UNDEFINED;
+  lxb_dom_node_t* parent = node->parent;
+
+  std::vector<void*> inserted;
+  for (int i = 0; i < argc; i++) {
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    if (!n) continue;
+    lxb_dom_node_insert_before(node, n);
+    inserted.push_back(n);
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (!inserted.empty() && rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent, inserted, {},
+        static_cast<lxb_dom_node_t*>(inserted.front())->prev, node);
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_after(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || !node->parent) return JS_UNDEFINED;
+  lxb_dom_node_t* parent = node->parent;
+  lxb_dom_node_t* ref = node->next;
+
+  std::vector<void*> inserted;
+  for (int i = 0; i < argc; i++) {
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    if (!n) continue;
+    if (ref) lxb_dom_node_insert_before(ref, n);
+    else lxb_dom_node_insert_child(parent, n);
+    inserted.push_back(n);
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (!inserted.empty() && rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent, inserted, {}, node, ref);
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_replaceWith(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || !node->parent) return JS_UNDEFINED;
+  lxb_dom_node_t* parent = node->parent;
+  lxb_dom_node_t* prev_sib = node->prev;
+  lxb_dom_node_t* next_sib = node->next;
+
+  std::vector<void*> inserted;
+  for (int i = 0; i < argc; i++) {
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    if (!n) continue;
+    lxb_dom_node_insert_before(node, n);
+    inserted.push_back(n);
+  }
+
+  auto* rctx = get_ctx(ctx);
+  invalidate_node_cache(ctx, rctx, node);
+  lxb_dom_node_remove(node);
+
+  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent, inserted, { node }, prev_sib, next_sib);
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_append(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* parent_node = unwrap_node(ctx, this_val);
+  if (!parent_node) return JS_UNDEFINED;
+
+  std::vector<void*> inserted;
+  for (int i = 0; i < argc; i++) {
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    if (!n) continue;
+    lxb_dom_node_insert_child(parent_node, n);
+    inserted.push_back(n);
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (!inserted.empty() && rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent_node, inserted, {},
+        static_cast<lxb_dom_node_t*>(inserted.front())->prev, nullptr);
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_prepend(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* parent_node = unwrap_node(ctx, this_val);
+  if (!parent_node) return JS_UNDEFINED;
+  lxb_dom_node_t* ref = parent_node->first_child;
+
+  std::vector<void*> inserted;
+  for (int i = 0; i < argc; i++) {
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    if (!n) continue;
+    if (ref) lxb_dom_node_insert_before(ref, n);
+    else lxb_dom_node_insert_child(parent_node, n);
+    inserted.push_back(n);
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (!inserted.empty() && rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent_node, inserted, {}, nullptr, ref);
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_closest(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 1) return JS_NULL;
+  const char* sel = JS_ToCString(ctx, argv[0]);
+  if (!sel) return JS_NULL;
+
+  JSValue result = JS_NULL;
+  for (lxb_dom_node_t* node = lxb_dom_interface_node(el);
+       node && node->type == LXB_DOM_NODE_TYPE_ELEMENT;
+       node = node->parent) {
+    if (get_doc(ctx)->matchesSelector(lxb_dom_interface_element(node), sel)) {
+      result = make_element(ctx, node);
+      break;
+    }
+  }
+  JS_FreeCString(ctx, sel);
+  return result;
+}
+
+JSValue js_el_insertAdjacentHTML(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 2) return JS_UNDEFINED;
+  const char* position = JS_ToCString(ctx, argv[0]);
+  const char* html = JS_ToCString(ctx, argv[1]);
+  if (!position || !html) {
+    if (position) JS_FreeCString(ctx, position);
+    if (html) JS_FreeCString(ctx, html);
+    return JS_UNDEFINED;
+  }
+  std::string pos(position);
+  JS_FreeCString(ctx, position);
+
+  lxb_dom_node_t* node = lxb_dom_interface_node(el);
+  auto parsed = get_doc(ctx)->parseFragmentNodes(el, html);
+  JS_FreeCString(ctx, html);
+  if (parsed.empty()) return JS_UNDEFINED;
+
+  lxb_dom_node_t* parent = nullptr;
+  lxb_dom_node_t* prev_sib = nullptr;
+  lxb_dom_node_t* next_sib = nullptr;
+
+  if (pos == "beforebegin") {
+    parent = node->parent;
+    if (!parent) return JS_UNDEFINED;
+    prev_sib = node->prev;
+    for (void* n : parsed) lxb_dom_node_insert_before(node, static_cast<lxb_dom_node_t*>(n));
+    next_sib = node;
+  } else if (pos == "afterbegin") {
+    parent = node;
+    lxb_dom_node_t* ref = node->first_child;
+    for (void* n : parsed) {
+      auto* dn = static_cast<lxb_dom_node_t*>(n);
+      if (ref) lxb_dom_node_insert_before(ref, dn); else lxb_dom_node_insert_child(node, dn);
+    }
+    next_sib = ref;
+  } else if (pos == "beforeend") {
+    parent = node;
+    prev_sib = node->last_child;
+    for (void* n : parsed) lxb_dom_node_insert_child(node, static_cast<lxb_dom_node_t*>(n));
+  } else if (pos == "afterend") {
+    parent = node->parent;
+    if (!parent) return JS_UNDEFINED;
+    prev_sib = node;
+    lxb_dom_node_t* ref = node->next;
+    for (void* n : parsed) {
+      auto* dn = static_cast<lxb_dom_node_t*>(n);
+      if (ref) lxb_dom_node_insert_before(ref, dn); else lxb_dom_node_insert_child(parent, dn);
+    }
+    next_sib = ref;
+  } else {
+    for (void* n : parsed) lxb_dom_node_destroy_deep(static_cast<lxb_dom_node_t*>(n));
+    JS_ThrowTypeError(ctx, "SyntaxError: invalid insertAdjacentHTML position '%s'", pos.c_str());
+    return JS_EXCEPTION;
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent, parsed, {}, prev_sib, next_sib);
+  }
+  return JS_UNDEFINED;
+}
+
 JSValue js_el_matches(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* el = unwrap_element(ctx, this_val);
   if (!el || argc < 1) return JS_FALSE;
@@ -643,7 +882,12 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, node_proto, "appendChild",  JS_NewCFunction(ctx, js_el_appendChild,  "appendChild",  1));
   JS_SetPropertyStr(ctx, node_proto, "removeChild",  JS_NewCFunction(ctx, js_el_removeChild,  "removeChild",  1));
   JS_SetPropertyStr(ctx, node_proto, "insertBefore", JS_NewCFunction(ctx, js_el_insertBefore, "insertBefore", 2));
+  JS_SetPropertyStr(ctx, node_proto, "replaceChild", JS_NewCFunction(ctx, js_el_replaceChild, "replaceChild", 2));
   JS_SetPropertyStr(ctx, node_proto, "cloneNode",    JS_NewCFunction(ctx, js_el_cloneNode,    "cloneNode",    1));
+  JS_SetPropertyStr(ctx, node_proto, "contains",     JS_NewCFunction(ctx, js_el_contains,     "contains",     1));
+  JS_SetPropertyStr(ctx, node_proto, "before",       JS_NewCFunction(ctx, js_el_before,       "before",       0));
+  JS_SetPropertyStr(ctx, node_proto, "after",        JS_NewCFunction(ctx, js_el_after,        "after",        0));
+  JS_SetPropertyStr(ctx, node_proto, "replaceWith",  JS_NewCFunction(ctx, js_el_replaceWith,  "replaceWith",  0));
 
   define_prop(ctx, node_proto, "nodeType",         js_el_get_nodeType,        nullptr);
   define_prop(ctx, node_proto, "nodeName",         js_el_get_nodeName,        nullptr);
@@ -673,6 +917,10 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "querySelectorAll",       JS_NewCFunction(ctx, js_el_querySelectorAll,       "querySelectorAll",       1));
   JS_SetPropertyStr(ctx, proto, "getElementsByClassName", JS_NewCFunction(ctx, js_el_getElementsByClassName, "getElementsByClassName", 1));
   JS_SetPropertyStr(ctx, proto, "getElementsByTagName",   JS_NewCFunction(ctx, js_el_getElementsByTagName,   "getElementsByTagName",   1));
+  JS_SetPropertyStr(ctx, proto, "closest",                JS_NewCFunction(ctx, js_el_closest,                "closest",                1));
+  JS_SetPropertyStr(ctx, proto, "insertAdjacentHTML",     JS_NewCFunction(ctx, js_el_insertAdjacentHTML,     "insertAdjacentHTML",     2));
+  JS_SetPropertyStr(ctx, proto, "append",                 JS_NewCFunction(ctx, js_el_append,                 "append",                 0));
+  JS_SetPropertyStr(ctx, proto, "prepend",                JS_NewCFunction(ctx, js_el_prepend,                "prepend",                0));
 
   define_prop(ctx, proto, "tagName",                js_el_get_tagName,             nullptr);
   define_prop(ctx, proto, "id",                     js_el_get_id,                  js_el_set_id);

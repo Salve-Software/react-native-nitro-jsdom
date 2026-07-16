@@ -249,6 +249,24 @@ void LexborDocument::setInnerHTMLOnEl(void* element, const std::string& html) {
   lxb_dom_node_destroy(frag);
 }
 
+std::vector<void*> LexborDocument::parseFragmentNodes(void* contextElement, const std::string& html) {
+  auto* el  = static_cast<lxb_dom_element_t*>(contextElement);
+  auto* doc = static_cast<lxb_html_document_t*>(_document);
+
+  lxb_dom_node_t* frag = lxb_html_document_parse_fragment(doc, el,
+      reinterpret_cast<const lxb_char_t*>(html.data()), html.size());
+  if (!frag) return {};
+
+  std::vector<void*> nodes;
+  while (frag->first_child) {
+    lxb_dom_node_t* child = frag->first_child;
+    lxb_dom_node_remove(child);
+    nodes.push_back(child);
+  }
+  lxb_dom_node_destroy(frag);
+  return nodes;
+}
+
 // ── Selector matching ────────────────────────────────────────────────────────
 
 bool LexborDocument::matchesSelector(void* element, const std::string& sel) const {

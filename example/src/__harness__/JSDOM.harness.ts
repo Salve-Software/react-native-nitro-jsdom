@@ -440,4 +440,101 @@ describe('JSDOM native module', () => {
     `);
     expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
   });
+
+  it('node identity is stable across repeated lookups of the same node', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span>hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      JSON.stringify({
+        sameElement: document.getElementById('d') === div,
+        sameFirstChild: div.firstChild === div.firstChild,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ sameElement: true, sameFirstChild: true });
+  });
+
+  it('contains() checks ancestor/descendant relationships', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const parent = document.getElementById('parent');
+      const child = document.getElementById('child');
+      JSON.stringify({
+        parentContainsChild: parent.contains(child),
+        childContainsParent: child.contains(parent),
+        selfContains: parent.contains(parent),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ parentContainsChild: true, childContainsParent: false, selfContains: true });
+  });
+
+  it('closest() walks up matching ancestors', async () => {
+    dom = JSDOM.create('<html><body><div class="outer"><div class="inner"><span id="s">hi</span></div></div></body></html>');
+    const result = await dom.evaluate(`
+      const span = document.getElementById('s');
+      JSON.stringify({
+        inner: span.closest('.inner') !== null,
+        outer: span.closest('.outer') !== null,
+        none: span.closest('.missing'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ inner: true, outer: true, none: null });
+  });
+
+  it('replaceChild() swaps a child and returns the removed node', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span id="old">old</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const oldEl = document.getElementById('old');
+      const newEl = document.createElement('p');
+      newEl.textContent = 'new';
+      const returned = div.replaceChild(newEl, oldEl);
+      JSON.stringify({ returnedIsOld: returned === oldEl, innerHTML: div.innerHTML });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnedIsOld: true, innerHTML: '<p>new</p>' });
+  });
+
+  it('before()/after()/replaceWith() manipulate siblings, accepting nodes and strings', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span id="s">mid</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const span = document.getElementById('s');
+      span.before('before-text');
+      span.after('after-text');
+      document.getElementById('d').innerHTML;
+    `);
+    expect(result).toBe('before-text<span id="s">mid</span>after-text');
+
+    const result2 = await dom.evaluate(`
+      document.getElementById('s').replaceWith('replaced');
+      document.getElementById('d').innerHTML;
+    `);
+    expect(result2).toBe('before-textreplacedafter-text');
+  });
+
+  it('append()/prepend() add children in argument order, accepting nodes and strings', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const b = document.createElement('b');
+      b.textContent = 'b';
+      div.append('a', b, 'c');
+      div.prepend('z');
+      div.innerHTML;
+    `);
+    expect(result).toBe('za<b>b</b>c');
+  });
+
+  it('insertAdjacentHTML() inserts parsed HTML at the four standard positions', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span>mid</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      div.insertAdjacentHTML('afterbegin', '<i>ab</i>');
+      div.insertAdjacentHTML('beforeend', '<i>be</i>');
+      div.insertAdjacentHTML('beforebegin', '<i>bb</i>');
+      div.insertAdjacentHTML('afterend', '<i>ae</i>');
+      document.body.innerHTML;
+    `);
+    expect(result).toBe(
+      '<i>bb</i><div id="d"><i>ab</i><span>mid</span><i>be</i></div><i>ae</i>'
+    );
+  });
 });

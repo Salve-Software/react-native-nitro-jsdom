@@ -41,6 +41,10 @@ public:
   void setTextContentOnEl(void* element, const std::string& text);
   void setInnerHTMLOnEl(void* element, const std::string& html);
 
+  // Like setInnerHTMLOnEl, but returns the detached parsed nodes instead of
+  // replacing contextElement's children — used by insertAdjacentHTML.
+  std::vector<void*> parseFragmentNodes(void* contextElement, const std::string& html);
+
   // ── Selector matching ─────────────────────────────────────────────────────
   bool matchesSelector(void* element, const std::string& sel) const;
 
