@@ -260,6 +260,13 @@ dom.dispose() // ← always pair with create()
 - [x] `element.append(...nodes)` / `prepend(...nodes)`
 - [x] `element.insertAdjacentHTML(position, html)`
 
+### v0.8 — Attribute Enumeration & Node Comparison
+- [x] `document.createComment()` / `document.createDocumentFragment()`
+- [x] `element.getAttributeNames()`
+- [x] `element.attributes` (snapshot array of `{name, value}`)
+- [x] `element.toggleAttribute(name, force?)`
+- [x] `node.isSameNode(other)` / `node.isEqualNode(other)`
+
 ---
 
 ## Repository Structure

@@ -36,6 +36,8 @@ public:
   // ── Node creation ─────────────────────────────────────────────────────────
   void* createElement(const std::string& tag);
   void* createTextNode(const std::string& text);
+  void* createComment(const std::string& text);
+  void* createDocumentFragment();
 
   // ── Element content ───────────────────────────────────────────────────────
   void setTextContentOnEl(void* element, const std::string& text);

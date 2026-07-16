@@ -537,4 +537,94 @@ describe('JSDOM native module', () => {
       '<i>bb</i><div id="d"><i>ab</i><span>mid</span><i>be</i></div><i>ae</i>'
     );
   });
+
+  it('document.createComment()/createDocumentFragment() create nodes usable with appendChild', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const comment = document.createComment('hi');
+      div.appendChild(comment);
+
+      const frag = document.createDocumentFragment();
+      const a = document.createElement('a');
+      a.textContent = 'link';
+      frag.appendChild(a);
+      div.appendChild(frag);
+
+      JSON.stringify({
+        commentNodeType: comment.nodeType,
+        commentNodeValue: comment.nodeValue,
+        innerHTML: div.innerHTML,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      commentNodeType: 8,
+      commentNodeValue: 'hi',
+      innerHTML: '<!--hi--><a>link</a>',
+    });
+  });
+
+  it('getAttributeNames()/attributes list every attribute on the element', async () => {
+    dom = JSDOM.create('<html><body><div id="d" class="x" data-role="admin"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      JSON.stringify({
+        names: div.getAttributeNames(),
+        attrs: Array.from(div.attributes).map((a) => [a.name, a.value]),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      names: ['id', 'class', 'data-role'],
+      attrs: [
+        ['id', 'd'],
+        ['class', 'x'],
+        ['data-role', 'admin'],
+      ],
+    });
+  });
+
+  it('toggleAttribute() toggles by default and respects the force argument', async () => {
+    dom = JSDOM.create('<html><body><div id="d" hidden></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const removed = div.toggleAttribute('hidden');
+      const afterRemove = div.hasAttribute('hidden');
+      const added = div.toggleAttribute('hidden');
+      const afterAdd = div.hasAttribute('hidden');
+      const forcedFalseOnAbsent = div.toggleAttribute('missing', false);
+      const forcedTrueTwice = [div.toggleAttribute('data-x', true), div.toggleAttribute('data-x', true)];
+      JSON.stringify({ removed, afterRemove, added, afterAdd, forcedFalseOnAbsent, forcedTrueTwice });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      removed: false,
+      afterRemove: false,
+      added: true,
+      afterAdd: true,
+      forcedFalseOnAbsent: false,
+      forcedTrueTwice: [true, true],
+    });
+  });
+
+  it('isSameNode() checks identity, isEqualNode() checks structural equality', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span class="x">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const span = div.firstChild;
+      const clone = span.cloneNode(true);
+      const different = document.createElement('span');
+      different.className = 'y';
+      JSON.stringify({
+        sameNodeSelf: span.isSameNode(div.firstChild),
+        sameNodeClone: span.isSameNode(clone),
+        equalNodeClone: span.isEqualNode(clone),
+        equalNodeDifferent: span.isEqualNode(different),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      sameNodeSelf: true,
+      sameNodeClone: false,
+      equalNodeClone: true,
+      equalNodeDifferent: false,
+    });
+  });
 });
