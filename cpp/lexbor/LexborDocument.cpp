@@ -206,6 +206,19 @@ void* LexborDocument::createTextNode(const std::string& text) {
       reinterpret_cast<const lxb_char_t*>(text.data()), text.size());
 }
 
+void* LexborDocument::createComment(const std::string& text) {
+  if (!_document) return nullptr;
+  auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
+  return lxb_dom_document_create_comment(dom_doc,
+      reinterpret_cast<const lxb_char_t*>(text.data()), text.size());
+}
+
+void* LexborDocument::createDocumentFragment() {
+  if (!_document) return nullptr;
+  auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
+  return lxb_dom_document_create_document_fragment(dom_doc);
+}
+
 // ── Element content ──────────────────────────────────────────────────────────
 
 void LexborDocument::setTextContentOnEl(void* element, const std::string& text) {

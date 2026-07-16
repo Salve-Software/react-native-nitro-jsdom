@@ -471,23 +471,41 @@ JSValue js_el_hasAttribute(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   return JS_NewBool(ctx, has);
 }
 
+// Inserts `node` via `insert_one`, expanding DocumentFragments into their
+// children first (per the DOM's "insert a node" algorithm — a fragment is
+// never itself part of the resulting tree, only its children are moved in).
+template <typename InsertOneFn>
+std::vector<lxb_dom_node_t*> expand_and_insert(lxb_dom_node_t* node, InsertOneFn insert_one) {
+  std::vector<lxb_dom_node_t*> inserted;
+  if (node->type == LXB_DOM_NODE_TYPE_DOCUMENT_FRAGMENT) {
+    while (node->first_child) {
+      lxb_dom_node_t* child = node->first_child;
+      lxb_dom_node_remove(child);
+      insert_one(child);
+      inserted.push_back(child);
+    }
+  } else {
+    insert_one(node);
+    inserted.push_back(node);
+  }
+  return inserted;
+}
+
 JSValue js_el_appendChild(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* parent_node = unwrap_node(ctx, this_val);
   if (!parent_node || argc < 1) return JS_NULL;
   auto* child_node = unwrap_node(ctx, argv[0]);
   if (!child_node) return JS_NULL;
 
-  lxb_dom_node_insert_child(parent_node, child_node);
+  auto inserted = expand_and_insert(child_node, [&](lxb_dom_node_t* n) {
+    lxb_dom_node_insert_child(parent_node, n);
+  });
 
-  // Capture siblings AFTER insertion so they reflect the node's new position
-  lxb_dom_node_t* prev_sib = child_node->prev;
-  lxb_dom_node_t* next_sib = child_node->next;
-
-  // Notify childList observers
   auto* rctx = get_ctx(ctx);
-  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+  if (!inserted.empty() && rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    std::vector<void*> insertedVoid(inserted.begin(), inserted.end());
     rctx->mutation_observers->notifyChildList(ctx, parent_node,
-        { child_node }, {}, prev_sib, next_sib);
+        insertedVoid, {}, inserted.front()->prev, nullptr);
   }
 
   return JS_DupValue(ctx, argv[0]);
@@ -519,10 +537,15 @@ JSValue js_el_insertBefore(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   if (!new_node) return JS_NULL;
 
   lxb_dom_node_t* parent_node = nullptr;
+  std::vector<lxb_dom_node_t*> inserted;
 
   if (argc < 2 || JS_IsNull(argv[1])) {
     parent_node = unwrap_node(ctx, this_val);
-    if (parent_node) lxb_dom_node_insert_child(parent_node, new_node);
+    if (parent_node) {
+      inserted = expand_and_insert(new_node, [&](lxb_dom_node_t* n) {
+        lxb_dom_node_insert_child(parent_node, n);
+      });
+    }
   } else {
     auto* ref = unwrap_node(ctx, argv[1]);
     if (ref) {
@@ -532,15 +555,18 @@ JSValue js_el_insertBefore(JSContext* ctx, JSValue this_val, int argc, JSValue* 
         return JS_EXCEPTION;
       }
       parent_node = receiver_node;
-      lxb_dom_node_insert_before(ref, new_node);
+      inserted = expand_and_insert(new_node, [&](lxb_dom_node_t* n) {
+        lxb_dom_node_insert_before(ref, n);
+      });
     }
   }
 
-  if (parent_node) {
+  if (parent_node && !inserted.empty()) {
     auto* rctx = get_ctx(ctx);
     if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+      std::vector<void*> insertedVoid(inserted.begin(), inserted.end());
       rctx->mutation_observers->notifyChildList(ctx, parent_node,
-          { new_node }, {}, new_node->prev, new_node->next);
+          insertedVoid, {}, inserted.front()->prev, inserted.back()->next);
     }
   }
 
@@ -600,14 +626,18 @@ JSValue js_el_replaceChild(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   lxb_dom_node_t* prev_sib = old_node->prev;
   lxb_dom_node_t* next_sib = old_node->next;
 
-  lxb_dom_node_insert_before(old_node, new_node);
+  auto inserted = expand_and_insert(new_node, [&](lxb_dom_node_t* n) {
+    lxb_dom_node_insert_before(old_node, n);
+  });
+
   auto* rctx = get_ctx(ctx);
   invalidate_node_cache(ctx, rctx, old_node);
   lxb_dom_node_remove(old_node);
 
   if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    std::vector<void*> insertedVoid(inserted.begin(), inserted.end());
     rctx->mutation_observers->notifyChildList(ctx, parent_node,
-        { new_node }, { old_node }, prev_sib, next_sib);
+        insertedVoid, { old_node }, prev_sib, next_sib);
   }
 
   return JS_DupValue(ctx, argv[1]); // returns the replaced (old) child, per spec
@@ -632,8 +662,8 @@ JSValue js_el_before(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) 
   for (int i = 0; i < argc; i++) {
     lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
     if (!n) continue;
-    lxb_dom_node_insert_before(node, n);
-    inserted.push_back(n);
+    auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) { lxb_dom_node_insert_before(node, one); });
+    inserted.insert(inserted.end(), batch.begin(), batch.end());
   }
 
   auto* rctx = get_ctx(ctx);
@@ -654,9 +684,10 @@ JSValue js_el_after(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   for (int i = 0; i < argc; i++) {
     lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
     if (!n) continue;
-    if (ref) lxb_dom_node_insert_before(ref, n);
-    else lxb_dom_node_insert_child(parent, n);
-    inserted.push_back(n);
+    auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) {
+      if (ref) lxb_dom_node_insert_before(ref, one); else lxb_dom_node_insert_child(parent, one);
+    });
+    inserted.insert(inserted.end(), batch.begin(), batch.end());
   }
 
   auto* rctx = get_ctx(ctx);
@@ -677,8 +708,8 @@ JSValue js_el_replaceWith(JSContext* ctx, JSValue this_val, int argc, JSValue* a
   for (int i = 0; i < argc; i++) {
     lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
     if (!n) continue;
-    lxb_dom_node_insert_before(node, n);
-    inserted.push_back(n);
+    auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) { lxb_dom_node_insert_before(node, one); });
+    inserted.insert(inserted.end(), batch.begin(), batch.end());
   }
 
   auto* rctx = get_ctx(ctx);
@@ -699,8 +730,8 @@ JSValue js_el_append(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) 
   for (int i = 0; i < argc; i++) {
     lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
     if (!n) continue;
-    lxb_dom_node_insert_child(parent_node, n);
-    inserted.push_back(n);
+    auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) { lxb_dom_node_insert_child(parent_node, one); });
+    inserted.insert(inserted.end(), batch.begin(), batch.end());
   }
 
   auto* rctx = get_ctx(ctx);
@@ -720,9 +751,10 @@ JSValue js_el_prepend(JSContext* ctx, JSValue this_val, int argc, JSValue* argv)
   for (int i = 0; i < argc; i++) {
     lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
     if (!n) continue;
-    if (ref) lxb_dom_node_insert_before(ref, n);
-    else lxb_dom_node_insert_child(parent_node, n);
-    inserted.push_back(n);
+    auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) {
+      if (ref) lxb_dom_node_insert_before(ref, one); else lxb_dom_node_insert_child(parent_node, one);
+    });
+    inserted.insert(inserted.end(), batch.begin(), batch.end());
   }
 
   auto* rctx = get_ctx(ctx);
@@ -864,6 +896,132 @@ JSValue js_el_getElementsByTagName(JSContext* ctx, JSValue this_val, int argc, J
   return make_element_array(ctx, results);
 }
 
+JSValue js_el_getAttributeNames(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  auto* el = unwrap_element(ctx, this_val);
+  JSValue arr = JS_NewArray(ctx);
+  if (!el) return arr;
+  uint32_t idx = 0;
+  for (auto* attr = lxb_dom_element_first_attribute(el); attr; attr = lxb_dom_element_next_attribute(attr)) {
+    size_t len = 0;
+    const lxb_char_t* name = lxb_dom_attr_qualified_name(attr, &len);
+    JS_SetPropertyUint32(ctx, arr, idx++, JS_NewStringLen(ctx, reinterpret_cast<const char*>(name), len));
+  }
+  return arr;
+}
+
+// NamedNodeMap-like: a snapshot array of {name, value} pairs rather than a
+// live spec-accurate NamedNodeMap, so it's plain-Array iterable for free.
+JSValue js_el_get_attributes(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  JSValue arr = JS_NewArray(ctx);
+  if (!el) return arr;
+  uint32_t idx = 0;
+  for (auto* attr = lxb_dom_element_first_attribute(el); attr; attr = lxb_dom_element_next_attribute(attr)) {
+    size_t nlen = 0, vlen = 0;
+    const lxb_char_t* name = lxb_dom_attr_qualified_name(attr, &nlen);
+    const lxb_char_t* value = lxb_dom_attr_value(attr, &vlen);
+    JSValue entry = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, entry, "name", JS_NewStringLen(ctx, reinterpret_cast<const char*>(name), nlen));
+    JS_SetPropertyStr(ctx, entry, "value",
+        value ? JS_NewStringLen(ctx, reinterpret_cast<const char*>(value), vlen) : JS_NewString(ctx, ""));
+    JS_SetPropertyUint32(ctx, arr, idx++, entry);
+  }
+  return arr;
+}
+
+JSValue js_el_toggleAttribute(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 1) return JS_FALSE;
+  const char* name = JS_ToCString(ctx, argv[0]);
+  if (!name) return JS_FALSE;
+  size_t name_len = strlen(name);
+  auto* attr_name = reinterpret_cast<const lxb_char_t*>(name);
+
+  bool has = lxb_dom_element_has_attribute(el, attr_name, name_len);
+  bool force_present = (argc >= 2 && !JS_IsUndefined(argv[1])) ? JS_ToBool(ctx, argv[1]) > 0 : !has;
+
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && has && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+    size_t len = 0;
+    const lxb_char_t* v = lxb_dom_element_get_attribute(el, attr_name, name_len, &len);
+    if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+  }
+
+  bool changed = false;
+  if (force_present && !has) {
+    lxb_dom_element_set_attribute(el, attr_name, name_len, reinterpret_cast<const lxb_char_t*>(""), 0);
+    changed = true;
+  } else if (!force_present && has) {
+    lxb_dom_element_remove_attribute(el, attr_name, name_len);
+    changed = true;
+  }
+
+  if (changed && has_obs) {
+    rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), std::string(name), old_val);
+  }
+
+  JS_FreeCString(ctx, name);
+  return JS_NewBool(ctx, force_present);
+}
+
+JSValue js_el_isSameNode(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || argc < 1) return JS_FALSE;
+  return JS_NewBool(ctx, unwrap_node(ctx, argv[0]) == node);
+}
+
+bool nodes_equal(lxb_dom_node_t* a, lxb_dom_node_t* b) {
+  if (a->type != b->type) return false;
+
+  if (a->type == LXB_DOM_NODE_TYPE_ELEMENT) {
+    auto* ea = lxb_dom_interface_element(a);
+    auto* eb = lxb_dom_interface_element(b);
+
+    size_t la = 0, lb = 0;
+    const lxb_char_t* na = lxb_dom_element_local_name(ea, &la);
+    const lxb_char_t* nb = lxb_dom_element_local_name(eb, &lb);
+    if (la != lb || memcmp(na, nb, la) != 0) return false;
+
+    size_t count_a = 0, count_b = 0;
+    for (auto* at = lxb_dom_element_first_attribute(ea); at; at = lxb_dom_element_next_attribute(at)) count_a++;
+    for (auto* at = lxb_dom_element_first_attribute(eb); at; at = lxb_dom_element_next_attribute(at)) count_b++;
+    if (count_a != count_b) return false;
+
+    for (auto* at = lxb_dom_element_first_attribute(ea); at; at = lxb_dom_element_next_attribute(at)) {
+      size_t nlen = 0, vlen = 0;
+      const lxb_char_t* name = lxb_dom_attr_qualified_name(at, &nlen);
+      const lxb_char_t* val = lxb_dom_attr_value(at, &vlen);
+      size_t blen = 0;
+      const lxb_char_t* bval = lxb_dom_element_get_attribute(eb, name, nlen, &blen);
+      if (!bval || vlen != blen || (vlen > 0 && memcmp(val, bval, vlen) != 0)) return false;
+    }
+  } else if (a->type == LXB_DOM_NODE_TYPE_TEXT || a->type == LXB_DOM_NODE_TYPE_COMMENT) {
+    auto* ca = reinterpret_cast<lxb_dom_character_data_t*>(a);
+    auto* cb = reinterpret_cast<lxb_dom_character_data_t*>(b);
+    if (ca->data.length != cb->data.length) return false;
+    if (ca->data.length > 0 && memcmp(ca->data.data, cb->data.data, ca->data.length) != 0) return false;
+  }
+
+  lxb_dom_node_t* ca = a->first_child;
+  lxb_dom_node_t* cb = b->first_child;
+  while (ca && cb) {
+    if (!nodes_equal(ca, cb)) return false;
+    ca = ca->next;
+    cb = cb->next;
+  }
+  return ca == nullptr && cb == nullptr;
+}
+
+JSValue js_el_isEqualNode(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || argc < 1) return JS_FALSE;
+  auto* other = unwrap_node(ctx, argv[0]);
+  if (!other) return JS_FALSE;
+  return JS_NewBool(ctx, nodes_equal(node, other));
+}
+
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
@@ -888,6 +1046,8 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, node_proto, "before",       JS_NewCFunction(ctx, js_el_before,       "before",       0));
   JS_SetPropertyStr(ctx, node_proto, "after",        JS_NewCFunction(ctx, js_el_after,        "after",        0));
   JS_SetPropertyStr(ctx, node_proto, "replaceWith",  JS_NewCFunction(ctx, js_el_replaceWith,  "replaceWith",  0));
+  JS_SetPropertyStr(ctx, node_proto, "isSameNode",   JS_NewCFunction(ctx, js_el_isSameNode,   "isSameNode",   1));
+  JS_SetPropertyStr(ctx, node_proto, "isEqualNode",  JS_NewCFunction(ctx, js_el_isEqualNode,  "isEqualNode",  1));
 
   define_prop(ctx, node_proto, "nodeType",         js_el_get_nodeType,        nullptr);
   define_prop(ctx, node_proto, "nodeName",         js_el_get_nodeName,        nullptr);
@@ -911,6 +1071,8 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "setAttribute",           JS_NewCFunction(ctx, js_el_setAttribute,           "setAttribute",           2));
   JS_SetPropertyStr(ctx, proto, "removeAttribute",        JS_NewCFunction(ctx, js_el_removeAttribute,        "removeAttribute",        1));
   JS_SetPropertyStr(ctx, proto, "hasAttribute",           JS_NewCFunction(ctx, js_el_hasAttribute,           "hasAttribute",           1));
+  JS_SetPropertyStr(ctx, proto, "toggleAttribute",        JS_NewCFunction(ctx, js_el_toggleAttribute,        "toggleAttribute",        2));
+  JS_SetPropertyStr(ctx, proto, "getAttributeNames",      JS_NewCFunction(ctx, js_el_getAttributeNames,      "getAttributeNames",      0));
   JS_SetPropertyStr(ctx, proto, "remove",                 JS_NewCFunction(ctx, js_el_remove,                 "remove",                 0));
   JS_SetPropertyStr(ctx, proto, "matches",                JS_NewCFunction(ctx, js_el_matches,                "matches",                1));
   JS_SetPropertyStr(ctx, proto, "querySelector",          JS_NewCFunction(ctx, js_el_querySelector,          "querySelector",          1));
@@ -936,6 +1098,7 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, proto, "dataset",                js_el_get_dataset,             nullptr);
   define_prop(ctx, proto, "style",                  js_el_get_style,               nullptr);
   define_prop(ctx, proto, "childElementCount",      js_el_get_childElementCount,   nullptr);
+  define_prop(ctx, proto, "attributes",              js_el_get_attributes,          nullptr);
 
   JS_SetClassProto(ctx, js_element_class_id, proto);
 }

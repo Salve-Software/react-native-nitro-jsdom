@@ -71,6 +71,19 @@ JSValue js_doc_createTextNode(JSContext* ctx, JSValue, int argc, JSValue* argv) 
   return make_element(ctx, node);
 }
 
+JSValue js_doc_createComment(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_NULL;
+  const char* text = JS_ToCString(ctx, argv[0]);
+  if (!text) return JS_NULL;
+  void* node = get_doc(ctx)->createComment(text);
+  JS_FreeCString(ctx, text);
+  return make_element(ctx, node);
+}
+
+JSValue js_doc_createDocumentFragment(JSContext* ctx, JSValue, int, JSValue*) {
+  return make_element(ctx, get_doc(ctx)->createDocumentFragment());
+}
+
 JSValue js_doc_get_body(JSContext* ctx, JSValue) {
   return make_element(ctx, get_doc(ctx)->body());
 }
@@ -121,6 +134,8 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "getElementsByTagName",   JS_NewCFunction(ctx, js_doc_getElementsByTagName,   "getElementsByTagName",   1));
   JS_SetPropertyStr(ctx, doc, "createElement",          JS_NewCFunction(ctx, js_doc_createElement,          "createElement",          1));
   JS_SetPropertyStr(ctx, doc, "createTextNode",         JS_NewCFunction(ctx, js_doc_createTextNode,         "createTextNode",         1));
+  JS_SetPropertyStr(ctx, doc, "createComment",          JS_NewCFunction(ctx, js_doc_createComment,          "createComment",          1));
+  JS_SetPropertyStr(ctx, doc, "createDocumentFragment", JS_NewCFunction(ctx, js_doc_createDocumentFragment, "createDocumentFragment", 0));
 
   define_prop(ctx, doc, "body",            js_doc_get_body,            nullptr);
   define_prop(ctx, doc, "head",            js_doc_get_head,            nullptr);
