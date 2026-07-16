@@ -33,6 +33,22 @@ std::string join_classes(const std::vector<std::string>& v) {
   return r;
 }
 
+// Validates a DOMTokenList token: throws on empty or whitespace-containing token.
+bool validate_token(JSContext* ctx, const char* token) {
+  if (!token || token[0] == '\0') {
+    JS_ThrowTypeError(ctx, "The token provided must not be empty.");
+    return false;
+  }
+  for (const char* p = token; *p; p++) {
+    unsigned char c = (unsigned char)*p;
+    if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
+      JS_ThrowTypeError(ctx, "The token provided contains HTML space characters, which are not valid in tokens.");
+      return false;
+    }
+  }
+  return true;
+}
+
 JSValue js_classList_add(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* el = unwrap_classList(ctx, this_val);
   if (!el) return JS_UNDEFINED;
@@ -43,13 +59,20 @@ JSValue js_classList_add(JSContext* ctx, JSValue this_val, int argc, JSValue* ar
   if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
     old_val = get_class_attr(el);
 
-  auto classes = split_classes(get_class_attr(el));
+  // Validate all tokens before mutating (spec: validate each, then add all)
+  std::vector<std::string> tokens;
   for (int i = 0; i < argc; i++) {
     const char* cls = JS_ToCString(ctx, argv[i]);
-    if (cls) {
-      if (std::find(classes.begin(), classes.end(), cls) == classes.end()) classes.push_back(cls);
-      JS_FreeCString(ctx, cls);
-    }
+    if (!cls) return JS_EXCEPTION;
+    if (!validate_token(ctx, cls)) { JS_FreeCString(ctx, cls); return JS_EXCEPTION; }
+    tokens.emplace_back(cls);
+    JS_FreeCString(ctx, cls);
+  }
+
+  auto classes = split_classes(get_class_attr(el));
+  for (auto& tok : tokens) {
+    if (std::find(classes.begin(), classes.end(), tok) == classes.end())
+      classes.push_back(tok);
   }
   set_class_attr(el, join_classes(classes));
 
@@ -70,11 +93,19 @@ JSValue js_classList_remove(JSContext* ctx, JSValue this_val, int argc, JSValue*
   if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
     old_val = get_class_attr(el);
 
-  auto classes = split_classes(get_class_attr(el));
+  // Validate all tokens before mutating
+  std::vector<std::string> tokens;
   for (int i = 0; i < argc; i++) {
     const char* cls = JS_ToCString(ctx, argv[i]);
-    if (cls) { classes.erase(std::remove(classes.begin(), classes.end(), cls), classes.end()); JS_FreeCString(ctx, cls); }
+    if (!cls) return JS_EXCEPTION;
+    if (!validate_token(ctx, cls)) { JS_FreeCString(ctx, cls); return JS_EXCEPTION; }
+    tokens.emplace_back(cls);
+    JS_FreeCString(ctx, cls);
   }
+
+  auto classes = split_classes(get_class_attr(el));
+  for (auto& tok : tokens)
+    classes.erase(std::remove(classes.begin(), classes.end(), tok), classes.end());
   set_class_attr(el, join_classes(classes));
 
   if (has_obs) {
@@ -88,7 +119,8 @@ JSValue js_classList_contains(JSContext* ctx, JSValue this_val, int argc, JSValu
   auto* el = unwrap_classList(ctx, this_val);
   if (!el || argc < 1) return JS_FALSE;
   const char* cls = JS_ToCString(ctx, argv[0]);
-  if (!cls) return JS_FALSE;
+  if (!cls) return JS_EXCEPTION;
+  if (!validate_token(ctx, cls)) { JS_FreeCString(ctx, cls); return JS_EXCEPTION; }
   auto classes = split_classes(get_class_attr(el));
   bool found = std::find(classes.begin(), classes.end(), cls) != classes.end();
   JS_FreeCString(ctx, cls);
@@ -99,7 +131,8 @@ JSValue js_classList_toggle(JSContext* ctx, JSValue this_val, int argc, JSValue*
   auto* el = unwrap_classList(ctx, this_val);
   if (!el || argc < 1) return JS_FALSE;
   const char* cls = JS_ToCString(ctx, argv[0]);
-  if (!cls) return JS_FALSE;
+  if (!cls) return JS_EXCEPTION;
+  if (!validate_token(ctx, cls)) { JS_FreeCString(ctx, cls); return JS_EXCEPTION; }
 
   auto* rctx = get_ctx(ctx);
   bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
@@ -109,9 +142,23 @@ JSValue js_classList_toggle(JSContext* ctx, JSValue this_val, int argc, JSValue*
 
   auto classes = split_classes(get_class_attr(el));
   auto it = std::find(classes.begin(), classes.end(), cls);
+
   bool added;
-  if (it != classes.end()) { classes.erase(it); added = false; }
-  else { classes.push_back(cls); added = true; }
+  bool force_present = argc >= 2 && !JS_IsUndefined(argv[1]);
+  if (force_present) {
+    bool force = JS_ToBool(ctx, argv[1]) > 0;
+    if (force) {
+      if (it == classes.end()) classes.push_back(cls);
+      added = true;
+    } else {
+      if (it != classes.end()) classes.erase(it);
+      added = false;
+    }
+  } else {
+    if (it != classes.end()) { classes.erase(it); added = false; }
+    else { classes.push_back(cls); added = true; }
+  }
+
   JS_FreeCString(ctx, cls);
   set_class_attr(el, join_classes(classes));
 
@@ -126,27 +173,35 @@ JSValue js_classList_replace(JSContext* ctx, JSValue this_val, int argc, JSValue
   auto* el = unwrap_classList(ctx, this_val);
   if (!el || argc < 2) return JS_FALSE;
   const char* oldCls = JS_ToCString(ctx, argv[0]);
+  if (!oldCls) return JS_EXCEPTION;
+  if (!validate_token(ctx, oldCls)) { JS_FreeCString(ctx, oldCls); return JS_EXCEPTION; }
   const char* newCls = JS_ToCString(ctx, argv[1]);
-  bool replaced = false;
-  if (oldCls && newCls) {
-    auto* rctx = get_ctx(ctx);
-    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
-    std::optional<std::string> old_val;
-    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
-      old_val = get_class_attr(el);
+  if (!newCls) { JS_FreeCString(ctx, oldCls); return JS_EXCEPTION; }
+  if (!validate_token(ctx, newCls)) { JS_FreeCString(ctx, oldCls); JS_FreeCString(ctx, newCls); return JS_EXCEPTION; }
 
-    auto classes = split_classes(get_class_attr(el));
-    auto it = std::find(classes.begin(), classes.end(), oldCls);
-    if (it != classes.end()) {
-      *it = newCls; replaced = true; set_class_attr(el, join_classes(classes));
-      if (has_obs) {
-        rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
-            "class", old_val);
-      }
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver())
+    old_val = get_class_attr(el);
+
+  auto classes = split_classes(get_class_attr(el));
+  auto it = std::find(classes.begin(), classes.end(), oldCls);
+  bool replaced = false;
+  if (it != classes.end()) {
+    *it = newCls;
+    // Remove any other occurrences of newCls to keep the set unique
+    classes.erase(std::remove(it + 1, classes.end(), newCls), classes.end());
+    replaced = true;
+    set_class_attr(el, join_classes(classes));
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el),
+          "class", old_val);
     }
   }
-  if (oldCls) JS_FreeCString(ctx, oldCls);
-  if (newCls) JS_FreeCString(ctx, newCls);
+
+  JS_FreeCString(ctx, oldCls);
+  JS_FreeCString(ctx, newCls);
   return JS_NewBool(ctx, replaced);
 }
 
@@ -160,14 +215,11 @@ std::string get_class_attr(lxb_dom_element_t* el) {
 }
 
 void set_class_attr(lxb_dom_element_t* el, const std::string& classes) {
-  if (classes.empty()) {
-    lxb_dom_element_remove_attribute(el,
-        reinterpret_cast<const lxb_char_t*>("class"), 5);
-  } else {
-    lxb_dom_element_set_attribute(el,
-        reinterpret_cast<const lxb_char_t*>("class"), 5,
-        reinterpret_cast<const lxb_char_t*>(classes.data()), classes.size());
-  }
+  // Always write the attribute (even when empty) so classList.value serializes
+  // back to "" rather than the attribute disappearing after the last token is removed.
+  lxb_dom_element_set_attribute(el,
+      reinterpret_cast<const lxb_char_t*>("class"), 5,
+      reinterpret_cast<const lxb_char_t*>(classes.data()), classes.size());
 }
 
 void ClassListBindings::install(JSContext* ctx) {
