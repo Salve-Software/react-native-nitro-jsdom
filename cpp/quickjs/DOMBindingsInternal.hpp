@@ -51,6 +51,12 @@ std::string serialize_node(lxb_dom_node_t* node);
 RuntimeContext* get_ctx(JSContext* ctx);
 LexborDocument* get_doc(JSContext* ctx);
 
+// ── Node wrapper cache ────────────────────────────────────────────────────────
+
+void invalidate_node_cache(JSContext* ctx, RuntimeContext* rctx, void* node);
+void invalidate_node_cache_batch(JSContext* ctx, RuntimeContext* rctx, const std::vector<void*>& nodes);
+void clear_node_cache(JSContext* ctx, RuntimeContext* rctx);
+
 // ── Accessor property helper ──────────────────────────────────────────────────
 
 using GetterFn = JSValue (*)(JSContext*, JSValue);

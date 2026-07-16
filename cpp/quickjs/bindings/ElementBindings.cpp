@@ -139,12 +139,14 @@ JSValue js_el_set_textContent(JSContext* ctx, JSValue this_val, JSValue val) {
     // but do NOT forward the raw pointers to notifyChildList: setTextContentOnEl
     // frees those nodes, so passing them into the async dispatch job would be
     // a use-after-free. We report removed={} (nodes already gone by dispatch time).
-    if (has_observers) {
+    {
       std::vector<void*> old_children;
       lxb_dom_node_t* child = node->first_child;
       while (child) { old_children.push_back(child); child = child->next; }
-      if (!old_children.empty())
-        rctx->mutation_observers->disconnectDetachedTargets(old_children);
+      if (!old_children.empty()) {
+        invalidate_node_cache_batch(ctx, rctx, old_children);
+        if (has_observers) rctx->mutation_observers->disconnectDetachedTargets(old_children);
+      }
     }
     get_doc(ctx)->setTextContentOnEl(el, str);
     if (has_observers) {
@@ -180,15 +182,15 @@ JSValue js_el_set_innerHTML(JSContext* ctx, JSValue this_val, JSValue val) {
 
   lxb_dom_node_t* parent = lxb_dom_interface_node(el);
 
-  // Collect old children before mutation
   std::vector<void*> old_children;
-  if (has_observers) {
+  {
     lxb_dom_node_t* child = parent->first_child;
     while (child) { old_children.push_back(child); child = child->next; }
   }
 
-  if (has_observers && !old_children.empty()) {
-    rctx->mutation_observers->disconnectDetachedTargets(old_children);
+  if (!old_children.empty()) {
+    invalidate_node_cache_batch(ctx, rctx, old_children);
+    if (has_observers) rctx->mutation_observers->disconnectDetachedTargets(old_children);
   }
 
   get_doc(ctx)->setInnerHTMLOnEl(el, html);
@@ -499,6 +501,7 @@ JSValue js_el_removeChild(JSContext* ctx, JSValue this_val, int argc, JSValue* a
   if (cn->parent == parent_node) {
     lxb_dom_node_t* prev_sib = cn->prev;
     lxb_dom_node_t* next_sib = cn->next;
+    invalidate_node_cache(ctx, get_ctx(ctx), cn);
     lxb_dom_node_remove(cn);
 
     auto* rctx = get_ctx(ctx);

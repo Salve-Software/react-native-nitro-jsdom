@@ -17,15 +17,57 @@ JSClassDef js_element_class = { "Element", .finalizer = nullptr };
 
 JSValue make_element(JSContext* ctx, void* ptr) {
   if (!ptr) return JS_NULL;
-  lxb_dom_node_t* node = static_cast<lxb_dom_node_t*>(ptr);
-  if (node->type == LXB_DOM_NODE_TYPE_ELEMENT) {
-    JSValue obj = JS_NewObjectClass(ctx, js_element_class_id);
-    JS_SetOpaque(obj, ptr);
-    return obj;
+
+  RuntimeContext* rctx = get_ctx(ctx);
+  if (rctx) {
+    auto it = rctx->node_wrapper_cache.find(ptr);
+    if (it != rctx->node_wrapper_cache.end()) {
+      JSValue* cached = static_cast<JSValue*>(it->second);
+      return JS_DupValue(ctx, *cached);
+    }
   }
-  JSValue obj = JS_NewObjectClass(ctx, js_node_class_id);
+
+  lxb_dom_node_t* node = static_cast<lxb_dom_node_t*>(ptr);
+  JSValue obj;
+  if (node->type == LXB_DOM_NODE_TYPE_ELEMENT) {
+    obj = JS_NewObjectClass(ctx, js_element_class_id);
+  } else {
+    obj = JS_NewObjectClass(ctx, js_node_class_id);
+  }
   JS_SetOpaque(obj, ptr);
+
+  if (rctx) {
+    rctx->node_wrapper_cache[ptr] = new JSValue(JS_DupValue(ctx, obj));
+  }
+
   return obj;
+}
+
+void invalidate_node_cache(JSContext* ctx, RuntimeContext* rctx, void* node) {
+  if (!rctx || !node) return;
+  auto it = rctx->node_wrapper_cache.find(node);
+  if (it != rctx->node_wrapper_cache.end()) {
+    JSValue* v = static_cast<JSValue*>(it->second);
+    JS_SetOpaque(*v, nullptr);
+    JS_FreeValue(ctx, *v);
+    delete v;
+    rctx->node_wrapper_cache.erase(it);
+  }
+}
+
+void invalidate_node_cache_batch(JSContext* ctx, RuntimeContext* rctx, const std::vector<void*>& nodes) {
+  for (void* n : nodes) invalidate_node_cache(ctx, rctx, n);
+}
+
+void clear_node_cache(JSContext* ctx, RuntimeContext* rctx) {
+  if (!rctx) return;
+  for (auto& kv : rctx->node_wrapper_cache) {
+    JSValue* v = static_cast<JSValue*>(kv.second);
+    JS_SetOpaque(*v, nullptr);
+    JS_FreeValue(ctx, *v);
+    delete v;
+  }
+  rctx->node_wrapper_cache.clear();
 }
 
 JSValue make_element_array(JSContext* ctx, const std::vector<void*>& elements) {
