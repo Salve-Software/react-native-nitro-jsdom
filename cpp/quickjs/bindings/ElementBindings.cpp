@@ -122,8 +122,9 @@ JSValue js_el_set_textContent(JSContext* ctx, JSValue this_val, JSValue val) {
 
   lxb_dom_node_t* node = lxb_dom_interface_node(el);
 
-  // Determine if this is an element node (childList) or text node (characterData)
-  if (node->type == LXB_DOM_NODE_TYPE_TEXT) {
+  // Determine if this is an element node (childList) or text/comment node (characterData)
+  if (node->type == LXB_DOM_NODE_TYPE_TEXT ||
+      node->type == LXB_DOM_NODE_TYPE_COMMENT) {
     // characterData mutation: capture old value before mutation
     std::optional<std::string> old_val;
     if (has_observers && rctx->mutation_observers->hasCharacterDataOldValueObserver()) {
@@ -139,25 +140,25 @@ JSValue js_el_set_textContent(JSContext* ctx, JSValue this_val, JSValue val) {
       rctx->mutation_observers->notifyCharacterData(ctx, node, old_val);
     }
   } else {
-    // Element node: textContent replaces all children — fire childList
-    // Collect old children before mutation
-    std::vector<void*> old_children;
+    // Element node: textContent replaces all children — fire childList.
+    // Collect old children BEFORE destruction to disconnect their observers,
+    // but do NOT forward the raw pointers to notifyChildList: setTextContentOnEl
+    // frees those nodes, so passing them into the async dispatch job would be
+    // a use-after-free. We report removed={} (nodes already gone by dispatch time).
     if (has_observers) {
+      std::vector<void*> old_children;
       lxb_dom_node_t* child = node->first_child;
       while (child) { old_children.push_back(child); child = child->next; }
-    }
-    // Disconnect observers targeting the old children before they are destroyed
-    if (has_observers && !old_children.empty()) {
-      rctx->mutation_observers->disconnectDetachedTargets(old_children);
+      if (!old_children.empty())
+        rctx->mutation_observers->disconnectDetachedTargets(old_children);
     }
     get_doc(ctx)->setTextContentOnEl(el, str);
     if (has_observers) {
-      // Collect new text node children after mutation
       std::vector<void*> new_children;
       lxb_dom_node_t* child = node->first_child;
       while (child) { new_children.push_back(child); child = child->next; }
       rctx->mutation_observers->notifyChildList(ctx, node,
-          new_children, old_children, nullptr, nullptr);
+          new_children, {}, nullptr, nullptr);
     }
   }
 
@@ -538,8 +539,14 @@ JSValue js_el_insertBefore(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   } else {
     auto* refNode = unwrap_element(ctx, argv[1]);
     if (refNode) {
+      auto* receiver = unwrap_element(ctx, this_val);
       lxb_dom_node_t* ref = lxb_dom_interface_node(refNode);
-      parent_node = ref->parent;
+      lxb_dom_node_t* receiver_node = receiver ? lxb_dom_interface_node(receiver) : nullptr;
+      if (!receiver_node || ref->parent != receiver_node) {
+        JS_ThrowTypeError(ctx, "NotFoundError: reference node is not a child of this node");
+        return JS_EXCEPTION;
+      }
+      parent_node = receiver_node;
       lxb_dom_node_insert_before(ref, new_node);
     }
   }
