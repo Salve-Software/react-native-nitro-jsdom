@@ -44,7 +44,14 @@ std::vector<std::pair<std::string, std::string>> parse_style_decls(const std::st
   std::vector<std::pair<std::string, std::string>> decls;
   size_t pos = 0;
   while (pos < css.size()) {
-    size_t semi = css.find(';', pos);
+    size_t semi = std::string::npos;
+    int depth = 0;
+    for (size_t i = pos; i < css.size(); i++) {
+      char c = css[i];
+      if (c == '(') depth++;
+      else if (c == ')' && depth > 0) depth--;
+      else if (c == ';' && depth == 0) { semi = i; break; }
+    }
     std::string decl = css.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
     pos = (semi == std::string::npos) ? css.size() : semi + 1;
 
