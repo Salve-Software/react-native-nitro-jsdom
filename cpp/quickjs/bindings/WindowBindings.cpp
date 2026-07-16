@@ -151,16 +151,28 @@ const char* kLocationBootstrapScript = R"JS(
     configurable: true,
   });
 
+  function resolveUrl(base, next) {
+    next = String(next);
+    if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(next)) return next;
+    var p = parseUrl(base);
+    var origin = (p.protocol || '') + (p.hostname ? '//' + p.hostname + (p.port ? ':' + p.port : '') : '');
+    if (next.charAt(0) === '/') return origin + next;
+    if (next.charAt(0) === '#') return base.split('#')[0] + next;
+    if (next.charAt(0) === '?') return base.split('?')[0].split('#')[0] + next;
+    var dir = (p.pathname || '/').replace(/\/[^\/]*$/, '/');
+    return origin + dir + next;
+  }
+
   Object.defineProperty(Location.prototype, 'href', {
     get: function() { return this._href; },
-    set: function(v) { this._href = String(v); },
+    set: function(v) { this._href = resolveUrl(this._href, v); },
     enumerable: true,
     configurable: true,
   });
 
   Location.prototype.toString = function() { return this._href; };
-  Location.prototype.assign = function(url) { this._href = String(url); };
-  Location.prototype.replace = function(url) { this._href = String(url); };
+  Location.prototype.assign = function(url) { this._href = resolveUrl(this._href, url); };
+  Location.prototype.replace = function(url) { this._href = resolveUrl(this._href, url); };
   Location.prototype.reload = function() {};
 
   globalThis.Location = Location;
