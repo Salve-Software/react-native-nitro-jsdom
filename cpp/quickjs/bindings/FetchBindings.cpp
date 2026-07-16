@@ -17,24 +17,37 @@ JSValue js_fetch_native(JSContext* ctx, JSValue, int argc, JSValue* argv) {
     return result;
   }
 
-  auto toStr = [&](JSValue v) -> std::string {
+  auto toStr = [&](JSValue v, bool& had_exception) -> std::string {
     JSValue s = JS_ToString(ctx, v);
-    std::string out;
+    if (JS_IsException(s)) { had_exception = true; return ""; }
     const char* c = JS_ToCString(ctx, s);
-    if (c) { out = c; JS_FreeCString(ctx, c); }
+    std::string out = c ? c : "";
+    if (c) JS_FreeCString(ctx, c);
     JS_FreeValue(ctx, s);
     return out;
   };
 
-  std::string url    = argc >= 1 ? toStr(argv[0]) : "";
-  std::string method = argc >= 2 ? toStr(argv[1]) : "GET";
-  std::string headersJson = argc >= 3 ? toStr(argv[2]) : "{}";
+  bool ex = false;
+  std::string url    = argc >= 1 ? toStr(argv[0], ex) : "";
+  if (ex) return JS_EXCEPTION;
+  std::string method = argc >= 2 ? toStr(argv[1], ex) : "GET";
+  if (ex) return JS_EXCEPTION;
+  std::string headersJson = argc >= 3 ? toStr(argv[2], ex) : "{}";
+  if (ex) return JS_EXCEPTION;
   std::optional<std::string> body;
   if (argc >= 4 && !JS_IsUndefined(argv[3]) && !JS_IsNull(argv[3])) {
-    body = toStr(argv[3]);
+    body = toStr(argv[3], ex);
+    if (ex) return JS_EXCEPTION;
   }
 
-  std::string response = rctx->fetch_callback(url, method, headersJson, body);
+  std::string response;
+  try {
+    response = rctx->fetch_callback(url, method, headersJson, body);
+  } catch (const std::exception& e) {
+    return JS_ThrowInternalError(ctx, "fetch callback threw: %s", e.what());
+  } catch (...) {
+    return JS_ThrowInternalError(ctx, "fetch callback threw an unknown exception");
+  }
 
   JSValue parsed = JS_ParseJSON(ctx, response.c_str(), response.size(), "<fetch-response>");
   if (JS_IsException(parsed)) {
@@ -51,10 +64,16 @@ const char* kFetchBootstrapScript = R"JS(
   function normalizeHeaders(h) {
     var out = {};
     if (!h) return out;
-    if (typeof h.entries === 'function') {
-      for (var pair of h.entries()) out[pair[0]] = pair[1];
+    if (Array.isArray(h)) {
+      for (var i = 0; i < h.length; i++) {
+        var pair = h[i];
+        if (Array.isArray(pair) && pair.length >= 2)
+          out[String(pair[0]).toLowerCase()] = String(pair[1]);
+      }
+    } else if (typeof h.entries === 'function') {
+      for (var pair of h.entries()) out[String(pair[0]).toLowerCase()] = String(pair[1]);
     } else {
-      for (var k in h) out[k] = h[k];
+      for (var k in h) if (Object.prototype.hasOwnProperty.call(h, k)) out[String(k).toLowerCase()] = String(h[k]);
     }
     return out;
   }
@@ -108,7 +127,11 @@ const char* kFetchBootstrapScript = R"JS(
   };
   Response.prototype.json = function() {
     this.bodyUsed = true;
-    return Promise.resolve(JSON.parse(this._bodyText));
+    try {
+      return Promise.resolve(JSON.parse(this._bodyText));
+    } catch (e) {
+      return Promise.reject(e);
+    }
   };
   Response.prototype.clone = function() {
     return new Response(this._bodyText, { status: this.status, statusText: this.statusText, headers: this.headers });

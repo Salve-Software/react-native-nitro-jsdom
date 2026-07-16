@@ -46,7 +46,9 @@ JSValue js_window_alert(JSContext* ctx, JSValue, int argc, JSValue* argv) {
     if (s) { message = s; JS_FreeCString(ctx, s); }
     JS_FreeValue(ctx, str_val);
   }
-  rctx->alert_callback(message);
+  try { rctx->alert_callback(message); }
+  catch (const std::exception& e) { return JS_ThrowInternalError(ctx, "alert callback threw: %s", e.what()); }
+  catch (...) { return JS_ThrowInternalError(ctx, "alert callback threw an unknown exception"); }
   return JS_UNDEFINED;
 }
 
@@ -61,7 +63,10 @@ JSValue js_window_confirm(JSContext* ctx, JSValue, int argc, JSValue* argv) {
     if (s) { message = s; JS_FreeCString(ctx, s); }
     JS_FreeValue(ctx, str_val);
   }
-  bool result = rctx->confirm_callback(message);
+  bool result;
+  try { result = rctx->confirm_callback(message); }
+  catch (const std::exception& e) { return JS_ThrowInternalError(ctx, "confirm callback threw: %s", e.what()); }
+  catch (...) { return JS_ThrowInternalError(ctx, "confirm callback threw an unknown exception"); }
   return JS_NewBool(ctx, result);
 }
 
@@ -84,7 +89,10 @@ JSValue js_window_prompt(JSContext* ctx, JSValue, int argc, JSValue* argv) {
     if (s) { defaultValue = std::string(s); JS_FreeCString(ctx, s); }
     JS_FreeValue(ctx, str_val);
   }
-  std::optional<std::string> result = rctx->prompt_callback(message, defaultValue);
+  std::optional<std::string> result;
+  try { result = rctx->prompt_callback(message, defaultValue); }
+  catch (const std::exception& e) { return JS_ThrowInternalError(ctx, "prompt callback threw: %s", e.what()); }
+  catch (...) { return JS_ThrowInternalError(ctx, "prompt callback threw an unknown exception"); }
   if (result.has_value()) {
     return JS_NewStringLen(ctx, result->c_str(), result->size());
   }
