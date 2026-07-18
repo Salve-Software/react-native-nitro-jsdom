@@ -17,7 +17,10 @@
     "build": "yarn run typecheck && bob build",
     "codegen": "nitrogen --logLevel=\"debug\" && yarn run build",
     "postcodegen": "yarn --cwd example pod",
-    "example": "yarn workspace @salve-software/react-native-nitro-jsdom-example"
+    "example": "yarn workspace @salve-software/react-native-nitro-jsdom-example",
+    "docs": "yarn --cwd website build && yarn --cwd website serve",
+    "docs:dev": "yarn --cwd website start",
+    "docs:build": "yarn --cwd website build"
   },
   "keywords": [
     "react-native",
