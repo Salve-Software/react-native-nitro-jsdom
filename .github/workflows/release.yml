@@ -30,8 +30,6 @@ jobs:
           node-version: '22'
       - name: Enable Corepack
         run: corepack enable
-      - name: Update npm for OIDC trusted publishing
-        run: npm install -g npm@latest
       - name: Get yarn cache dir
         id: yarn-cache-dir
         run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
