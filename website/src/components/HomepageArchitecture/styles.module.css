@@ -70,18 +70,35 @@
 }
 
 @media screen and (max-width: 640px) {
+  .arrow {
+    width: 100%;
+    max-width: 16rem;
+    height: auto;
+    background: none;
+    padding-top: 2.75rem;
+  }
+  .arrow::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 2.75rem;
+    background: var(--ifm-color-emphasis-300);
+  }
+  .arrow::after {
+    bottom: auto;
+    top: calc(2.75rem - 7px);
+  }
   .arrowLabel {
     position: static;
     display: block;
     transform: none;
     white-space: normal;
     text-align: center;
-    max-width: 12rem;
+    max-width: 14rem;
     margin: 0.4rem auto 0;
-  }
-  .arrow {
-    height: auto;
-    padding-bottom: 2.5rem;
   }
 }
 
