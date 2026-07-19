@@ -33,7 +33,7 @@ target_sources(
   # Autolinking Setup
   ../nitrogen/generated/android/NitroJsdomOnLoad.cpp
   # Shared Nitrogen C++ sources
-  ../nitrogen/generated/shared/c++/HybridNitroJsdomSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridHtmlSandboxSpec.cpp
   # Android-specific Nitrogen C++ sources
   
 )

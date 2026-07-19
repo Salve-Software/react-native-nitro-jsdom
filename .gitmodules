@@ -1,0 +1,6 @@
+[submodule "packages/lexbor"]
+	path = packages/lexbor
+	url = https://github.com/lexbor/lexbor.git
+[submodule "packages/quickjs"]
+	path = packages/quickjs
+	url = https://github.com/bellard/quickjs.git

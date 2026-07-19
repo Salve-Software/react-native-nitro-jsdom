@@ -1,0 +1,57 @@
+#include "DOMBindings.hpp"
+#include "DOMBindingsInternal.hpp"
+#include "MutationObservers.hpp"
+#include "Storage.hpp"
+#include "QuickJSRuntime.hpp"
+#include "../lexbor/LexborDocument.hpp"
+#include "bindings/ElementBindings.hpp"
+#include "bindings/DocumentBindings.hpp"
+#include "bindings/EventBindings.hpp"
+#include "bindings/TimerBindings.hpp"
+#include "bindings/WindowBindings.hpp"
+#include "bindings/FetchBindings.hpp"
+#include <lexbor/html/html.h>
+#include <lexbor/dom/dom.h>
+
+// DOMBindings::install() is the single orchestrator for every QuickJS binding
+// module below. Each module owns one concern and exposes `install(JSContext*)`;
+// this function just sequences them (some depend on an earlier one having
+// already registered a class or global — see the comments in each header).
+
+namespace margelo::nitro::nitrojsdom {
+
+void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
+  JSContext* ctx = static_cast<JSContext*>(runtime->context());
+  (void)document;
+
+  ElementBindings::install(ctx);   // registers the Element class + proto
+  DocumentBindings::install(ctx);  // creates globalThis.document
+  EventBindings::install(ctx);     // needs Element's proto + globalThis.document to exist
+  TimerBindings::install(ctx);
+  WindowBindings::install(ctx);
+  FetchBindings::install(ctx);     // XHR bootstrap uses `new Event(...)`, so must run after EventBindings
+
+  // ── localStorage / sessionStorage ──────────────────────────────────────────
+  {
+    RuntimeContext* rctx = get_ctx(ctx);
+    if (rctx) {
+      installStorage(ctx, "localStorage", &rctx->local_storage);
+      installStorage(ctx, "sessionStorage", &rctx->session_storage);
+    }
+  }
+
+  // ── MutationObserver ───────────────────────────────────────────────────────
+  {
+    RuntimeContext* rctx = get_ctx(ctx);
+    if (rctx && rctx->mutation_observers && rctx->document) {
+      // Pass the lxb_dom_document_t* root node as the doc_root for ancestry checks
+      void* html_doc = rctx->document->documentHtmlPtr();
+      void* doc_node = lxb_dom_interface_node(
+          lxb_dom_interface_document(
+              static_cast<lxb_html_document_t*>(html_doc)));
+      rctx->mutation_observers->install(ctx, doc_node);
+    }
+  }
+}
+
+} // namespace margelo::nitro::nitrojsdom
