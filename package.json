@@ -54,7 +54,7 @@
   "author": "eumaninho54",
   "license": "MIT",
   "bugs": "https://github.com/Salve-Software/react-native-nitro-jsdom/issues",
-  "homepage": "https://github.com/Salve-Software/react-native-nitro-jsdom#readme",
+  "homepage": "https://salve-software.github.io/react-native-nitro-jsdom/",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
