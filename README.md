@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="react-native-nitro-jsdom Banner" width="1280" style="border-radius: 20px;">
+  <img src="assets/banner.png" alt="react-native-nitro-jsdom Banner" width="1280">
 </p>
 
 <h1 align="center">react-native-nitro-jsdom</h1>
