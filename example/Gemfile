@@ -20,3 +20,8 @@ gem 'bigdecimal'
 gem 'logger'
 gem 'benchmark'
 gem 'mutex_m'
+
+# Ruby 4.1.0 will remove tsort from the standard library; Ruby 4.0's kconv
+# was already replaced by nkf, which CFPropertyList depends on.
+gem 'tsort'
+gem 'nkf'
