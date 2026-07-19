@@ -1,3 +1,13 @@
+## [1.0.1](https://github.com/Salve-Software/react-native-nitro-jsdom/compare/v1.0.0...v1.0.1) (2026-07-19)
+
+### 🐛 Bug Fixes
+
+* **pkg:** point homepage to docs site ([132e649](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/132e6495ea908e81a89a1d56f48f5e2ff3c29902))
+
+### 📚 Documentation
+
+* add repo banner image ([de01500](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/de01500dcac0fb9b600680772c9d2adce7e7d3d0))
+
 ## 1.0.0 (2026-07-19)
 
 ### ✨ Features
