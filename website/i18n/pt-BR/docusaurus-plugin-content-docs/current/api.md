@@ -14,7 +14,6 @@ Cria um novo ambiente de DOM em sandbox. Síncrono.
 const dom = JSDOM.create('<html><body><p id="x">hello</p></body></html>', {
   runScripts: true,       // executa tags <script>, padrão: true
   url: 'about:blank',     // window.location.href, padrão: 'about:blank'
-  pretendToBeVisual: false, // document.hidden = false, padrão: false
   onConsole: (level, args) => console.log(`[sandbox ${level}]`, ...args),
   onAlert: (message) => console.log('[alert]', message),          // padrão: no-op
   onConfirm: (message) => true,                                    // padrão: false
