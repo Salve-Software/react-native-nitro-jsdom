@@ -1,0 +1,54 @@
+{
+  "link.title.Docs": {
+    "message": "Documentação",
+    "description": "The title of the footer links column with title=Docs in the footer"
+  },
+  "link.title.Community": {
+    "message": "Comunidade",
+    "description": "The title of the footer links column with title=Community in the footer"
+  },
+  "link.title.More": {
+    "message": "Mais",
+    "description": "The title of the footer links column with title=More in the footer"
+  },
+  "link.item.label.Introduction": {
+    "message": "Introdução",
+    "description": "The label of footer link with label=Introduction linking to /docs/intro"
+  },
+  "link.item.label.Architecture": {
+    "message": "Arquitetura",
+    "description": "The label of footer link with label=Architecture linking to /docs/architecture"
+  },
+  "link.item.label.Public API": {
+    "message": "API Pública",
+    "description": "The label of footer link with label=Public API linking to /docs/api"
+  },
+  "link.item.label.Compatibility": {
+    "message": "Compatibilidade",
+    "description": "The label of footer link with label=Compatibility linking to /docs/compatibility"
+  },
+  "link.item.label.Roadmap": {
+    "message": "Roadmap",
+    "description": "The label of footer link with label=Roadmap linking to /docs/roadmap"
+  },
+  "link.item.label.Salve-Software on GitHub": {
+    "message": "Salve-Software no GitHub",
+    "description": "The label of footer link with label=Salve-Software on GitHub linking to https://github.com/Salve-Software"
+  },
+  "link.item.label.Issues": {
+    "message": "Issues",
+    "description": "The label of footer link with label=Issues linking to https://github.com/Salve-Software/react-native-nitro-jsdom/issues"
+  },
+  "link.item.label.npm": {
+    "message": "npm",
+    "description": "The label of footer link with label=npm linking to https://www.npmjs.com/package/@salve-software/react-native-nitro-jsdom"
+  },
+  "link.item.label.GitHub": {
+    "message": "GitHub",
+    "description": "The label of footer link with label=GitHub linking to https://github.com/Salve-Software/react-native-nitro-jsdom"
+  },
+  "copyright": {
+    "message": "Copyright © 2026 Salve-Software. Construído com Docusaurus.",
+    "description": "The footer copyright"
+  }
+}
