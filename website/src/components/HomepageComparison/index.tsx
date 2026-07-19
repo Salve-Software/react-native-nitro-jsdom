@@ -80,19 +80,21 @@ export default function HomepageComparison(): ReactNode {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th></th>
-                <th>
+                <th scope="col">
+                  <Translate id="homepage.comparison.col.feature">Feature</Translate>
+                </th>
+                <th scope="col">
                   <Translate id="homepage.comparison.col.webview">
                     WebView (hidden)
                   </Translate>
                 </th>
-                <th className={styles.highlightCol}>react-native-nitro-jsdom</th>
+                <th scope="col" className={styles.highlightCol}>react-native-nitro-jsdom</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, idx) => (
                 <tr key={idx}>
-                  <td className={styles.rowLabel}>{row.label}</td>
+                  <th scope="row" className={styles.rowLabel}>{row.label}</th>
                   <td>
                     <Cell value={row.webview} />
                   </td>
