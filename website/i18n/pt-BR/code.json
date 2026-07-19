@@ -128,6 +128,9 @@
   "homepage.comparison.title": {
     "message": "Por que não usar simplesmente uma WebView oculta?"
   },
+  "homepage.comparison.col.feature": {
+    "message": "Recurso"
+  },
   "homepage.comparison.col.webview": {
     "message": "WebView (oculta)"
   },
@@ -150,10 +153,10 @@
     "message": "Baseado no Lexbor, o parser de HTML compatível com WHATWG mais rápido em C99, sem dependências."
   },
   "homepage.features.jsdom.title": {
-    "message": "API compatível com jsdom"
+    "message": "DOM no formato do jsdom"
   },
   "homepage.features.jsdom.description": {
-    "message": "Código escrito para Node.js e jsdom migra com mudanças mínimas: querySelector, textContent, dataset e muito mais."
+    "message": "querySelector, textContent, dataset e muito mais espelham o formato do DOM do jsdom, embora o uso seja diferente: tudo passa pelo evaluate() assíncrono, não pelo acesso síncrono a objetos do jsdom."
   },
   "homepage.features.jsi.title": {
     "message": "Bridge JSI síncrona"

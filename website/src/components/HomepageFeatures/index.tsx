@@ -51,11 +51,12 @@ const FeatureList: FeatureItem[] = [
   },
   {
     icon: IconCode,
-    title: <Translate id="homepage.features.jsdom.title">jsdom-compatible API</Translate>,
+    title: <Translate id="homepage.features.jsdom.title">jsdom-shaped DOM API</Translate>,
     description: (
       <Translate id="homepage.features.jsdom.description">
-        Code written for Node.js and jsdom migrates with minimal changes:
-        querySelector, textContent, dataset, and more.
+        querySelector, textContent, dataset, and more mirror jsdom's DOM
+        shape, though usage differs: everything runs through the async
+        evaluate(), not jsdom's synchronous object access.
       </Translate>
     ),
   },

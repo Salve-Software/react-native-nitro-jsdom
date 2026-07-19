@@ -50,7 +50,7 @@ const html = dom.serialize()
 dom.dispose()
 ```
 
-`evaluate()` é a única porta de entrada para o sandbox: todas as consultas e mutações do DOM são expressas como strings JavaScript passadas ao QuickJS, que delega para o Lexbor internamente. A API é intencionalmente compatível com o [jsdom](https://github.com/jsdom/jsdom), então código escrito para Node.js deve migrar com mudanças mínimas.
+`evaluate()` é a única porta de entrada para o sandbox: todas as consultas e mutações do DOM são expressas como strings JavaScript passadas ao QuickJS, que delega para o Lexbor internamente. O formato do DOM espelha o [jsdom](https://github.com/jsdom/jsdom) (`querySelector`, `textContent`, `dataset` e outros), embora o uso seja diferente: tudo passa pelo `evaluate()` assíncrono baseado em strings, não pelo `new JSDOM()` síncrono do jsdom com acesso direto a `dom.window.document`.
 
 ## Comparação
 

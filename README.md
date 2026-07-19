@@ -48,7 +48,7 @@ dom.dispose()
 - **Headless & off-tree** - no React component, no screen, no UI tree. Parse, mutate, and evaluate HTML entirely off-screen.
 - **Truly isolated runtime** - every `JSDOM.create()` spins up its own QuickJS runtime, not a shared Hermes instance. No leaking globals between sandboxes.
 - **Native HTML parsing** - backed by [Lexbor](https://github.com/lexbor/lexbor), the fastest WHATWG-compliant HTML parser in C99, with zero dependencies.
-- **jsdom-compatible API** - code written for Node.js and jsdom migrates with minimal changes: `querySelector`, `textContent`, `dataset`, and more.
+- **jsdom-shaped DOM API** - `querySelector`, `textContent`, `dataset`, and more mirror jsdom's DOM shape, though usage differs: everything runs through the async `evaluate()`, not jsdom's synchronous object access.
 - **Synchronous JSI bridge** - powered by Nitro Modules, with direct JSI calls, no bridge, no JSON serialization overhead.
 - **Full memory control** - call `dispose()` to deterministically free the Lexbor document and QuickJS runtime, no waiting on GC.
 
