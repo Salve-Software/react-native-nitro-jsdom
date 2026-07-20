@@ -396,10 +396,16 @@ void QuickJSRuntime::fireTimer(Timer* t) {
 std::string QuickJSRuntime::evaluate(const std::string& script) {
   JSRuntime* rt  = reinterpret_cast<JSRuntime*>(_runtime);
   JSContext* ctx = reinterpret_cast<JSContext*>(_context);
-  std::lock_guard<std::mutex> lock(_mutex);
 
-  // Update the stack reference so QuickJS doesn't false-positive overflow
-  // when evaluate() runs on a different thread than initialize().
+  std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    throw std::runtime_error(
+      "QuickJSRuntime: evaluate() called reentrantly. A callback (onFetch/onAlert/onConfirm/onPrompt) "
+      "attempted to call dom.evaluate() again while an evaluate() call was already in progress on this "
+      "instance. QuickJS is not re-entrant."
+    );
+  }
+
   JS_UpdateStackTop(rt);
 
   JSValue result = JS_Eval(ctx, script.data(), script.size(), "<eval>", JS_EVAL_TYPE_GLOBAL);
