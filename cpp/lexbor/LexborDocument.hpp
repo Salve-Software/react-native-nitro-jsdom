@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <optional>
 #include <vector>
 
 namespace margelo::nitro::nitrojsdom {
@@ -49,15 +48,6 @@ public:
 
   // ── Selector matching ─────────────────────────────────────────────────────
   bool matchesSelector(void* element, const std::string& sel) const;
-
-  // ── Legacy selector-based API (kept for backward compat) ─────────────────
-  std::optional<std::string> querySelector(const std::string& selector) const;
-  std::vector<std::string> querySelectorAll(const std::string& selector) const;
-  std::optional<std::string> getAttribute(const std::string& selector, const std::string& attr) const;
-  void setAttribute(const std::string& selector, const std::string& attr, const std::string& value);
-  std::optional<std::string> getTextContent(const std::string& selector) const;
-  std::optional<std::string> getInnerHTML(const std::string& selector) const;
-  void setInnerHTML(const std::string& selector, const std::string& html);
 
 private:
   void* _document  { nullptr };
