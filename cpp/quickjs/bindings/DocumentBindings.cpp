@@ -1,5 +1,6 @@
 #include "DocumentBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
+#include "../QuickJSRuntime.hpp"
 #include "../../lexbor/LexborDocument.hpp"
 #include <cstring>
 
@@ -140,6 +141,10 @@ void DocumentBindings::install(JSContext* ctx) {
   define_prop(ctx, doc, "body",            js_doc_get_body,            nullptr);
   define_prop(ctx, doc, "head",            js_doc_get_head,            nullptr);
   define_prop(ctx, doc, "documentElement", js_doc_get_documentElement, nullptr);
+
+  RuntimeContext* rctx = get_ctx(ctx);
+  bool hidden = !(rctx && rctx->pretend_to_be_visual);
+  JS_SetPropertyStr(ctx, doc, "hidden", JS_NewBool(ctx, hidden));
 
   JS_SetPropertyStr(ctx, global, "document", doc);
   JS_FreeValue(ctx, global);

@@ -44,6 +44,7 @@ export class JSDOM {
       html,
       options?.runScripts ?? true,
       options?.url ?? 'about:blank',
+      options?.pretendToBeVisual ?? false,
     );
 
     if (options?.onConsole) {

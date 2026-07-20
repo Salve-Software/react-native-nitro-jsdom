@@ -66,6 +66,8 @@ struct RuntimeContext {
   Storage local_storage;
   Storage session_storage;
 
+  bool pretend_to_be_visual { false };
+
   // node pointer → heap-allocated JSValue* (DupValue'd strong ref)
   // Ensures the same native node always returns the same JS wrapper object.
   std::unordered_map<void*, void*> node_wrapper_cache;
@@ -80,7 +82,7 @@ public:
   QuickJSRuntime();
   ~QuickJSRuntime();
 
-  void initialize(const std::string& url);
+  void initialize(const std::string& url, bool pretendToBeVisual);
   void bindDocument(LexborDocument* document);
   std::string evaluate(const std::string& script);
 

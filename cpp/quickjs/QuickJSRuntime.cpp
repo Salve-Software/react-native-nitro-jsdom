@@ -137,7 +137,7 @@ void QuickJSRuntime::cleanupTimers() {
 
 // ── initialize ─────────────────────────────────────────────────────────────────
 
-void QuickJSRuntime::initialize(const std::string& url) {
+void QuickJSRuntime::initialize(const std::string& url, bool pretendToBeVisual) {
   JSRuntime* rt = JS_NewRuntime();
   if (!rt) throw std::runtime_error("QuickJS: failed to create runtime");
   JSContext* ctx = JS_NewContext(rt);
@@ -151,6 +151,7 @@ void QuickJSRuntime::initialize(const std::string& url) {
   // Create RuntimeContext and attach to QuickJS context opaque
   _ctxState = std::make_unique<RuntimeContext>();
   _ctxState->runtime = this;
+  _ctxState->pretend_to_be_visual = pretendToBeVisual;
   _ctxState->mutation_observers = std::make_unique<MutationObservers>();
   JS_SetContextOpaque(ctx, _ctxState.get());
 
