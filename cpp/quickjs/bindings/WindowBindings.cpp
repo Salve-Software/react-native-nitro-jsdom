@@ -1,4 +1,5 @@
 #include "WindowBindings.hpp"
+#include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include <cstring>
@@ -10,6 +11,159 @@
 namespace margelo::nitro::nitrojsdom {
 
 namespace {
+
+// ── atob / btoa ────────────────────────────────────────────────────────────
+
+const char kBase64Alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+int8_t base64_decode_char(unsigned char c) {
+  if (c >= 'A' && c <= 'Z') return c - 'A';
+  if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+  if (c >= '0' && c <= '9') return c - '0' + 52;
+  if (c == '+') return 62;
+  if (c == '/') return 63;
+  return -1;
+}
+
+bool is_ascii_whitespace(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r';
+}
+
+JSValue js_window_btoa(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_ThrowTypeError(ctx, "btoa() requires 1 argument");
+  JSValue str_val = JS_ToString(ctx, argv[0]);
+  if (JS_IsException(str_val)) return JS_EXCEPTION;
+  const char* s = JS_ToCString(ctx, str_val);
+  if (!s) { JS_FreeValue(ctx, str_val); return JS_EXCEPTION; }
+
+  // JS_ToCString yields UTF-8; btoa operates on Latin1 code units, so decode
+  // the UTF-8 back into code points and reject anything outside 0x00-0xFF.
+  std::vector<uint8_t> bytes;
+  size_t len = strlen(s);
+  bytes.reserve(len);
+  bool out_of_range = false;
+  for (size_t i = 0; i < len && !out_of_range;) {
+    unsigned char c = static_cast<unsigned char>(s[i]);
+    uint32_t codepoint;
+    size_t seq_len;
+    if (c < 0x80) { codepoint = c; seq_len = 1; }
+    else if ((c & 0xE0) == 0xC0 && i + 1 < len) { codepoint = c & 0x1F; seq_len = 2; }
+    else if ((c & 0xF0) == 0xE0 && i + 2 < len) { codepoint = c & 0x0F; seq_len = 3; }
+    else { out_of_range = true; break; }
+    for (size_t k = 1; k < seq_len; k++) {
+      codepoint = (codepoint << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3F);
+    }
+    if (codepoint > 0xFF) { out_of_range = true; break; }
+    bytes.push_back(static_cast<uint8_t>(codepoint));
+    i += seq_len;
+  }
+  JS_FreeCString(ctx, s);
+  JS_FreeValue(ctx, str_val);
+
+  if (out_of_range) {
+    return throw_dom_exception(ctx, "InvalidCharacterError",
+        "The string to be encoded contains characters outside of the Latin1 range.");
+  }
+
+  std::string out;
+  out.reserve(((bytes.size() + 2) / 3) * 4);
+  size_t i = 0;
+  while (i + 3 <= bytes.size()) {
+    uint32_t n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    out += kBase64Alphabet[(n >> 18) & 0x3F];
+    out += kBase64Alphabet[(n >> 12) & 0x3F];
+    out += kBase64Alphabet[(n >> 6) & 0x3F];
+    out += kBase64Alphabet[n & 0x3F];
+    i += 3;
+  }
+  size_t remaining = bytes.size() - i;
+  if (remaining == 1) {
+    uint32_t n = bytes[i] << 16;
+    out += kBase64Alphabet[(n >> 18) & 0x3F];
+    out += kBase64Alphabet[(n >> 12) & 0x3F];
+    out += "==";
+  } else if (remaining == 2) {
+    uint32_t n = (bytes[i] << 16) | (bytes[i + 1] << 8);
+    out += kBase64Alphabet[(n >> 18) & 0x3F];
+    out += kBase64Alphabet[(n >> 12) & 0x3F];
+    out += kBase64Alphabet[(n >> 6) & 0x3F];
+    out += "=";
+  }
+
+  return JS_NewStringLen(ctx, out.c_str(), out.size());
+}
+
+JSValue js_window_atob(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_ThrowTypeError(ctx, "atob() requires 1 argument");
+  JSValue str_val = JS_ToString(ctx, argv[0]);
+  if (JS_IsException(str_val)) return JS_EXCEPTION;
+  const char* s = JS_ToCString(ctx, str_val);
+  if (!s) { JS_FreeValue(ctx, str_val); return JS_EXCEPTION; }
+
+  std::string data;
+  for (const char* p = s; *p; p++) {
+    if (!is_ascii_whitespace(*p)) data += *p;
+  }
+  JS_FreeCString(ctx, s);
+  JS_FreeValue(ctx, str_val);
+
+  if (data.size() % 4 == 0) {
+    if (data.size() >= 2 && data[data.size() - 1] == '=' && data[data.size() - 2] == '=') {
+      data.resize(data.size() - 2);
+    } else if (!data.empty() && data.back() == '=') {
+      data.resize(data.size() - 1);
+    }
+  }
+
+  if (data.size() % 4 == 1) {
+    return throw_dom_exception(ctx, "InvalidCharacterError",
+        "The string to be decoded is not correctly encoded.");
+  }
+  for (char c : data) {
+    if (base64_decode_char(static_cast<unsigned char>(c)) < 0) {
+      return throw_dom_exception(ctx, "InvalidCharacterError",
+          "The string to be decoded is not correctly encoded.");
+    }
+  }
+
+  std::string out;
+  out.reserve((data.size() / 4) * 3 + 3);
+  size_t i = 0;
+  while (i + 4 <= data.size()) {
+    uint32_t n = (base64_decode_char(data[i]) << 18) | (base64_decode_char(data[i + 1]) << 12) |
+                 (base64_decode_char(data[i + 2]) << 6) | base64_decode_char(data[i + 3]);
+    out += static_cast<char>((n >> 16) & 0xFF);
+    out += static_cast<char>((n >> 8) & 0xFF);
+    out += static_cast<char>(n & 0xFF);
+    i += 4;
+  }
+  size_t remaining = data.size() - i;
+  if (remaining == 2) {
+    uint32_t n = (base64_decode_char(data[i]) << 18) | (base64_decode_char(data[i + 1]) << 12);
+    out += static_cast<char>((n >> 16) & 0xFF);
+  } else if (remaining == 3) {
+    uint32_t n = (base64_decode_char(data[i]) << 18) | (base64_decode_char(data[i + 1]) << 12) |
+                 (base64_decode_char(data[i + 2]) << 6);
+    out += static_cast<char>((n >> 16) & 0xFF);
+    out += static_cast<char>((n >> 8) & 0xFF);
+  }
+
+  // atob's result is a "binary string" — each output char code is one decoded
+  // byte (0x00-0xFF). JS_NewStringLen expects UTF-8 input, so each byte must
+  // be re-encoded as the UTF-8 sequence for that same code point (1 byte for
+  // 0x00-0x7F, 2 bytes for 0x80-0xFF) to round-trip through QuickJS correctly.
+  std::string utf8;
+  utf8.reserve(out.size() * 2);
+  for (unsigned char byte : out) {
+    if (byte < 0x80) {
+      utf8 += static_cast<char>(byte);
+    } else {
+      utf8 += static_cast<char>(0xC0 | (byte >> 6));
+      utf8 += static_cast<char>(0x80 | (byte & 0x3F));
+    }
+  }
+  return JS_NewStringLen(ctx, utf8.c_str(), utf8.size());
+}
 
 // ── console ────────────────────────────────────────────────────────────────
 
@@ -227,6 +381,8 @@ void WindowBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, global, "alert",   JS_NewCFunction(ctx, js_window_alert,   "alert",   1));
   JS_SetPropertyStr(ctx, global, "confirm", JS_NewCFunction(ctx, js_window_confirm, "confirm", 1));
   JS_SetPropertyStr(ctx, global, "prompt",  JS_NewCFunction(ctx, js_window_prompt,  "prompt",  2));
+  JS_SetPropertyStr(ctx, global, "atob",    JS_NewCFunction(ctx, js_window_atob,    "atob",    1));
+  JS_SetPropertyStr(ctx, global, "btoa",    JS_NewCFunction(ctx, js_window_btoa,    "btoa",    1));
 
   JSValue console_obj = JS_NewObject(ctx);
   JS_SetPropertyStr(ctx, console_obj, "log",   JS_NewCFunctionMagic(ctx, js_console_method, "log",   0, JS_CFUNC_generic_magic, 0));
