@@ -3,6 +3,7 @@
 #include "DatasetBindings.hpp"
 #include "StyleBindings.hpp"
 #include "LiveCollectionBindings.hpp"
+#include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include "../MutationObservers.hpp"
@@ -540,8 +541,7 @@ JSValue js_el_insertBefore(JSContext* ctx, JSValue this_val, int argc, JSValue* 
     if (ref) {
       lxb_dom_node_t* receiver_node = unwrap_node(ctx, this_val);
       if (!receiver_node || ref->parent != receiver_node) {
-        JS_ThrowTypeError(ctx, "NotFoundError: reference node is not a child of this node");
-        return JS_EXCEPTION;
+        return throw_dom_exception(ctx, "NotFoundError", "reference node is not a child of this node");
       }
       parent_node = receiver_node;
       inserted = expand_and_insert(new_node, [&](lxb_dom_node_t* n) {
@@ -608,8 +608,7 @@ JSValue js_el_replaceChild(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   auto* old_node = unwrap_node(ctx, argv[1]);
   if (!new_node || !old_node) return JS_NULL;
   if (old_node->parent != parent_node) {
-    JS_ThrowTypeError(ctx, "NotFoundError: the node to be replaced is not a child of this node");
-    return JS_EXCEPTION;
+    return throw_dom_exception(ctx, "NotFoundError", "the node to be replaced is not a child of this node");
   }
 
   lxb_dom_node_t* prev_sib = old_node->prev;
@@ -824,8 +823,7 @@ JSValue js_el_insertAdjacentHTML(JSContext* ctx, JSValue this_val, int argc, JSV
     next_sib = ref;
   } else {
     for (void* n : parsed) lxb_dom_node_destroy_deep(static_cast<lxb_dom_node_t*>(n));
-    JS_ThrowTypeError(ctx, "SyntaxError: invalid insertAdjacentHTML position '%s'", pos.c_str());
-    return JS_EXCEPTION;
+    return throw_dom_exception(ctx, "SyntaxError", ("invalid insertAdjacentHTML position '" + pos + "'").c_str());
   }
 
   auto* rctx = get_ctx(ctx);
