@@ -44,7 +44,9 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
 
   if (runScripts) {
     for (const auto& script : _document->getScriptContents()) {
-      _runtime->evaluate(script);
+      try {
+        _runtime->evaluate(script);
+      } catch (...) { }
     }
   }
 
