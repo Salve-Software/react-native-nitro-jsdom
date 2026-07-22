@@ -23,6 +23,11 @@ namespace margelo::nitro::nitrojsdom {
 //   from the initial HTML), Element/ShadowRoot.innerHTML assignment, and
 //   insertAdjacentHTML. Other insertion paths (before/after/replaceWith/
 //   append/prepend) are not hooked.
+// - The define()-time rescan walks document.querySelectorAll(name) only, so
+//   it does not cross shadow boundaries: elements already sitting inside an
+//   existing shadow root are not retroactively upgraded when a matching tag
+//   is define()'d afterward. (Populating that shadow root's innerHTML after
+//   the define() call still upgrades them, per the innerHTML trigger above.)
 //
 // Must run after ElementBindings, DocumentBindings, and ShadowRootBindings
 // (wraps their innerHTML/createElement/appendChild/removeChild).

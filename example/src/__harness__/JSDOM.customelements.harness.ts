@@ -67,6 +67,48 @@ describe('JSDOM Custom Elements', () => {
     });
   });
 
+  it('appendChild() with a DocumentFragment connects custom elements moved out of it', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const log = [];
+      class FragEl extends HTMLElement {
+        connectedCallback() { log.push('connected'); }
+      }
+      customElements.define('frag-el', FragEl);
+
+      const frag = document.createDocumentFragment();
+      const el = document.createElement('frag-el');
+      frag.appendChild(el);
+      const beforeAppend = log.slice();
+
+      document.body.appendChild(frag);
+      JSON.stringify({ beforeAppend, afterAppend: log });
+    `);
+    expect(JSON.parse(result)).toEqual({ beforeAppend: [], afterAppend: ['connected'] });
+  });
+
+  it('innerHTML assignment disconnects old custom-element content before connecting the new content', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const log = [];
+      class ReplaceEl extends HTMLElement {
+        connectedCallback() { log.push('connected:' + this.id); }
+        disconnectedCallback() { log.push('disconnected:' + this.id); }
+      }
+      customElements.define('replace-el', ReplaceEl);
+      const host = document.getElementById('host');
+      host.innerHTML = '<replace-el id="old"></replace-el>';
+      const afterFirstInsert = log.slice();
+
+      host.innerHTML = '<replace-el id="new"></replace-el>';
+      JSON.stringify({ afterFirstInsert, afterReplace: log });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      afterFirstInsert: ['connected:old'],
+      afterReplace: ['connected:old', 'disconnected:old', 'connected:new'],
+    });
+  });
+
   it('attributeChangedCallback only fires for attributes in observedAttributes', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
