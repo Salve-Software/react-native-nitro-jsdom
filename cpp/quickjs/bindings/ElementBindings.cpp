@@ -149,14 +149,33 @@ JSValue js_select_get_value(JSContext* ctx, lxb_dom_element_t* select_el) {
 
 void js_select_set_value(JSContext* ctx, lxb_dom_element_t* select_el, const std::string& value) {
   auto options = get_doc(ctx)->querySelectorAllFromEl(select_el, "option");
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  auto* attr_name = reinterpret_cast<const lxb_char_t*>("selected");
+
   for (void* opt : options) {
     auto* opt_el = static_cast<lxb_dom_element_t*>(opt);
-    if (option_effective_value(opt_el) == value) {
-      lxb_dom_element_set_attribute(opt_el,
-          reinterpret_cast<const lxb_char_t*>("selected"), 8,
-          reinterpret_cast<const lxb_char_t*>(""), 0);
-    } else {
-      lxb_dom_element_remove_attribute(opt_el, reinterpret_cast<const lxb_char_t*>("selected"), 8);
+    bool should_select = option_effective_value(opt_el) == value;
+    bool has_selected = lxb_dom_element_has_attribute(opt_el, attr_name, 8);
+
+    std::optional<std::string> old_val;
+    if (has_obs && has_selected && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+      size_t len = 0;
+      const lxb_char_t* v = lxb_dom_element_get_attribute(opt_el, attr_name, 8, &len);
+      if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+    }
+
+    bool changed = false;
+    if (should_select && !has_selected) {
+      lxb_dom_element_set_attribute(opt_el, attr_name, 8, reinterpret_cast<const lxb_char_t*>(""), 0);
+      changed = true;
+    } else if (!should_select && has_selected) {
+      lxb_dom_element_remove_attribute(opt_el, attr_name, 8);
+      changed = true;
+    }
+
+    if (changed && has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(opt_el), "selected", old_val);
     }
   }
 }
@@ -181,7 +200,26 @@ JSValue js_el_set_value(JSContext* ctx, JSValue this_val, JSValue val) {
   if (element_tag_is(el, "select")) {
     js_select_set_value(ctx, el, str);
   } else if (element_tag_is(el, "textarea")) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+    lxb_dom_node_t* node = lxb_dom_interface_node(el);
+
+    std::vector<void*> old_children;
+    lxb_dom_node_t* child = node->first_child;
+    while (child) { old_children.push_back(child); child = child->next; }
+    if (!old_children.empty()) {
+      invalidate_node_cache_batch(ctx, rctx, old_children);
+      if (has_obs) rctx->mutation_observers->disconnectDetachedTargets(old_children);
+    }
+
     get_doc(ctx)->setTextContentOnEl(el, str);
+
+    if (has_obs) {
+      std::vector<void*> new_children;
+      child = node->first_child;
+      while (child) { new_children.push_back(child); child = child->next; }
+      rctx->mutation_observers->notifyChildList(ctx, node, new_children, {}, nullptr, nullptr);
+    }
   } else {
     auto* rctx = get_ctx(ctx);
     bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
@@ -221,6 +259,12 @@ JSValue js_el_set_checked(JSContext* ctx, JSValue this_val, JSValue val) {
 
   auto* rctx = get_ctx(ctx);
   bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && has && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+    size_t len = 0;
+    const lxb_char_t* v = lxb_dom_element_get_attribute(el, attr_name, 7, &len);
+    if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+  }
 
   if (checked && !has) {
     lxb_dom_element_set_attribute(el, attr_name, 7, reinterpret_cast<const lxb_char_t*>(""), 0);
@@ -230,7 +274,7 @@ JSValue js_el_set_checked(JSContext* ctx, JSValue this_val, JSValue val) {
   } else if (!checked && has) {
     lxb_dom_element_remove_attribute(el, attr_name, 7);
     if (has_obs) {
-      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), "checked", std::optional<std::string>(""));
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), "checked", old_val);
     }
   }
 
