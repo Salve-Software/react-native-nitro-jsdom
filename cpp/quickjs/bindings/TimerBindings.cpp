@@ -19,7 +19,9 @@ double dom_now_high_res_ms() {
 }
 
 JSValue js_native_now_ms(JSContext* ctx, JSValue, int, JSValue*) {
-  return JS_NewFloat64(ctx, dom_now_high_res_ms());
+  auto* rctx = get_ctx(ctx);
+  double origin = rctx ? rctx->time_origin_ms : 0.0;
+  return JS_NewFloat64(ctx, dom_now_high_res_ms() - origin);
 }
 
 JSValue js_setTimeout(JSContext* ctx, JSValue, int argc, JSValue* argv) {
@@ -111,6 +113,9 @@ const char* kTimerBootstrapScript = R"JS(
 } // namespace
 
 void TimerBindings::install(JSContext* ctx) {
+  auto* rctx = get_ctx(ctx);
+  if (rctx) rctx->time_origin_ms = dom_now_high_res_ms();
+
   JSValue global = JS_GetGlobalObject(ctx);
   JS_SetPropertyStr(ctx, global, "setTimeout",    JS_NewCFunction(ctx, js_setTimeout,  "setTimeout",   2));
   JS_SetPropertyStr(ctx, global, "setInterval",   JS_NewCFunction(ctx, js_setInterval, "setInterval",  2));
