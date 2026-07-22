@@ -152,7 +152,7 @@ JSValue make(JSContext* ctx, void* owner, LiveKind kind, const std::string& sele
 } // namespace
 
 void LiveCollectionBindings::install(JSContext* ctx) {
-  JS_NewClassID(&js_live_collection_class_id);
+  if (js_live_collection_class_id == 0) JS_NewClassID(&js_live_collection_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_live_collection_class_id, &js_livecoll_class);
 
   JSValue proto = JS_NewObject(ctx);
