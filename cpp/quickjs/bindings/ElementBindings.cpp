@@ -955,6 +955,17 @@ JSValue js_el_toggleAttribute(JSContext* ctx, JSValue this_val, int argc, JSValu
   return JS_NewBool(ctx, force_present);
 }
 
+JSValue js_el_getBoundingClientRect(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  JSValue rect = JS_NewObject(ctx);
+  static const char* kFields[] = { "x", "y", "width", "height", "top", "right", "bottom", "left" };
+  for (const char* field : kFields) {
+    JS_SetPropertyStr(ctx, rect, field, JS_NewInt32(ctx, 0));
+  }
+  return rect;
+}
+
 JSValue js_el_isSameNode(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* node = unwrap_node(ctx, this_val);
   if (!node || argc < 1) return JS_FALSE;
@@ -1072,6 +1083,7 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "insertAdjacentHTML",     JS_NewCFunction(ctx, js_el_insertAdjacentHTML,     "insertAdjacentHTML",     2));
   JS_SetPropertyStr(ctx, proto, "append",                 JS_NewCFunction(ctx, js_el_append,                 "append",                 0));
   JS_SetPropertyStr(ctx, proto, "prepend",                JS_NewCFunction(ctx, js_el_prepend,                "prepend",                0));
+  JS_SetPropertyStr(ctx, proto, "getBoundingClientRect",  JS_NewCFunction(ctx, js_el_getBoundingClientRect,  "getBoundingClientRect",  0));
 
   define_prop(ctx, proto, "tagName",                js_el_get_tagName,             nullptr);
   define_prop(ctx, proto, "id",                     js_el_get_id,                  js_el_set_id);
