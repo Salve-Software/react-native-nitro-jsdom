@@ -38,9 +38,14 @@ public:
   void* createComment(const std::string& text);
   void* createDocumentFragment();
 
+  // ── Shadow DOM ─────────────────────────────────────────────────────────────
+  // mode: 0 = open, 1 = closed (matches lxb_dom_shadow_root_mode_t).
+  void* createShadowRoot(void* hostElement, int mode);
+
   // ── Element content ───────────────────────────────────────────────────────
   void setTextContentOnEl(void* element, const std::string& text);
   void setInnerHTMLOnEl(void* element, const std::string& html);
+  void setInnerHTMLOnShadowRoot(void* shadowRoot, void* hostElement, const std::string& html);
 
   // Like setInnerHTMLOnEl, but returns the detached parsed nodes instead of
   // replacing contextElement's children — used by insertAdjacentHTML.

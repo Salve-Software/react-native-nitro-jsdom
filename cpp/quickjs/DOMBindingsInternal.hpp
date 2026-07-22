@@ -34,11 +34,16 @@ class LexborDocument;
 // node class (Node traversal only). This prevents non-element nodes from
 // reaching lxb_dom_element_* calls.
 //
+// js_shadow_root_class_id wraps lxb_dom_shadow_root_t* (see ShadowRootBindings).
+//
 // unwrap_element() returns non-null only for element-class objects.
-// unwrap_node()    returns non-null for either class (shared Node methods).
+// unwrap_node()    returns non-null for any of the three (shared Node methods
+//                  like appendChild/childNodes work the same way on a
+//                  ShadowRoot, since it embeds a document fragment's layout).
 
 extern JSClassID js_element_class_id;
 extern JSClassID js_node_class_id;
+extern JSClassID js_shadow_root_class_id;
 
 JSValue make_element(JSContext* ctx, void* node_or_el);
 JSValue make_element_array(JSContext* ctx, const std::vector<void*>& elements);

@@ -234,6 +234,32 @@ dom.dispose() // ← always pair with create()
 - [x] `element.toggleAttribute(name, force?)`
 - [x] `node.isSameNode(other)` / `node.isEqualNode(other)`
 
+### v0.9 — Shadow DOM & Custom Elements
+- [x] `element.attachShadow({mode})` / `element.shadowRoot`, backed by Lexbor's real `lxb_dom_shadow_root_t`
+- [x] `customElements.define/get/whenDefined` with upgrade hooks (`connectedCallback`, `disconnectedCallback`, `attributeChangedCallback`)
+
+### v0.10 — Real-World Embedded Script Gaps
+> Gaps identified auditing against jsdom for the project's core use case
+> (CMS-driven HTML fragments with a small embedded script: countdown timers,
+> personalized greetings, discount badges), prioritized by how often that
+> class of script actually reaches for them. Range/Selection, TreeWalker/
+> NodeIterator, `window.history`, and cross-frame messaging (`postMessage`,
+> `MessageChannel`) are deliberately excluded — they target full-page/SPA or
+> multi-frame scenarios this sandbox isn't built for.
+- [ ] `document.cookie` (get/set)
+- [ ] `<template>` / `element.content` (DocumentFragment)
+- [ ] Shadow DOM slotting (`<slot>`, `assignedNodes()`/`assignedElements()`, `slotchange`)
+- [ ] `DOMContentLoaded` / `load` events on `document`/`window`
+- [ ] `customElements.upgrade(root)`
+- [ ] `document.forms` / `.images` / `.scripts` / `.links` collections
+- [ ] `document.getElementsByName()`
+- [ ] `node.normalize()`
+- [ ] `node.compareDocumentPosition(other)`
+- [ ] `DOMParser` / `XMLSerializer`
+- [ ] `document.implementation.createHTMLDocument()`
+- [ ] `document.doctype` / `DocumentType` node
+- [ ] Form validity API (`ValidityState`, `checkValidity()` / `reportValidity()` / `setCustomValidity()`)
+
 ---
 
 ## Repository Structure

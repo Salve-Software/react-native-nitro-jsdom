@@ -8,8 +8,9 @@
 
 namespace margelo::nitro::nitrojsdom {
 
-JSClassID js_element_class_id = 0;
-JSClassID js_node_class_id    = 0;
+JSClassID js_element_class_id     = 0;
+JSClassID js_node_class_id        = 0;
+JSClassID js_shadow_root_class_id = 0;
 
 namespace {
 JSClassDef js_element_class = { "Element", .finalizer = nullptr };
@@ -85,6 +86,8 @@ lxb_dom_node_t* unwrap_node(JSContext* ctx, JSValue val) {
   void* p = JS_GetOpaque(val, js_element_class_id);
   if (p) return static_cast<lxb_dom_node_t*>(p);
   p = JS_GetOpaque(val, js_node_class_id);
+  if (p) return static_cast<lxb_dom_node_t*>(p);
+  p = JS_GetOpaque(val, js_shadow_root_class_id);
   return static_cast<lxb_dom_node_t*>(p);
 }
 
