@@ -60,6 +60,22 @@ void invalidate_node_cache_batch(JSContext* ctx, RuntimeContext* rctx, const std
   for (void* n : nodes) invalidate_node_cache(ctx, rctx, n);
 }
 
+namespace {
+void invalidate_node_cache_deep(JSContext* ctx, RuntimeContext* rctx, void* node_ptr) {
+  if (!node_ptr) return;
+  invalidate_node_cache(ctx, rctx, node_ptr);
+  for (lxb_dom_node_t* child = static_cast<lxb_dom_node_t*>(node_ptr)->first_child;
+       child; child = child->next) {
+    invalidate_node_cache_deep(ctx, rctx, child);
+  }
+}
+} // namespace
+
+void invalidate_node_cache_deep_batch(JSContext* ctx, RuntimeContext* rctx, const std::vector<void*>& roots) {
+  if (!rctx) return;
+  for (void* root : roots) invalidate_node_cache_deep(ctx, rctx, root);
+}
+
 void clear_node_cache(JSContext* ctx, RuntimeContext* rctx) {
   if (!rctx) return;
   for (auto& kv : rctx->node_wrapper_cache) {
