@@ -33,13 +33,14 @@ JSValue js_window_btoa(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   if (argc < 1) return JS_ThrowTypeError(ctx, "btoa() requires 1 argument");
   JSValue str_val = JS_ToString(ctx, argv[0]);
   if (JS_IsException(str_val)) return JS_EXCEPTION;
-  const char* s = JS_ToCString(ctx, str_val);
+  size_t len = 0;
+  const char* s = JS_ToCStringLen(ctx, &len, str_val);
   if (!s) { JS_FreeValue(ctx, str_val); return JS_EXCEPTION; }
 
-  // JS_ToCString yields UTF-8; btoa operates on Latin1 code units, so decode
-  // the UTF-8 back into code points and reject anything outside 0x00-0xFF.
+  // JS_ToCStringLen yields UTF-8 (length-aware, so embedded NULs survive);
+  // btoa operates on Latin1 code units, so decode the UTF-8 back into code
+  // points and reject anything outside 0x00-0xFF.
   std::vector<uint8_t> bytes;
-  size_t len = strlen(s);
   bytes.reserve(len);
   bool out_of_range = false;
   for (size_t i = 0; i < len && !out_of_range;) {
@@ -97,12 +98,14 @@ JSValue js_window_atob(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   if (argc < 1) return JS_ThrowTypeError(ctx, "atob() requires 1 argument");
   JSValue str_val = JS_ToString(ctx, argv[0]);
   if (JS_IsException(str_val)) return JS_EXCEPTION;
-  const char* s = JS_ToCString(ctx, str_val);
+  size_t len = 0;
+  const char* s = JS_ToCStringLen(ctx, &len, str_val);
   if (!s) { JS_FreeValue(ctx, str_val); return JS_EXCEPTION; }
 
   std::string data;
-  for (const char* p = s; *p; p++) {
-    if (!is_ascii_whitespace(*p)) data += *p;
+  data.reserve(len);
+  for (size_t i = 0; i < len; i++) {
+    if (!is_ascii_whitespace(s[i])) data += s[i];
   }
   JS_FreeCString(ctx, s);
   JS_FreeValue(ctx, str_val);

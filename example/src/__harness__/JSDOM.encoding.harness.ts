@@ -32,6 +32,15 @@ describe('JSDOM atob/btoa', () => {
     expect(JSON.parse(result)).toEqual(['a', 'ab', 'abc', 'abcd']);
   });
 
+  it('btoa/atob round-trip a string containing an embedded NUL character', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const original = 'a' + String.fromCharCode(0) + 'b';
+      JSON.stringify({ length: original.length, decoded: atob(btoa(original)) });
+    `);
+    expect(JSON.parse(result)).toEqual({ length: 3, decoded: 'a\u0000b' });
+  });
+
   it('btoa throws InvalidCharacterError DOMException for non-Latin1 input', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
