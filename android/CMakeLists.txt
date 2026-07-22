@@ -63,6 +63,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/FormBindings.cpp
   ../cpp/quickjs/bindings/BlobBindings.cpp
   ../cpp/quickjs/bindings/CSSOMBindings.cpp
+  ../cpp/quickjs/bindings/ShadowRootBindings.cpp
   ${QUICKJS_SOURCES}
 )
 

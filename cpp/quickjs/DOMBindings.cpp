@@ -18,6 +18,7 @@
 #include "bindings/FormBindings.hpp"
 #include "bindings/BlobBindings.hpp"
 #include "bindings/CSSOMBindings.hpp"
+#include "bindings/ShadowRootBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -35,6 +36,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   DOMExceptionBindings::install(ctx); // no dependencies; other modules throw DOMException instances
   LiveCollectionBindings::install(ctx);
   ElementBindings::install(ctx);   // registers the Element class + proto
+  ShadowRootBindings::install(ctx); // needs Element's proto + js_node_class_id's proto
   DocumentBindings::install(ctx);  // creates globalThis.document
   CSSOMBindings::install(ctx);     // needs Element's proto + globalThis.document to exist
   EventBindings::install(ctx);     // needs Element's proto + globalThis.document to exist

@@ -73,6 +73,11 @@ struct RuntimeContext {
   // Ensures the same native node always returns the same JS wrapper object.
   std::unordered_map<void*, void*> node_wrapper_cache;
 
+  // host element pointer (lxb_dom_element_t*) → its shadow root
+  // (lxb_dom_shadow_root_t*). Lexbor's element struct has no built-in
+  // back-pointer to an attached shadow root, so we track it ourselves.
+  std::unordered_map<void*, void*> element_shadow_roots;
+
   ~RuntimeContext() = default;
 };
 

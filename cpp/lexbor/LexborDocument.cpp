@@ -151,14 +151,14 @@ std::vector<void*> LexborDocument::querySelectorAll_el(const std::string& sel) c
 
 void* LexborDocument::querySelectorFromEl(void* element, const std::string& sel) const {
   if (!element) return nullptr;
-  return findFirstFrom(lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(element)), sel);
+  return findFirstFrom(static_cast<lxb_dom_node_t*>(element), sel);
 }
 
 std::vector<void*> LexborDocument::querySelectorAllFromEl(void* element, const std::string& sel) const {
   if (!_document || !element) return {};
   auto* parser    = static_cast<lxb_css_parser_t*>(_cssParser);
   auto* selectors = static_cast<lxb_selectors_t*>(_selectors);
-  auto* node      = lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(element));
+  auto* node      = static_cast<lxb_dom_node_t*>(element);
 
   lxb_css_selector_list_t* list = lxb_css_selectors_parse(parser,
       reinterpret_cast<const lxb_char_t*>(sel.data()), sel.size());
@@ -244,6 +244,16 @@ void* LexborDocument::createDocumentFragment() {
   return lxb_dom_document_create_document_fragment(dom_doc);
 }
 
+void* LexborDocument::createShadowRoot(void* hostElement, int mode) {
+  if (!_document || !hostElement) return nullptr;
+  auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
+  auto* shadow = lxb_dom_shadow_root_interface_create(dom_doc);
+  if (!shadow) return nullptr;
+  shadow->host = static_cast<lxb_dom_element_t*>(hostElement);
+  shadow->mode = static_cast<lxb_dom_shadow_root_mode_t>(mode);
+  return shadow;
+}
+
 // ── Element content ──────────────────────────────────────────────────────────
 
 void LexborDocument::setTextContentOnEl(void* element, const std::string& text) {
@@ -265,6 +275,26 @@ void LexborDocument::setTextContentOnEl(void* element, const std::string& text) 
   if (text_node) {
     lxb_dom_node_insert_child(node, lxb_dom_interface_node(text_node));
   }
+}
+
+void LexborDocument::setInnerHTMLOnShadowRoot(void* shadowRoot, void* hostElement, const std::string& html) {
+  auto* host = static_cast<lxb_dom_element_t*>(hostElement);
+  auto* doc  = static_cast<lxb_html_document_t*>(_document);
+  auto* root = static_cast<lxb_dom_node_t*>(shadowRoot);
+
+  lxb_dom_node_t* frag = lxb_html_document_parse_fragment(doc, host,
+      reinterpret_cast<const lxb_char_t*>(html.data()), html.size());
+  if (!frag) return;
+
+  while (root->first_child) lxb_dom_node_destroy_deep(root->first_child);
+
+  while (frag->first_child) {
+    lxb_dom_node_t* child = frag->first_child;
+    lxb_dom_node_remove(child);
+    lxb_dom_node_insert_child(root, child);
+  }
+
+  lxb_dom_node_destroy(frag);
 }
 
 void LexborDocument::setInnerHTMLOnEl(void* element, const std::string& html) {
