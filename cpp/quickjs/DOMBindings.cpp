@@ -4,6 +4,7 @@
 #include "Storage.hpp"
 #include "QuickJSRuntime.hpp"
 #include "../lexbor/LexborDocument.hpp"
+#include "bindings/DOMExceptionBindings.hpp"
 #include "bindings/ElementBindings.hpp"
 #include "bindings/DocumentBindings.hpp"
 #include "bindings/EventBindings.hpp"
@@ -27,6 +28,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSContext* ctx = static_cast<JSContext*>(runtime->context());
   (void)document;
 
+  DOMExceptionBindings::install(ctx); // no dependencies; other modules throw DOMException instances
   LiveCollectionBindings::install(ctx);
   ElementBindings::install(ctx);   // registers the Element class + proto
   DocumentBindings::install(ctx);  // creates globalThis.document

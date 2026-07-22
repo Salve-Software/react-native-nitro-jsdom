@@ -3,6 +3,7 @@
 #include "DatasetBindings.hpp"
 #include "StyleBindings.hpp"
 #include "LiveCollectionBindings.hpp"
+#include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include "../MutationObservers.hpp"
@@ -98,6 +99,185 @@ JSValue js_el_set_className(JSContext* ctx, JSValue this_val, JSValue val) {
           "class", old_val);
     }
   }
+  return JS_UNDEFINED;
+}
+
+// ── Form element properties (value / checked) ────────────────────────────────
+// Simplified attribute-reflection model, matching this file's existing id/
+// className getters: no separate "dirty value" IDL flag like real browsers,
+// just direct reflection so scripts that set then read these back (the
+// common embedded-widget pattern) see consistent results.
+
+JSValue js_el_get_textContent(JSContext* ctx, JSValue this_val);
+
+bool element_tag_is(lxb_dom_element_t* el, const char* tag) {
+  size_t len = 0;
+  const lxb_char_t* name = lxb_dom_element_local_name(el, &len);
+  if (!name || len != strlen(tag)) return false;
+  for (size_t i = 0; i < len; i++) {
+    if (std::tolower(name[i]) != std::tolower((unsigned char)tag[i])) return false;
+  }
+  return true;
+}
+
+// HTMLOptionElement's value: the "value" attribute if present, else the
+// option's text content.
+std::string option_effective_value(lxb_dom_element_t* option) {
+  size_t len = 0;
+  const lxb_char_t* val = lxb_dom_element_get_attribute(option,
+      reinterpret_cast<const lxb_char_t*>("value"), 5, &len);
+  if (val) return std::string(reinterpret_cast<const char*>(val), len);
+  lxb_dom_node_t* node = lxb_dom_interface_node(option);
+  lxb_char_t* text = lxb_dom_node_text_content(node, &len);
+  if (!text) return "";
+  std::string result(reinterpret_cast<char*>(text), len);
+  lxb_dom_document_destroy_text(node->owner_document, text);
+  return result;
+}
+
+JSValue js_select_get_value(JSContext* ctx, lxb_dom_element_t* select_el) {
+  auto options = get_doc(ctx)->querySelectorAllFromEl(select_el, "option");
+  void* chosen = nullptr;
+  for (void* opt : options) {
+    if (lxb_dom_element_has_attribute(static_cast<lxb_dom_element_t*>(opt),
+        reinterpret_cast<const lxb_char_t*>("selected"), 8)) { chosen = opt; break; }
+  }
+  if (!chosen && !options.empty()) chosen = options.front();
+  if (!chosen) return JS_NewString(ctx, "");
+  return JS_NewString(ctx, option_effective_value(static_cast<lxb_dom_element_t*>(chosen)).c_str());
+}
+
+void js_select_set_value(JSContext* ctx, lxb_dom_element_t* select_el, const std::string& value) {
+  auto options = get_doc(ctx)->querySelectorAllFromEl(select_el, "option");
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  auto* attr_name = reinterpret_cast<const lxb_char_t*>("selected");
+
+  for (void* opt : options) {
+    auto* opt_el = static_cast<lxb_dom_element_t*>(opt);
+    bool should_select = option_effective_value(opt_el) == value;
+    bool has_selected = lxb_dom_element_has_attribute(opt_el, attr_name, 8);
+
+    std::optional<std::string> old_val;
+    if (has_obs && has_selected && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+      size_t len = 0;
+      const lxb_char_t* v = lxb_dom_element_get_attribute(opt_el, attr_name, 8, &len);
+      if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+    }
+
+    bool changed = false;
+    if (should_select && !has_selected) {
+      lxb_dom_element_set_attribute(opt_el, attr_name, 8, reinterpret_cast<const lxb_char_t*>(""), 0);
+      changed = true;
+    } else if (!should_select && has_selected) {
+      lxb_dom_element_remove_attribute(opt_el, attr_name, 8);
+      changed = true;
+    }
+
+    if (changed && has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(opt_el), "selected", old_val);
+    }
+  }
+}
+
+JSValue js_el_get_value(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NewString(ctx, "");
+  if (element_tag_is(el, "select")) return js_select_get_value(ctx, el);
+  if (element_tag_is(el, "textarea")) return js_el_get_textContent(ctx, this_val);
+  size_t len = 0;
+  const lxb_char_t* val = lxb_dom_element_get_attribute(el,
+      reinterpret_cast<const lxb_char_t*>("value"), 5, &len);
+  return val ? JS_NewStringLen(ctx, reinterpret_cast<const char*>(val), len) : JS_NewString(ctx, "");
+}
+
+JSValue js_el_set_value(JSContext* ctx, JSValue this_val, JSValue val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+  const char* str = JS_ToCString(ctx, val);
+  if (!str) return JS_UNDEFINED;
+
+  if (element_tag_is(el, "select")) {
+    js_select_set_value(ctx, el, str);
+  } else if (element_tag_is(el, "textarea")) {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+    lxb_dom_node_t* node = lxb_dom_interface_node(el);
+
+    std::vector<void*> old_children;
+    lxb_dom_node_t* child = node->first_child;
+    while (child) { old_children.push_back(child); child = child->next; }
+    if (!old_children.empty()) {
+      invalidate_node_cache_batch(ctx, rctx, old_children);
+      if (has_obs) rctx->mutation_observers->disconnectDetachedTargets(old_children);
+    }
+
+    get_doc(ctx)->setTextContentOnEl(el, str);
+
+    if (has_obs) {
+      std::vector<void*> new_children;
+      child = node->first_child;
+      while (child) { new_children.push_back(child); child = child->next; }
+      rctx->mutation_observers->notifyChildList(ctx, node, new_children, {}, nullptr, nullptr);
+    }
+  } else {
+    auto* rctx = get_ctx(ctx);
+    bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+    std::optional<std::string> old_val;
+    if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+      size_t len = 0;
+      const lxb_char_t* v = lxb_dom_element_get_attribute(el,
+          reinterpret_cast<const lxb_char_t*>("value"), 5, &len);
+      if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+    }
+    lxb_dom_element_set_attribute(el,
+        reinterpret_cast<const lxb_char_t*>("value"), 5,
+        reinterpret_cast<const lxb_char_t*>(str), strlen(str));
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), "value", old_val);
+    }
+  }
+
+  JS_FreeCString(ctx, str);
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_get_checked(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_FALSE;
+  bool has = lxb_dom_element_has_attribute(el,
+      reinterpret_cast<const lxb_char_t*>("checked"), 7);
+  return JS_NewBool(ctx, has);
+}
+
+JSValue js_el_set_checked(JSContext* ctx, JSValue this_val, JSValue val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+  bool checked = JS_ToBool(ctx, val) > 0;
+  auto* attr_name = reinterpret_cast<const lxb_char_t*>("checked");
+  bool has = lxb_dom_element_has_attribute(el, attr_name, 7);
+
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && has && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+    size_t len = 0;
+    const lxb_char_t* v = lxb_dom_element_get_attribute(el, attr_name, 7, &len);
+    if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+  }
+
+  if (checked && !has) {
+    lxb_dom_element_set_attribute(el, attr_name, 7, reinterpret_cast<const lxb_char_t*>(""), 0);
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), "checked", std::nullopt);
+    }
+  } else if (!checked && has) {
+    lxb_dom_element_remove_attribute(el, attr_name, 7);
+    if (has_obs) {
+      rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), "checked", old_val);
+    }
+  }
+
   return JS_UNDEFINED;
 }
 
@@ -540,8 +720,7 @@ JSValue js_el_insertBefore(JSContext* ctx, JSValue this_val, int argc, JSValue* 
     if (ref) {
       lxb_dom_node_t* receiver_node = unwrap_node(ctx, this_val);
       if (!receiver_node || ref->parent != receiver_node) {
-        JS_ThrowTypeError(ctx, "NotFoundError: reference node is not a child of this node");
-        return JS_EXCEPTION;
+        return throw_dom_exception(ctx, "NotFoundError", "reference node is not a child of this node");
       }
       parent_node = receiver_node;
       inserted = expand_and_insert(new_node, [&](lxb_dom_node_t* n) {
@@ -608,8 +787,7 @@ JSValue js_el_replaceChild(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   auto* old_node = unwrap_node(ctx, argv[1]);
   if (!new_node || !old_node) return JS_NULL;
   if (old_node->parent != parent_node) {
-    JS_ThrowTypeError(ctx, "NotFoundError: the node to be replaced is not a child of this node");
-    return JS_EXCEPTION;
+    return throw_dom_exception(ctx, "NotFoundError", "the node to be replaced is not a child of this node");
   }
 
   lxb_dom_node_t* prev_sib = old_node->prev;
@@ -824,8 +1002,7 @@ JSValue js_el_insertAdjacentHTML(JSContext* ctx, JSValue this_val, int argc, JSV
     next_sib = ref;
   } else {
     for (void* n : parsed) lxb_dom_node_destroy_deep(static_cast<lxb_dom_node_t*>(n));
-    JS_ThrowTypeError(ctx, "SyntaxError: invalid insertAdjacentHTML position '%s'", pos.c_str());
-    return JS_EXCEPTION;
+    return throw_dom_exception(ctx, "SyntaxError", ("invalid insertAdjacentHTML position '" + pos + "'").c_str());
   }
 
   auto* rctx = get_ctx(ctx);
@@ -1088,6 +1265,8 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, proto, "tagName",                js_el_get_tagName,             nullptr);
   define_prop(ctx, proto, "id",                     js_el_get_id,                  js_el_set_id);
   define_prop(ctx, proto, "className",              js_el_get_className,           js_el_set_className);
+  define_prop(ctx, proto, "value",                  js_el_get_value,               js_el_set_value);
+  define_prop(ctx, proto, "checked",                js_el_get_checked,             js_el_set_checked);
   define_prop(ctx, proto, "innerHTML",              js_el_get_innerHTML,           js_el_set_innerHTML);
   define_prop(ctx, proto, "outerHTML",              js_el_get_outerHTML,           nullptr);
   define_prop(ctx, proto, "children",               js_el_get_children,            nullptr);

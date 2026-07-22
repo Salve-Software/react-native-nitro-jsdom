@@ -1,4 +1,5 @@
 #include "ClassListBindings.hpp"
+#include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include "../MutationObservers.hpp"
@@ -36,13 +37,13 @@ std::string join_classes(const std::vector<std::string>& v) {
 // Validates a DOMTokenList token: throws on empty or whitespace-containing token.
 bool validate_token(JSContext* ctx, const char* token) {
   if (!token || token[0] == '\0') {
-    JS_ThrowTypeError(ctx, "The token provided must not be empty.");
+    throw_dom_exception(ctx, "SyntaxError", "The token provided must not be empty.");
     return false;
   }
   for (const char* p = token; *p; p++) {
     unsigned char c = (unsigned char)*p;
     if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
-      JS_ThrowTypeError(ctx, "The token provided contains HTML space characters, which are not valid in tokens.");
+      throw_dom_exception(ctx, "InvalidCharacterError", "The token provided contains HTML space characters, which are not valid in tokens.");
       return false;
     }
   }

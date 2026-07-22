@@ -48,6 +48,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/Storage.cpp
   ../cpp/quickjs/bindings/ClassListBindings.cpp
   ../cpp/quickjs/bindings/DatasetBindings.cpp
+  ../cpp/quickjs/bindings/DOMExceptionBindings.cpp
   ../cpp/quickjs/bindings/StyleBindings.cpp
   ../cpp/quickjs/bindings/ElementBindings.cpp
   ../cpp/quickjs/bindings/DocumentBindings.cpp
