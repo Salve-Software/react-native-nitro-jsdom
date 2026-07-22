@@ -59,6 +59,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/LiveCollectionBindings.cpp
   ../cpp/quickjs/bindings/UrlBindings.cpp
   ../cpp/quickjs/bindings/AbortBindings.cpp
+  ../cpp/quickjs/bindings/TextEncodingBindings.cpp
   ${QUICKJS_SOURCES}
 )
 

@@ -14,6 +14,7 @@
 #include "bindings/LiveCollectionBindings.hpp"
 #include "bindings/UrlBindings.hpp"
 #include "bindings/AbortBindings.hpp"
+#include "bindings/TextEncodingBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -37,6 +38,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   WindowBindings::install(ctx);
   UrlBindings::install(ctx);
   AbortBindings::install(ctx);
+  TextEncodingBindings::install(ctx);
   FetchBindings::install(ctx);     // XHR bootstrap uses `new Event(...)`, so must run after EventBindings
 
   // ── localStorage / sessionStorage ──────────────────────────────────────────
