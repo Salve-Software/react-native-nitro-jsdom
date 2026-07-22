@@ -55,6 +55,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/TimerBindings.cpp
   ../cpp/quickjs/bindings/WindowBindings.cpp
   ../cpp/quickjs/bindings/FetchBindings.cpp
+  ../cpp/quickjs/bindings/LiveCollectionBindings.cpp
   ${QUICKJS_SOURCES}
 )
 

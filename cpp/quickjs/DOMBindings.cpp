@@ -10,6 +10,7 @@
 #include "bindings/TimerBindings.hpp"
 #include "bindings/WindowBindings.hpp"
 #include "bindings/FetchBindings.hpp"
+#include "bindings/LiveCollectionBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -24,6 +25,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSContext* ctx = static_cast<JSContext*>(runtime->context());
   (void)document;
 
+  LiveCollectionBindings::install(ctx);
   ElementBindings::install(ctx);   // registers the Element class + proto
   DocumentBindings::install(ctx);  // creates globalThis.document
   EventBindings::install(ctx);     // needs Element's proto + globalThis.document to exist

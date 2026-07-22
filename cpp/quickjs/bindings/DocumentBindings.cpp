@@ -1,4 +1,5 @@
 #include "DocumentBindings.hpp"
+#include "LiveCollectionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include "../../lexbor/LexborDocument.hpp"
@@ -39,18 +40,18 @@ JSValue js_doc_getElementsByClassName(JSContext* ctx, JSValue, int argc, JSValue
   if (argc < 1) return JS_NewArray(ctx);
   const char* names = JS_ToCString(ctx, argv[0]);
   if (!names) return JS_NewArray(ctx);
-  auto results = get_doc(ctx)->querySelectorAll_el(classNames_to_selector(names));
+  JSValue result = LiveCollectionBindings::makeBySelector(ctx, nullptr, classNames_to_selector(names));
   JS_FreeCString(ctx, names);
-  return make_element_array(ctx, results);
+  return result;
 }
 
 JSValue js_doc_getElementsByTagName(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   if (argc < 1) return JS_NewArray(ctx);
   const char* tag = JS_ToCString(ctx, argv[0]);
   if (!tag) return JS_NewArray(ctx);
-  auto results = get_doc(ctx)->querySelectorAll_el(tag);
+  JSValue result = LiveCollectionBindings::makeBySelector(ctx, nullptr, tag);
   JS_FreeCString(ctx, tag);
-  return make_element_array(ctx, results);
+  return result;
 }
 
 JSValue js_doc_createElement(JSContext* ctx, JSValue, int argc, JSValue* argv) {

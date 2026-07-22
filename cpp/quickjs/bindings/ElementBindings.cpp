@@ -2,6 +2,7 @@
 #include "ClassListBindings.hpp"
 #include "DatasetBindings.hpp"
 #include "StyleBindings.hpp"
+#include "LiveCollectionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include "../MutationObservers.hpp"
@@ -223,16 +224,8 @@ JSValue js_el_get_parentElement(JSContext* ctx, JSValue this_val) {
 
 JSValue js_el_get_children(JSContext* ctx, JSValue this_val) {
   auto* el = unwrap_element(ctx, this_val);
-  JSValue arr = JS_NewArray(ctx);
-  if (!el) return arr;
-  uint32_t idx = 0;
-  lxb_dom_node_t* child = lxb_dom_interface_node(el)->first_child;
-  while (child) {
-    if (child->type == LXB_DOM_NODE_TYPE_ELEMENT)
-      JS_SetPropertyUint32(ctx, arr, idx++, make_element(ctx, lxb_dom_interface_element(child)));
-    child = child->next;
-  }
-  return arr;
+  if (!el) return JS_NewArray(ctx);
+  return LiveCollectionBindings::makeChildren(ctx, el);
 }
 
 JSValue js_el_get_firstElementChild(JSContext* ctx, JSValue this_val) {
@@ -348,12 +341,8 @@ JSValue js_el_set_nodeValue(JSContext* ctx, JSValue this_val, JSValue val) {
 
 JSValue js_el_get_childNodes(JSContext* ctx, JSValue this_val) {
   auto* node = unwrap_node(ctx, this_val);
-  JSValue arr = JS_NewArray(ctx);
-  if (!node) return arr;
-  uint32_t idx = 0;
-  lxb_dom_node_t* child = node->first_child;
-  while (child) { JS_SetPropertyUint32(ctx, arr, idx++, make_element(ctx, child)); child = child->next; }
-  return arr;
+  if (!node) return JS_NewArray(ctx);
+  return LiveCollectionBindings::makeChildNodes(ctx, node);
 }
 
 JSValue js_el_get_firstChild(JSContext* ctx, JSValue this_val) {
@@ -881,9 +870,9 @@ JSValue js_el_getElementsByClassName(JSContext* ctx, JSValue this_val, int argc,
   if (!el || argc < 1) return JS_NewArray(ctx);
   const char* names = JS_ToCString(ctx, argv[0]);
   if (!names) return JS_NewArray(ctx);
-  auto results = get_doc(ctx)->querySelectorAllFromEl(el, classNames_to_selector(names));
+  JSValue result = LiveCollectionBindings::makeBySelector(ctx, el, classNames_to_selector(names));
   JS_FreeCString(ctx, names);
-  return make_element_array(ctx, results);
+  return result;
 }
 
 JSValue js_el_getElementsByTagName(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
@@ -891,9 +880,9 @@ JSValue js_el_getElementsByTagName(JSContext* ctx, JSValue this_val, int argc, J
   if (!el || argc < 1) return JS_NewArray(ctx);
   const char* tag = JS_ToCString(ctx, argv[0]);
   if (!tag) return JS_NewArray(ctx);
-  auto results = get_doc(ctx)->querySelectorAllFromEl(el, tag);
+  JSValue result = LiveCollectionBindings::makeBySelector(ctx, el, tag);
   JS_FreeCString(ctx, tag);
-  return make_element_array(ctx, results);
+  return result;
 }
 
 JSValue js_el_getAttributeNames(JSContext* ctx, JSValue this_val, int, JSValue*) {
