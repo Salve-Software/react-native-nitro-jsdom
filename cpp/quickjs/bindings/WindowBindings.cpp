@@ -181,6 +181,28 @@ const char* kLocationBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── crypto.getRandomValues ────────────────────────────────────────────────────
+
+const char* kCryptoBootstrapScript = R"JS(
+(function() {
+  globalThis.crypto = globalThis.crypto || {};
+  globalThis.crypto.getRandomValues = function(typedArray) {
+    if (!typedArray || typeof typedArray.length !== 'number' || typedArray instanceof BigInt64Array || typedArray instanceof BigUint64Array) {
+      throw new TypeError('crypto.getRandomValues() requires an integer TypedArray argument');
+    }
+    if (typedArray.length > 65536) {
+      var err = new Error('crypto.getRandomValues() can only fill up to 65536 bytes at a time');
+      err.name = 'QuotaExceededError';
+      throw err;
+    }
+    for (var i = 0; i < typedArray.length; i++) {
+      typedArray[i] = Math.floor(Math.random() * 0x100000000);
+    }
+    return typedArray;
+  };
+})();
+)JS";
+
 } // namespace
 
 void WindowBindings::install(JSContext* ctx) {
@@ -206,6 +228,13 @@ void WindowBindings::install(JSContext* ctx) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, location_result);
+
+  JSValue crypto_result = JS_Eval(ctx, kCryptoBootstrapScript, strlen(kCryptoBootstrapScript),
+                                   "<crypto-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(crypto_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, crypto_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom
