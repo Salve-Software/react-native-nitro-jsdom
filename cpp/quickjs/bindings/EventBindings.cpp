@@ -71,6 +71,89 @@ JSValue js_CustomEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue* a
   return obj;
 }
 
+// Reads a numeric/string init-dict field, falling back to `def` if the field
+// is absent or the dict itself wasn't passed — shared by KeyboardEvent and
+// MouseEvent, whose constructors otherwise differ only in which fields they copy.
+double get_num_init_field(JSContext* ctx, JSValue init, const char* name, double def) {
+  if (!JS_IsObject(init)) return def;
+  JSValue v = JS_GetPropertyStr(ctx, init, name);
+  if (JS_IsException(v)) { JS_FreeValue(ctx, JS_GetException(ctx)); return def; }
+  if (JS_IsUndefined(v)) { JS_FreeValue(ctx, v); return def; }
+  double d = def;
+  JS_ToFloat64(ctx, &d, v);
+  JS_FreeValue(ctx, v);
+  return d;
+}
+
+// get_bool_prop() (DOMBindingsInternal.hpp) assumes a real object receiver;
+// init dicts are optional, so this guards the JS_IsObject check first.
+bool get_bool_init_field(JSContext* ctx, JSValue init, const char* name) {
+  if (!JS_IsObject(init)) return false;
+  return get_bool_prop(ctx, init, name);
+}
+
+std::string get_str_init_field(JSContext* ctx, JSValue init, const char* name, const char* def) {
+  if (!JS_IsObject(init)) return def;
+  JSValue v = JS_GetPropertyStr(ctx, init, name);
+  if (JS_IsException(v)) { JS_FreeValue(ctx, JS_GetException(ctx)); return def; }
+  if (JS_IsUndefined(v)) { JS_FreeValue(ctx, v); return def; }
+  const char* s = JS_ToCString(ctx, v);
+  std::string result = s ? s : def;
+  if (s) JS_FreeCString(ctx, s);
+  JS_FreeValue(ctx, v);
+  return result;
+}
+
+JSValue js_KeyboardEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  JSValue obj = JS_NewObjectClass(ctx, js_event_class_id);
+  const char* type_str = (argc >= 1) ? JS_ToCString(ctx, argv[0]) : nullptr;
+  JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, type_str ? type_str : ""));
+  if (type_str) JS_FreeCString(ctx, type_str);
+
+  JSValue init = (argc >= 2) ? argv[1] : JS_UNDEFINED;
+  JS_SetPropertyStr(ctx, obj, "bubbles",    JS_NewBool(ctx, get_bool_init_field(ctx, init, "bubbles")));
+  JS_SetPropertyStr(ctx, obj, "cancelable", JS_NewBool(ctx, get_bool_init_field(ctx, init, "cancelable")));
+  JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
+
+  std::string key = get_str_init_field(ctx, init, "key", "");
+  std::string code = get_str_init_field(ctx, init, "code", "");
+  JS_SetPropertyStr(ctx, obj, "key",      JS_NewStringLen(ctx, key.c_str(), key.size()));
+  JS_SetPropertyStr(ctx, obj, "code",     JS_NewStringLen(ctx, code.c_str(), code.size()));
+  JS_SetPropertyStr(ctx, obj, "location", JS_NewInt32(ctx, (int32_t)get_num_init_field(ctx, init, "location", 0)));
+  JS_SetPropertyStr(ctx, obj, "repeat",   JS_NewBool(ctx, get_bool_init_field(ctx, init, "repeat")));
+  JS_SetPropertyStr(ctx, obj, "ctrlKey",  JS_NewBool(ctx, get_bool_init_field(ctx, init, "ctrlKey")));
+  JS_SetPropertyStr(ctx, obj, "shiftKey", JS_NewBool(ctx, get_bool_init_field(ctx, init, "shiftKey")));
+  JS_SetPropertyStr(ctx, obj, "altKey",   JS_NewBool(ctx, get_bool_init_field(ctx, init, "altKey")));
+  JS_SetPropertyStr(ctx, obj, "metaKey",  JS_NewBool(ctx, get_bool_init_field(ctx, init, "metaKey")));
+  return obj;
+}
+
+JSValue js_MouseEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  JSValue obj = JS_NewObjectClass(ctx, js_event_class_id);
+  const char* type_str = (argc >= 1) ? JS_ToCString(ctx, argv[0]) : nullptr;
+  JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, type_str ? type_str : ""));
+  if (type_str) JS_FreeCString(ctx, type_str);
+
+  JSValue init = (argc >= 2) ? argv[1] : JS_UNDEFINED;
+  JS_SetPropertyStr(ctx, obj, "bubbles",    JS_NewBool(ctx, get_bool_init_field(ctx, init, "bubbles")));
+  JS_SetPropertyStr(ctx, obj, "cancelable", JS_NewBool(ctx, get_bool_init_field(ctx, init, "cancelable")));
+  JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
+
+  JS_SetPropertyStr(ctx, obj, "clientX", JS_NewFloat64(ctx, get_num_init_field(ctx, init, "clientX", 0)));
+  JS_SetPropertyStr(ctx, obj, "clientY", JS_NewFloat64(ctx, get_num_init_field(ctx, init, "clientY", 0)));
+  JS_SetPropertyStr(ctx, obj, "screenX", JS_NewFloat64(ctx, get_num_init_field(ctx, init, "screenX", 0)));
+  JS_SetPropertyStr(ctx, obj, "screenY", JS_NewFloat64(ctx, get_num_init_field(ctx, init, "screenY", 0)));
+  JS_SetPropertyStr(ctx, obj, "pageX",   JS_NewFloat64(ctx, get_num_init_field(ctx, init, "pageX", 0)));
+  JS_SetPropertyStr(ctx, obj, "pageY",   JS_NewFloat64(ctx, get_num_init_field(ctx, init, "pageY", 0)));
+  JS_SetPropertyStr(ctx, obj, "button",  JS_NewInt32(ctx, (int32_t)get_num_init_field(ctx, init, "button", 0)));
+  JS_SetPropertyStr(ctx, obj, "buttons", JS_NewInt32(ctx, (int32_t)get_num_init_field(ctx, init, "buttons", 0)));
+  JS_SetPropertyStr(ctx, obj, "ctrlKey",  JS_NewBool(ctx, get_bool_init_field(ctx, init, "ctrlKey")));
+  JS_SetPropertyStr(ctx, obj, "shiftKey", JS_NewBool(ctx, get_bool_init_field(ctx, init, "shiftKey")));
+  JS_SetPropertyStr(ctx, obj, "altKey",   JS_NewBool(ctx, get_bool_init_field(ctx, init, "altKey")));
+  JS_SetPropertyStr(ctx, obj, "metaKey",  JS_NewBool(ctx, get_bool_init_field(ctx, init, "metaKey")));
+  return obj;
+}
+
 // ── Event prototype methods ───────────────────────────────────────────────────
 
 JSValue js_event_preventDefault(JSContext* ctx, JSValue this_val, int, JSValue*) {
@@ -330,6 +413,10 @@ void EventBindings::install(JSContext* ctx) {
       JS_NewCFunction2(ctx, js_Event_constructor, "Event", 1, JS_CFUNC_constructor, 0));
   JS_SetPropertyStr(ctx, global, "CustomEvent",
       JS_NewCFunction2(ctx, js_CustomEvent_constructor, "CustomEvent", 2, JS_CFUNC_constructor, 0));
+  JS_SetPropertyStr(ctx, global, "KeyboardEvent",
+      JS_NewCFunction2(ctx, js_KeyboardEvent_constructor, "KeyboardEvent", 2, JS_CFUNC_constructor, 0));
+  JS_SetPropertyStr(ctx, global, "MouseEvent",
+      JS_NewCFunction2(ctx, js_MouseEvent_constructor, "MouseEvent", 2, JS_CFUNC_constructor, 0));
 
   // ── addEventListener/removeEventListener/dispatchEvent on Node + Element ──
   // Added to the Node proto so text/comment nodes can also receive events.
