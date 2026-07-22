@@ -4,6 +4,8 @@
 #include <lexbor/selectors/selectors.h>
 #include <lexbor/dom/dom.h>
 #include <stdexcept>
+#include <cctype>
+#include <unordered_set>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -22,16 +24,31 @@ static std::string serializeNode(lxb_dom_node_t* node) {
   return result;
 }
 
+bool is_javascript_mime_type(const std::string& type) {
+  if (type.empty()) return true;
+  std::string t;
+  t.reserve(type.size());
+  for (char c : type) t += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  size_t start = t.find_first_not_of(" \t\n\r\f");
+  if (start == std::string::npos) return true;
+  size_t end = t.find_last_not_of(" \t\n\r\f");
+  t = t.substr(start, end - start + 1);
+
+  static const std::unordered_set<std::string> kJsTypes = {
+    "text/javascript", "application/javascript", "application/ecmascript",
+    "application/x-ecmascript", "application/x-javascript", "text/ecmascript",
+    "text/javascript1.0", "text/javascript1.1", "text/javascript1.2",
+    "text/javascript1.3", "text/javascript1.4", "text/javascript1.5",
+    "text/jscript", "text/livescript", "text/x-ecmascript", "text/x-javascript",
+  };
+  return kJsTypes.count(t) > 0;
+}
+
 struct FindFirstCtx { lxb_dom_element_t* result = nullptr; };
 
 static lxb_status_t findFirstCallback(lxb_dom_node_t* node, lxb_css_selector_specificity_t, void* ctx) {
   static_cast<FindFirstCtx*>(ctx)->result = lxb_dom_interface_element(node);
   return LXB_STATUS_STOP;
-}
-
-static lxb_status_t findAllStringCallback(lxb_dom_node_t* node, lxb_css_selector_specificity_t, void* ctx) {
-  static_cast<std::vector<std::string>*>(ctx)->push_back(serializeNode(node));
-  return LXB_STATUS_OK;
 }
 
 static lxb_status_t findAllPtrCallback(lxb_dom_node_t* node, lxb_css_selector_specificity_t, void* ctx) {
@@ -179,7 +196,15 @@ std::vector<std::string> LexborDocument::getScriptContents() const {
   contents.reserve(scriptEls.size());
 
   for (void* el : scriptEls) {
-    auto* node = lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(el));
+    auto* element = static_cast<lxb_dom_element_t*>(el);
+
+    size_t type_len = 0;
+    const lxb_char_t* type_attr = lxb_dom_element_get_attribute(element,
+        reinterpret_cast<const lxb_char_t*>("type"), 4, &type_len);
+    std::string type = type_attr ? std::string(reinterpret_cast<const char*>(type_attr), type_len) : "";
+    if (!is_javascript_mime_type(type)) continue;
+
+    auto* node = lxb_dom_interface_node(element);
     size_t len = 0;
     lxb_char_t* text = lxb_dom_node_text_content(node, &len);
     if (text && len > 0) {
@@ -288,78 +313,6 @@ bool LexborDocument::matchesSelector(void* element, const std::string& sel) cons
     if (el == element) return true;
   }
   return false;
-}
-
-// ── Legacy selector-based API ────────────────────────────────────────────────
-
-std::optional<std::string> LexborDocument::querySelector(const std::string& selector) const {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
-  if (!el) return std::nullopt;
-  return serializeNode(lxb_dom_interface_node(el));
-}
-
-std::vector<std::string> LexborDocument::querySelectorAll(const std::string& selector) const {
-  if (!_document) return {};
-  auto* parser    = static_cast<lxb_css_parser_t*>(_cssParser);
-  auto* selectors = static_cast<lxb_selectors_t*>(_selectors);
-  auto* doc       = static_cast<lxb_html_document_t*>(_document);
-
-  lxb_css_selector_list_t* list = lxb_css_selectors_parse(parser,
-      reinterpret_cast<const lxb_char_t*>(selector.data()), selector.size());
-  std::vector<std::string> results;
-  if (list) {
-    lxb_selectors_find(selectors, lxb_dom_interface_node(doc), list, findAllStringCallback, &results);
-    lxb_css_selector_list_destroy_memory(list);
-  }
-  return results;
-}
-
-std::optional<std::string> LexborDocument::getAttribute(const std::string& selector, const std::string& attr) const {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
-  if (!el) return std::nullopt;
-  size_t val_len;
-  const lxb_char_t* val = lxb_dom_element_get_attribute(el,
-      reinterpret_cast<const lxb_char_t*>(attr.data()), attr.size(), &val_len);
-  if (!val) return std::nullopt;
-  return std::string(reinterpret_cast<const char*>(val), val_len);
-}
-
-void LexborDocument::setAttribute(const std::string& selector, const std::string& attr, const std::string& value) {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
-  if (!el) return;
-  lxb_dom_element_set_attribute(el,
-      reinterpret_cast<const lxb_char_t*>(attr.data()), attr.size(),
-      reinterpret_cast<const lxb_char_t*>(value.data()), value.size());
-}
-
-std::optional<std::string> LexborDocument::getTextContent(const std::string& selector) const {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
-  if (!el) return std::nullopt;
-  lxb_dom_node_t* node = lxb_dom_interface_node(el);
-  size_t len;
-  lxb_char_t* text = lxb_dom_node_text_content(node, &len);
-  if (!text) return std::nullopt;
-  std::string result(reinterpret_cast<char*>(text), len);
-  lxb_dom_document_destroy_text(node->owner_document, text);
-  return result;
-}
-
-std::optional<std::string> LexborDocument::getInnerHTML(const std::string& selector) const {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
-  if (!el) return std::nullopt;
-  std::string result;
-  lxb_dom_node_t* child = lxb_dom_interface_node(el)->first_child;
-  while (child) {
-    result += serializeNode(child);
-    child = child->next;
-  }
-  return result;
-}
-
-void LexborDocument::setInnerHTML(const std::string& selector, const std::string& html) {
-  auto* el = static_cast<lxb_dom_element_t*>(findFirst(selector));
-  if (!el) return;
-  setInnerHTMLOnEl(el, html);
 }
 
 } // namespace margelo::nitro::nitrojsdom

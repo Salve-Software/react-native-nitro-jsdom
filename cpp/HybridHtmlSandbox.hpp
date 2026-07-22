@@ -18,7 +18,7 @@ public:
   HybridHtmlSandbox() : HybridObject(TAG), HybridHtmlSandboxSpec() {}
   ~HybridHtmlSandbox() override = default;
 
-  void initialize(const std::string& html, bool runScripts, const std::string& url) override;
+  void initialize(const std::string& html, bool runScripts, const std::string& url, bool pretendToBeVisual) override;
 
   std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) override;
 

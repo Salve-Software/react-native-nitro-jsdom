@@ -34,12 +34,12 @@ std::string jsonQuote(const std::string& s) {
 }
 } // namespace
 
-void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, const std::string& url) {
+void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, const std::string& url, bool pretendToBeVisual) {
   _document = std::make_unique<LexborDocument>();
   _document->parse(html);
 
   _runtime = std::make_unique<QuickJSRuntime>();
-  _runtime->initialize(url);
+  _runtime->initialize(url, pretendToBeVisual);
   _runtime->bindDocument(_document.get());
 
   if (runScripts) {

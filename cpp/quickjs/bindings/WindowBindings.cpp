@@ -3,6 +3,7 @@
 #include "../QuickJSRuntime.hpp"
 #include <cstring>
 #include <optional>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -181,6 +182,43 @@ const char* kLocationBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── crypto.getRandomValues ────────────────────────────────────────────────────
+
+JSValue js_native_random_bytes(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  int32_t count = 0;
+  if (argc >= 1) JS_ToInt32(ctx, &count, argv[0]);
+  if (count < 0) count = 0;
+
+  static thread_local std::mt19937 gen{std::random_device{}()};
+  std::uniform_int_distribution<int> dist(0, 255);
+
+  JSValue arr = JS_NewArray(ctx);
+  for (int32_t i = 0; i < count; i++) {
+    JS_SetPropertyUint32(ctx, arr, static_cast<uint32_t>(i), JS_NewInt32(ctx, dist(gen)));
+  }
+  return arr;
+}
+
+const char* kCryptoBootstrapScript = R"JS(
+(function() {
+  globalThis.crypto = globalThis.crypto || {};
+  globalThis.crypto.getRandomValues = function(typedArray) {
+    if (!typedArray || typeof typedArray.byteLength !== 'number' || typedArray instanceof BigInt64Array || typedArray instanceof BigUint64Array) {
+      throw new TypeError('crypto.getRandomValues() requires an integer TypedArray argument');
+    }
+    if (typedArray.byteLength > 65536) {
+      var err = new Error('crypto.getRandomValues() can only fill up to 65536 bytes at a time');
+      err.name = 'QuotaExceededError';
+      throw err;
+    }
+    var bytes = __nativeRandomBytes(typedArray.byteLength);
+    var view = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+    for (var i = 0; i < bytes.length; i++) view[i] = bytes[i];
+    return typedArray;
+  };
+})();
+)JS";
+
 } // namespace
 
 void WindowBindings::install(JSContext* ctx) {
@@ -197,6 +235,7 @@ void WindowBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, console_obj, "info",  JS_NewCFunctionMagic(ctx, js_console_method, "info",  0, JS_CFUNC_generic_magic, 3));
   JS_SetPropertyStr(ctx, console_obj, "debug", JS_NewCFunctionMagic(ctx, js_console_method, "debug", 0, JS_CFUNC_generic_magic, 4));
   JS_SetPropertyStr(ctx, global, "console", console_obj);
+  JS_SetPropertyStr(ctx, global, "__nativeRandomBytes", JS_NewCFunction(ctx, js_native_random_bytes, "__nativeRandomBytes", 1));
 
   JS_FreeValue(ctx, global);
 
@@ -206,6 +245,13 @@ void WindowBindings::install(JSContext* ctx) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, location_result);
+
+  JSValue crypto_result = JS_Eval(ctx, kCryptoBootstrapScript, strlen(kCryptoBootstrapScript),
+                                   "<crypto-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(crypto_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, crypto_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom

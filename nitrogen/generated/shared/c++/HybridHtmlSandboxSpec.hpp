@@ -54,7 +54,7 @@ namespace margelo::nitro::nitrojsdom {
 
     public:
       // Methods
-      virtual void initialize(const std::string& html, bool runScripts, const std::string& url) = 0;
+      virtual void initialize(const std::string& html, bool runScripts, const std::string& url, bool pretendToBeVisual) = 0;
       virtual std::shared_ptr<Promise<std::string>> evaluate(const std::string& script) = 0;
       virtual std::string serialize() = 0;
       virtual void setConsoleCallback(const std::optional<std::variant<nitro::NullType, std::function<void(const std::string& /* level */, const std::vector<std::string>& /* args */)>>>& callback) = 0;

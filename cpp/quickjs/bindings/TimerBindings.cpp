@@ -2,6 +2,7 @@
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include <chrono>
+#include <cstring>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -10,6 +11,17 @@ namespace {
 int64_t dom_now_ms() {
   using namespace std::chrono;
   return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
+double dom_now_high_res_ms() {
+  using namespace std::chrono;
+  return duration<double, std::milli>(steady_clock::now().time_since_epoch()).count();
+}
+
+JSValue js_native_now_ms(JSContext* ctx, JSValue, int, JSValue*) {
+  auto* rctx = get_ctx(ctx);
+  double origin = rctx ? rctx->time_origin_ms : 0.0;
+  return JS_NewFloat64(ctx, dom_now_high_res_ms() - origin);
 }
 
 JSValue js_setTimeout(JSContext* ctx, JSValue, int argc, JSValue* argv) {
@@ -80,15 +92,44 @@ JSValue js_clearTimer(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   return JS_UNDEFINED;
 }
 
+const char* kTimerBootstrapScript = R"JS(
+(function() {
+  globalThis.performance = globalThis.performance || {};
+  globalThis.performance.now = function() { return __nativeNowMs(); };
+
+  globalThis.requestAnimationFrame = function(callback) {
+    return setTimeout(function() { callback(performance.now()); }, 16);
+  };
+  globalThis.cancelAnimationFrame = function(id) {
+    clearTimeout(id);
+  };
+
+  globalThis.queueMicrotask = function(callback) {
+    Promise.resolve().then(function() { callback(); });
+  };
+})();
+)JS";
+
 } // namespace
 
 void TimerBindings::install(JSContext* ctx) {
+  auto* rctx = get_ctx(ctx);
+  if (rctx) rctx->time_origin_ms = dom_now_high_res_ms();
+
   JSValue global = JS_GetGlobalObject(ctx);
   JS_SetPropertyStr(ctx, global, "setTimeout",    JS_NewCFunction(ctx, js_setTimeout,  "setTimeout",   2));
   JS_SetPropertyStr(ctx, global, "setInterval",   JS_NewCFunction(ctx, js_setInterval, "setInterval",  2));
   JS_SetPropertyStr(ctx, global, "clearTimeout",  JS_NewCFunction(ctx, js_clearTimer,  "clearTimeout", 1));
   JS_SetPropertyStr(ctx, global, "clearInterval", JS_NewCFunction(ctx, js_clearTimer,  "clearInterval",1));
+  JS_SetPropertyStr(ctx, global, "__nativeNowMs", JS_NewCFunction(ctx, js_native_now_ms, "__nativeNowMs", 0));
   JS_FreeValue(ctx, global);
+
+  JSValue result = JS_Eval(ctx, kTimerBootstrapScript, strlen(kTimerBootstrapScript),
+                            "<timer-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, result);
 }
 
 } // namespace margelo::nitro::nitrojsdom

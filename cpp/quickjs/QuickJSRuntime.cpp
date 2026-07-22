@@ -137,7 +137,7 @@ void QuickJSRuntime::cleanupTimers() {
 
 // ── initialize ─────────────────────────────────────────────────────────────────
 
-void QuickJSRuntime::initialize(const std::string& url) {
+void QuickJSRuntime::initialize(const std::string& url, bool pretendToBeVisual) {
   JSRuntime* rt = JS_NewRuntime();
   if (!rt) throw std::runtime_error("QuickJS: failed to create runtime");
   JSContext* ctx = JS_NewContext(rt);
@@ -151,6 +151,7 @@ void QuickJSRuntime::initialize(const std::string& url) {
   // Create RuntimeContext and attach to QuickJS context opaque
   _ctxState = std::make_unique<RuntimeContext>();
   _ctxState->runtime = this;
+  _ctxState->pretend_to_be_visual = pretendToBeVisual;
   _ctxState->mutation_observers = std::make_unique<MutationObservers>();
   JS_SetContextOpaque(ctx, _ctxState.get());
 
@@ -396,10 +397,16 @@ void QuickJSRuntime::fireTimer(Timer* t) {
 std::string QuickJSRuntime::evaluate(const std::string& script) {
   JSRuntime* rt  = reinterpret_cast<JSRuntime*>(_runtime);
   JSContext* ctx = reinterpret_cast<JSContext*>(_context);
-  std::lock_guard<std::mutex> lock(_mutex);
 
-  // Update the stack reference so QuickJS doesn't false-positive overflow
-  // when evaluate() runs on a different thread than initialize().
+  std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    throw std::runtime_error(
+      "QuickJSRuntime: evaluate() called reentrantly. A callback (onFetch/onAlert/onConfirm/onPrompt) "
+      "attempted to call dom.evaluate() again while an evaluate() call was already in progress on this "
+      "instance. QuickJS is not re-entrant."
+    );
+  }
+
   JS_UpdateStackTop(rt);
 
   JSValue result = JS_Eval(ctx, script.data(), script.size(), "<eval>", JS_EVAL_TYPE_GLOBAL);
