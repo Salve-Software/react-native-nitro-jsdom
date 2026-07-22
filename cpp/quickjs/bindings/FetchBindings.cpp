@@ -141,8 +141,12 @@ const char* kFetchBootstrapScript = R"JS(
   globalThis.fetch = function(input, init) {
     return new Promise(function(resolve, reject) {
       try {
-        var url = typeof input === 'string' ? input : (input && input.url);
         init = init || {};
+        if (init.signal && init.signal.aborted) {
+          reject(init.signal.reason !== undefined ? init.signal.reason : new Error('The operation was aborted'));
+          return;
+        }
+        var url = typeof input === 'string' ? input : (input && input.url);
         var method = (init.method || 'GET').toUpperCase();
         var headers = normalizeHeaders(init.headers);
         var headersJson = JSON.stringify(headers);
