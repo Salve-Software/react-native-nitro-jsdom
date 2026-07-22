@@ -188,7 +188,18 @@ JSValue js_el_get_value(JSContext* ctx, JSValue this_val) {
   size_t len = 0;
   const lxb_char_t* val = lxb_dom_element_get_attribute(el,
       reinterpret_cast<const lxb_char_t*>("value"), 5, &len);
-  return val ? JS_NewStringLen(ctx, reinterpret_cast<const char*>(val), len) : JS_NewString(ctx, "");
+  if (val) return JS_NewStringLen(ctx, reinterpret_cast<const char*>(val), len);
+
+  // A checkbox/radio with no "value" attribute defaults its value to "on".
+  if (element_tag_is(el, "input")) {
+    size_t type_len = 0;
+    const lxb_char_t* type_val = lxb_dom_element_get_attribute(el,
+        reinterpret_cast<const lxb_char_t*>("type"), 4, &type_len);
+    std::string type_str = type_val ? std::string(reinterpret_cast<const char*>(type_val), type_len) : "";
+    for (auto& c : type_str) c = (char)std::tolower((unsigned char)c);
+    if (type_str == "checkbox" || type_str == "radio") return JS_NewString(ctx, "on");
+  }
+  return JS_NewString(ctx, "");
 }
 
 JSValue js_el_set_value(JSContext* ctx, JSValue this_val, JSValue val) {

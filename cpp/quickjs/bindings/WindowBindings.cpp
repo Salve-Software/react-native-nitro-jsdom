@@ -376,6 +376,57 @@ const char* kCryptoBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── navigator ──────────────────────────────────────────────────────────────
+
+const char* kNavigatorBootstrapScript = R"JS(
+(function() {
+  var navigator = {
+    userAgent: 'Mozilla/5.0 (ReactNative) react-native-nitro-jsdom',
+    platform: 'ReactNative',
+    language: 'en-US',
+    languages: ['en-US'],
+    onLine: true,
+    cookieEnabled: false,
+    hardwareConcurrency: 1,
+  };
+  globalThis.navigator = navigator;
+})();
+)JS";
+
+// ── matchMedia ─────────────────────────────────────────────────────────────
+// No layout engine backs this sandbox, so every query reports "no match" —
+// mirrors jsdom's own stance that layout-dependent APIs return inert defaults
+// rather than throwing.
+
+const char* kMatchMediaBootstrapScript = R"JS(
+(function() {
+  function MediaQueryList(media) {
+    this.media = String(media === undefined ? '' : media);
+    this.matches = false;
+    this.onchange = null;
+    this._listeners = [];
+  }
+  MediaQueryList.prototype.addListener = function(cb) {
+    if (typeof cb === 'function' && this._listeners.indexOf(cb) === -1) this._listeners.push(cb);
+  };
+  MediaQueryList.prototype.removeListener = function(cb) {
+    var idx = this._listeners.indexOf(cb);
+    if (idx !== -1) this._listeners.splice(idx, 1);
+  };
+  MediaQueryList.prototype.addEventListener = function(type, cb) {
+    if (type === 'change') this.addListener(cb);
+  };
+  MediaQueryList.prototype.removeEventListener = function(type, cb) {
+    if (type === 'change') this.removeListener(cb);
+  };
+  MediaQueryList.prototype.dispatchEvent = function() { return true; };
+
+  globalThis.matchMedia = function(query) {
+    return new MediaQueryList(query);
+  };
+})();
+)JS";
+
 } // namespace
 
 void WindowBindings::install(JSContext* ctx) {
@@ -411,6 +462,20 @@ void WindowBindings::install(JSContext* ctx) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, crypto_result);
+
+  JSValue navigator_result = JS_Eval(ctx, kNavigatorBootstrapScript, strlen(kNavigatorBootstrapScript),
+                                      "<navigator-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(navigator_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, navigator_result);
+
+  JSValue match_media_result = JS_Eval(ctx, kMatchMediaBootstrapScript, strlen(kMatchMediaBootstrapScript),
+                                        "<match-media-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(match_media_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, match_media_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom
