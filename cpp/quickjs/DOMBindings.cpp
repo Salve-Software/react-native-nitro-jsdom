@@ -17,6 +17,7 @@
 #include "bindings/TextEncodingBindings.hpp"
 #include "bindings/FormBindings.hpp"
 #include "bindings/BlobBindings.hpp"
+#include "bindings/CSSOMBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -35,6 +36,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   LiveCollectionBindings::install(ctx);
   ElementBindings::install(ctx);   // registers the Element class + proto
   DocumentBindings::install(ctx);  // creates globalThis.document
+  CSSOMBindings::install(ctx);     // needs Element's proto + globalThis.document to exist
   EventBindings::install(ctx);     // needs Element's proto + globalThis.document to exist
   TimerBindings::install(ctx);
   WindowBindings::install(ctx);

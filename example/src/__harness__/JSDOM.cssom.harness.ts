@@ -1,0 +1,96 @@
+import { describe, it, expect, afterEach } from 'react-native-harness';
+import { JSDOM } from '@salve-software/react-native-nitro-jsdom';
+
+// Runs on a real device/simulator via react-native-harness, exercising the actual
+// Nitro/QuickJS/Lexbor native module — not a JS mock.
+
+describe('JSDOM CSSOM (document.styleSheets / CSSStyleRule)', () => {
+  let dom: JSDOM | undefined;
+
+  afterEach(() => {
+    dom?.dispose();
+    dom = undefined;
+  });
+
+  it('parses a <style> element into cssRules with selectorText and a live style object', async () => {
+    dom = JSDOM.create(`
+      <html><head>
+        <style>.foo { color: red; font-size: 12px; } #bar { display: none; }</style>
+      </head><body></body></html>
+    `);
+    const result = await dom.evaluate(`
+      const sheet = document.styleSheets[0];
+      JSON.stringify({
+        length: sheet.cssRules.length,
+        first: { selectorText: sheet.cssRules[0].selectorText, color: sheet.cssRules[0].style.color, fontSize: sheet.cssRules[0].style.fontSize },
+        second: { selectorText: sheet.cssRules[1].selectorText, display: sheet.cssRules[1].style.display },
+        type: sheet.cssRules[0].type,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      length: 2,
+      first: { selectorText: '.foo', color: 'red', fontSize: '12px' },
+      second: { selectorText: '#bar', display: 'none' },
+      type: 1,
+    });
+  });
+
+  it('mutating rule.style updates cssText, and document.styleSheets caches across accesses', async () => {
+    dom = JSDOM.create('<html><head><style>.foo { color: red; }</style></head><body></body></html>');
+    const result = await dom.evaluate(`
+      document.styleSheets[0].cssRules[0].style.color = 'blue';
+      const cssTextAfter = document.styleSheets[0].cssRules[0].cssText;
+      const sameSheet = document.styleSheets[0] === document.styleSheets[0];
+      JSON.stringify({ cssTextAfter, sameSheet });
+    `);
+    expect(JSON.parse(result)).toEqual({ cssTextAfter: '.foo { color: blue; }', sameSheet: true });
+  });
+
+  it('insertRule/deleteRule mutate cssRules and throw IndexSizeError DOMException out of range', async () => {
+    dom = JSDOM.create('<html><head><style>.a { color: red; }</style></head><body></body></html>');
+    const result = await dom.evaluate(`
+      const sheet = document.styleSheets[0];
+      const insertedIndex = sheet.insertRule('.b { color: green; }', 0);
+      const afterInsert = Array.from(sheet.cssRules).map((r) => r.selectorText);
+      sheet.deleteRule(1);
+      const afterDelete = Array.from(sheet.cssRules).map((r) => r.selectorText);
+      let caught;
+      try { sheet.deleteRule(99); } catch (e) { caught = { name: e.name, isDOMException: e instanceof DOMException }; }
+      JSON.stringify({ insertedIndex, afterInsert, afterDelete, caught });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      insertedIndex: 0,
+      afterInsert: ['.b', '.a'],
+      afterDelete: ['.b'],
+      caught: { name: 'IndexSizeError', isDOMException: true },
+    });
+  });
+
+  it('collects multiple <style> elements in document order', async () => {
+    dom = JSDOM.create(`
+      <html><head><style>.a { color: red; }</style></head>
+      <body><style>.b { color: blue; }</style></body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(Array.from(document.styleSheets).map((s) => s.cssRules[0].selectorText));
+    `);
+    expect(JSON.parse(result)).toEqual(['.a', '.b']);
+  });
+
+  it('at-rules like @media are captured as opaque stub rules without crashing', async () => {
+    dom = JSDOM.create(`
+      <html><head>
+        <style>@media (min-width: 600px) { .a { color: red; } } .b { color: blue; }</style>
+      </head><body></body></html>
+    `);
+    const result = await dom.evaluate(`
+      const sheet = document.styleSheets[0];
+      JSON.stringify({
+        length: sheet.cssRules.length,
+        firstType: sheet.cssRules[0].type,
+        secondSelector: sheet.cssRules[1].selectorText,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ length: 2, firstType: 0, secondSelector: '.b' });
+  });
+});
