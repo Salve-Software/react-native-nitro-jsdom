@@ -21,9 +21,30 @@ const char* kAbortBootstrapScript = R"JS(
   function AbortSignal() {
     this.aborted = false;
     this.reason = undefined;
-    this.onabort = null;
     this._listeners = [];
+    this._onabort = null;
+    this._onabortListener = null;
   }
+
+  Object.defineProperty(AbortSignal.prototype, 'onabort', {
+    get: function() { return this._onabort; },
+    set: function(fn) {
+      if (this._onabortListener) {
+        var idx = this._listeners.indexOf(this._onabortListener);
+        if (idx !== -1) this._listeners.splice(idx, 1);
+      }
+      this._onabort = typeof fn === 'function' ? fn : null;
+      if (this._onabort) {
+        var self = this;
+        this._onabortListener = function(evt) { self._onabort(evt); };
+        this._listeners.push(this._onabortListener);
+      } else {
+        this._onabortListener = null;
+      }
+    },
+    enumerable: true,
+    configurable: true,
+  });
 
   AbortSignal.prototype.addEventListener = function(type, cb) {
     if (type !== 'abort' || typeof cb !== 'function') return;
@@ -44,9 +65,6 @@ const char* kAbortBootstrapScript = R"JS(
   AbortSignal.prototype._fire = function() {
     var evt = new Event('abort');
     evt.target = this;
-    if (typeof this.onabort === 'function') {
-      try { this.onabort(evt); } catch (e) {}
-    }
     this._listeners.slice().forEach(function(cb) {
       try { cb(evt); } catch (e) {}
     });

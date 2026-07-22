@@ -71,7 +71,7 @@ describe('JSDOM fetch/XHR/AbortController', () => {
       beforeAborted: false,
       afterAborted: true,
       reason: 'custom reason',
-      events: ['onabort', 'listener'],
+      events: ['listener', 'onabort'],
     });
   });
 
