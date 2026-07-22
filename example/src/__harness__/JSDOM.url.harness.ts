@@ -59,6 +59,7 @@ describe('JSDOM URL/URLSearchParams', () => {
       const all = params.getAll('a');
       params.set('a', '9');
       const afterSet = params.getAll('a');
+      params.append('0', 'first');
       params.delete('b');
       params.sort();
       JSON.stringify({ all, afterSet, toString: params.toString(), entries: Array.from(params) });
@@ -66,8 +67,8 @@ describe('JSDOM URL/URLSearchParams', () => {
     expect(JSON.parse(result)).toEqual({
       all: ['1', '3'],
       afterSet: ['9'],
-      toString: 'a=9',
-      entries: [['a', '9']],
+      toString: '0=first&a=9',
+      entries: [['0', 'first'], ['a', '9']],
     });
   });
 });

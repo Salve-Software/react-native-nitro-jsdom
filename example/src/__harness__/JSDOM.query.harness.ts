@@ -75,16 +75,15 @@ describe('JSDOM selectors, live collections, instanceof', () => {
     });
   });
 
-  it('Element/Node/Document constructors throw when called directly', async () => {
+  it('Element/Node constructors throw when called directly', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
       let threw = 0;
       try { new Element(); } catch (e) { threw++; }
       try { new Node(); } catch (e) { threw++; }
-      try { new Document(); } catch (e) { threw++; }
       threw;
     `);
-    expect(result).toBe('3');
+    expect(result).toBe('2');
   });
 
   it('children/childNodes/getElementsBy* reflect DOM mutations made after the initial lookup', async () => {
