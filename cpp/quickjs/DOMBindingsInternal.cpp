@@ -117,6 +117,19 @@ void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter,
   JS_FreeAtom(ctx, atom);
 }
 
+JSValue js_illegal_constructor(JSContext* ctx, JSValue, int, JSValue*) {
+  return JS_ThrowTypeError(ctx, "Illegal constructor");
+}
+
+JSValue define_global_constructor(JSContext* ctx, const char* name, JSValue proto) {
+  JSValue ctor = JS_NewCFunction2(ctx, js_illegal_constructor, name, 0, JS_CFUNC_constructor, 0);
+  JS_SetConstructor(ctx, ctor, proto);
+  JSValue global = JS_GetGlobalObject(ctx);
+  JS_SetPropertyStr(ctx, global, name, JS_DupValue(ctx, ctor));
+  JS_FreeValue(ctx, global);
+  return ctor;
+}
+
 bool get_bool_prop(JSContext* ctx, JSValue obj, const char* name) {
   JSValue v = JS_GetPropertyStr(ctx, obj, name);
   bool b = JS_ToBool(ctx, v) > 0;

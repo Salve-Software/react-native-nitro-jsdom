@@ -64,6 +64,11 @@ using SetterFn = JSValue (*)(JSContext*, JSValue, JSValue);
 
 void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter, SetterFn setter = nullptr);
 
+// ── Global constructor helper (instanceof support) ────────────────────────────
+
+JSValue js_illegal_constructor(JSContext* ctx, JSValue this_val, int argc, JSValue* argv);
+JSValue define_global_constructor(JSContext* ctx, const char* name, JSValue proto);
+
 // ── Misc shared helpers ───────────────────────────────────────────────────────
 
 // Reads a boolean-ish property off any JS object (used by Event dispatch to read

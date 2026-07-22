@@ -1101,6 +1101,18 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, proto, "attributes",              js_el_get_attributes,          nullptr);
 
   JS_SetClassProto(ctx, js_element_class_id, proto);
+
+  JSValue node_proto_ref    = JS_GetClassProto(ctx, js_node_class_id);
+  JSValue element_proto_ref = JS_GetClassProto(ctx, js_element_class_id);
+
+  JS_FreeValue(ctx, define_global_constructor(ctx, "Node", node_proto_ref));
+  JSValue element_ctor = define_global_constructor(ctx, "Element", element_proto_ref);
+  JSValue global = JS_GetGlobalObject(ctx);
+  JS_SetPropertyStr(ctx, global, "HTMLElement", element_ctor);
+  JS_FreeValue(ctx, global);
+
+  JS_FreeValue(ctx, node_proto_ref);
+  JS_FreeValue(ctx, element_proto_ref);
 }
 
 } // namespace margelo::nitro::nitrojsdom
