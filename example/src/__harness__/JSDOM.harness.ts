@@ -627,4 +627,215 @@ describe('JSDOM native module', () => {
       equalNodeDifferent: false,
     });
   });
+
+  it('document.hidden defaults to true and is false when pretendToBeVisual is set', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const defaultResult = await dom.evaluate('String(document.hidden)');
+    expect(defaultResult).toBe('true');
+    dom.dispose();
+
+    dom = JSDOM.create('<html><body></body></html>', { pretendToBeVisual: true });
+    const visibleResult = await dom.evaluate('String(document.hidden)');
+    expect(visibleResult).toBe('false');
+  });
+
+  it('evaluate() rejects with a clear error when called reentrantly from a callback', async () => {
+    dom = JSDOM.create('<html><body></body></html>', {
+      onFetch: async () => {
+        await expect(dom!.evaluate('1')).rejects.toThrow();
+        return { status: 200, body: '' };
+      },
+    });
+    await dom.evaluate(`fetch('https://example.com')`);
+  });
+
+  it('skips non-JS <script> types like application/ld+json', async () => {
+    dom = JSDOM.create(`
+      <html>
+        <body>
+          <script>window.__ran = (window.__ran || 0) + 1;</script>
+          <script type="application/ld+json">{"@type": "Thing"}</script>
+          <script type="application/json">{"not": "js"}</script>
+        </body>
+      </html>
+    `);
+    const result = await dom.evaluate('window.__ran');
+    expect(result).toBe('1');
+  });
+
+  it('exposes Node/Element/HTMLElement/Document globals for instanceof checks', async () => {
+    dom = JSDOM.create('<html><body><div id="d">hi</div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const text = div.firstChild;
+      JSON.stringify({
+        elInstanceofElement: div instanceof Element,
+        elInstanceofNode: div instanceof Node,
+        elInstanceofHTMLElement: div instanceof HTMLElement,
+        textInstanceofNode: text instanceof Node,
+        textInstanceofElement: text instanceof Element,
+        docInstanceofDocument: document instanceof Document,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      elInstanceofElement: true,
+      elInstanceofNode: true,
+      elInstanceofHTMLElement: true,
+      textInstanceofNode: true,
+      textInstanceofElement: false,
+      docInstanceofDocument: true,
+    });
+  });
+
+  it('Element/Node/Document constructors throw when called directly', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      let threw = 0;
+      try { new Element(); } catch (e) { threw++; }
+      try { new Node(); } catch (e) { threw++; }
+      try { new Document(); } catch (e) { threw++; }
+      threw;
+    `);
+    expect(result).toBe('3');
+  });
+
+  it('children/childNodes/getElementsBy* reflect DOM mutations made after the initial lookup', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const children = div.children;
+      const childNodes = div.childNodes;
+      const byTag = document.getElementsByTagName('span');
+      const before = { children: children.length, childNodes: childNodes.length, byTag: byTag.length };
+
+      const span = document.createElement('span');
+      div.appendChild(span);
+
+      JSON.stringify({
+        before,
+        after: { children: children.length, childNodes: childNodes.length, byTag: byTag.length },
+        childrenItem0Tag: children[0].tagName,
+        iterated: Array.from(children).map((el) => el.tagName),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: { children: 0, childNodes: 0, byTag: 0 },
+      after: { children: 1, childNodes: 1, byTag: 1 },
+      childrenItem0Tag: 'SPAN',
+      iterated: ['SPAN'],
+    });
+  });
+
+  it('querySelectorAll returns a static snapshot, unlike getElementsBy*', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const snapshot = document.querySelectorAll('span');
+      div.appendChild(document.createElement('span'));
+      snapshot.length;
+    `);
+    expect(result).toBe('0');
+  });
+
+  it('getBoundingClientRect() returns a zeroed rect instead of throwing', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify(document.getElementById('d').getBoundingClientRect());
+    `);
+    expect(JSON.parse(result)).toEqual({
+      x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0,
+    });
+  });
+
+  it('URL parses and serializes components, resolving relative URLs against a base', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const url = new URL('/path?a=1#hash', 'https://user:pass@example.com:8080');
+      JSON.stringify({
+        href: url.href,
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port,
+        pathname: url.pathname,
+        search: url.search,
+        hash: url.hash,
+        origin: url.origin,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      href: 'https://user:pass@example.com:8080/path?a=1#hash',
+      protocol: 'https:',
+      hostname: 'example.com',
+      port: '8080',
+      pathname: '/path',
+      search: '?a=1',
+      hash: '#hash',
+      origin: 'https://example.com:8080',
+    });
+  });
+
+  it('URL.searchParams stays in sync with url.search in both directions', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const url = new URL('https://example.com/?a=1');
+      url.searchParams.append('b', '2');
+      const afterAppend = url.search;
+      url.search = '?c=3';
+      const afterSearchSet = url.searchParams.get('c');
+      JSON.stringify({ afterAppend, afterSearchSet, hasA: url.searchParams.has('a') });
+    `);
+    expect(JSON.parse(result)).toEqual({ afterAppend: '?a=1&b=2', afterSearchSet: '3', hasA: false });
+  });
+
+  it('URLSearchParams supports append/get/getAll/delete/set/sort/iteration', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const params = new URLSearchParams('b=2&a=1&a=3');
+      const all = params.getAll('a');
+      params.set('a', '9');
+      const afterSet = params.getAll('a');
+      params.delete('b');
+      params.sort();
+      JSON.stringify({ all, afterSet, toString: params.toString(), entries: Array.from(params) });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      all: ['1', '3'],
+      afterSet: ['9'],
+      toString: 'a=9',
+      entries: [['a', '9']],
+    });
+  });
+
+  it('AbortController.abort() marks the signal aborted and fires abort listeners', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const controller = new AbortController();
+      const events = [];
+      controller.signal.addEventListener('abort', () => events.push('listener'));
+      controller.signal.onabort = () => events.push('onabort');
+      const beforeAborted = controller.signal.aborted;
+      controller.abort('custom reason');
+      JSON.stringify({
+        beforeAborted,
+        afterAborted: controller.signal.aborted,
+        reason: controller.signal.reason,
+        events,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      beforeAborted: false,
+      afterAborted: true,
+      reason: 'custom reason',
+      events: ['onabort', 'listener'],
+    });
+  });
+
+  it('fetch() rejects immediately when called with an already-aborted signal', async () => {
+    dom = JSDOM.create('<html><body></body></html>', {
+      onFetch: async () => ({ status: 200, body: 'should not be reached' }),
+    });
+    await expect(
+      dom.evaluate(`fetch('https://example.com', { signal: AbortSignal.abort() })`)
+    ).rejects.toThrow();
+  });
 });
