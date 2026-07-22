@@ -4,6 +4,8 @@
 #include <lexbor/selectors/selectors.h>
 #include <lexbor/dom/dom.h>
 #include <stdexcept>
+#include <cctype>
+#include <unordered_set>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -20,6 +22,26 @@ static std::string serializeNode(lxb_dom_node_t* node) {
   std::string result;
   lxb_html_serialize_tree_cb(node, serializeCallback, &result);
   return result;
+}
+
+bool is_javascript_mime_type(const std::string& type) {
+  if (type.empty()) return true;
+  std::string t;
+  t.reserve(type.size());
+  for (char c : type) t += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  size_t start = t.find_first_not_of(" \t\n\r\f");
+  if (start == std::string::npos) return true;
+  size_t end = t.find_last_not_of(" \t\n\r\f");
+  t = t.substr(start, end - start + 1);
+
+  static const std::unordered_set<std::string> kJsTypes = {
+    "text/javascript", "application/javascript", "application/ecmascript",
+    "application/x-ecmascript", "application/x-javascript", "text/ecmascript",
+    "text/javascript1.0", "text/javascript1.1", "text/javascript1.2",
+    "text/javascript1.3", "text/javascript1.4", "text/javascript1.5",
+    "text/jscript", "text/livescript", "text/x-ecmascript", "text/x-javascript",
+  };
+  return kJsTypes.count(t) > 0;
 }
 
 struct FindFirstCtx { lxb_dom_element_t* result = nullptr; };
@@ -174,7 +196,15 @@ std::vector<std::string> LexborDocument::getScriptContents() const {
   contents.reserve(scriptEls.size());
 
   for (void* el : scriptEls) {
-    auto* node = lxb_dom_interface_node(static_cast<lxb_dom_element_t*>(el));
+    auto* element = static_cast<lxb_dom_element_t*>(el);
+
+    size_t type_len = 0;
+    const lxb_char_t* type_attr = lxb_dom_element_get_attribute(element,
+        reinterpret_cast<const lxb_char_t*>("type"), 4, &type_len);
+    std::string type = type_attr ? std::string(reinterpret_cast<const char*>(type_attr), type_len) : "";
+    if (!is_javascript_mime_type(type)) continue;
+
+    auto* node = lxb_dom_interface_node(element);
     size_t len = 0;
     lxb_char_t* text = lxb_dom_node_text_content(node, &len);
     if (text && len > 0) {
