@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
     'architecture',
     'api',
     'compatibility',
+    'testing-webview',
     'roadmap',
   ],
 };
