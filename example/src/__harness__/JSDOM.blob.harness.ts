@@ -73,6 +73,26 @@ describe('JSDOM Blob / FileReader', () => {
     expect(JSON.parse(result)).toBe(true);
   });
 
+  it('File coerces a non-number lastModified per Web IDL long long semantics', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        fromString: new File(['x'], 'a.txt', { lastModified: '123' }).lastModified,
+        fromFloat: new File(['x'], 'a.txt', { lastModified: 123.9 }).lastModified,
+        fromNaN: new File(['x'], 'a.txt', { lastModified: NaN }).lastModified,
+        fromInfinity: new File(['x'], 'a.txt', { lastModified: Infinity }).lastModified,
+        fromNull: new File(['x'], 'a.txt', { lastModified: null }).lastModified,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      fromString: 123,
+      fromFloat: 123,
+      fromNaN: 0,
+      fromInfinity: 0,
+      fromNull: 0,
+    });
+  });
+
   it('FileReader.readAsDataURL() produces a base64 data URL', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
