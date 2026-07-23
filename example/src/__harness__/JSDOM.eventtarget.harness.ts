@@ -111,4 +111,48 @@ describe('JSDOM standalone EventTarget', () => {
     `);
     expect(JSON.parse(result)).toEqual({ detail: 42, isEventTarget: true });
   });
+
+  it('event types that collide with inherited Object properties (constructor, toString, __proto__) work normally', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const target = new EventTarget();
+      const received = [];
+      ['constructor', 'toString', '__proto__', 'hasOwnProperty'].forEach((type) => {
+        target.addEventListener(type, () => { received.push(type); });
+      });
+      ['constructor', 'toString', '__proto__', 'hasOwnProperty'].forEach((type) => {
+        target.dispatchEvent(new Event(type));
+      });
+      JSON.stringify({ received });
+    `);
+    expect(JSON.parse(result)).toEqual({ received: ['constructor', 'toString', '__proto__', 'hasOwnProperty'] });
+  });
+
+  it('a listener removed by an earlier listener during the same dispatch does not fire', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const target = new EventTarget();
+      const order = [];
+      function third() { order.push('third'); }
+      target.addEventListener('x', () => { order.push('first'); target.removeEventListener('x', third); });
+      target.addEventListener('x', () => { order.push('second'); });
+      target.addEventListener('x', third);
+      target.dispatchEvent(new Event('x'));
+      JSON.stringify({ order });
+    `);
+    expect(JSON.parse(result)).toEqual({ order: ['first', 'second'] });
+  });
+
+  it('currentTarget resets to null even when a listener throws, and the exception propagates out of dispatchEvent', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const target = new EventTarget();
+      target.addEventListener('x', () => { throw new Error('boom'); });
+      const event = new Event('x');
+      let caughtMessage = null;
+      try { target.dispatchEvent(event); } catch (e) { caughtMessage = e.message; }
+      JSON.stringify({ caughtMessage, currentTargetAfter: event.currentTarget });
+    `);
+    expect(JSON.parse(result)).toEqual({ caughtMessage: 'boom', currentTargetAfter: null });
+  });
 });

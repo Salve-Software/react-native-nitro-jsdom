@@ -147,4 +147,28 @@ describe('JSDOM timers and runtime globals', () => {
     `);
     expect(JSON.parse(result)).toEqual({ afterClearA: ['b'], afterClearMeasures: 0, afterClearAllMarks: 0 });
   });
+
+  it('performance.measure() throws SyntaxError DOMException when a referenced mark does not exist', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      performance.mark('real');
+      let caughtStart, caughtEnd, caughtOptionsStart;
+      try { performance.measure('m', 'missing'); } catch (e) { caughtStart = { name: e.name, isDOMException: e instanceof DOMException }; }
+      try { performance.measure('m', 'real', 'missing'); } catch (e) { caughtEnd = { name: e.name, isDOMException: e instanceof DOMException }; }
+      try { performance.measure('m', { start: 'missing' }); } catch (e) { caughtOptionsStart = { name: e.name, isDOMException: e instanceof DOMException }; }
+      JSON.stringify({ caughtStart, caughtEnd, caughtOptionsStart });
+    `);
+    const expectedError = { name: 'SyntaxError', isDOMException: true };
+    expect(JSON.parse(result)).toEqual({ caughtStart: expectedError, caughtEnd: expectedError, caughtOptionsStart: expectedError });
+  });
+
+  it('performance.measure() passes through PerformanceMeasureOptions.detail instead of hardcoding null', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const withDetail = performance.measure('m1', { start: 0, end: 10, detail: { source: 'test' } });
+      const withoutDetail = performance.measure('m2', { start: 0, end: 10 });
+      JSON.stringify({ withDetail: withDetail.detail, withoutDetail: withoutDetail.detail });
+    `);
+    expect(JSON.parse(result)).toEqual({ withDetail: { source: 'test' }, withoutDetail: null });
+  });
 });

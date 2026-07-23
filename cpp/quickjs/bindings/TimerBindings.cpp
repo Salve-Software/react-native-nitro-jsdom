@@ -128,6 +128,14 @@ const char* kTimerBootstrapScript = R"JS(
     }
     return null;
   }
+  function __perfRequireMark(name) {
+    var entry = __perfFindMark(name);
+    if (!entry) {
+      throw new DOMException(
+        "Failed to execute 'measure' on 'Performance': The mark '" + name + "' does not exist.", 'SyntaxError');
+    }
+    return entry.startTime;
+  }
   performance.mark = function(name, options) {
     var entry = {
       name: String(name),
@@ -142,28 +150,22 @@ const char* kTimerBootstrapScript = R"JS(
   performance.measure = function(name, startOrOptions, endMark) {
     var startTime = 0;
     var endTime = performance.now();
+    var detail = null;
     if (typeof startOrOptions === 'string') {
-      var startEntry = __perfFindMark(startOrOptions);
-      if (startEntry) startTime = startEntry.startTime;
-      if (endMark) {
-        var endEntry = __perfFindMark(endMark);
-        if (endEntry) endTime = endEntry.startTime;
-      }
+      startTime = __perfRequireMark(startOrOptions);
+      if (endMark !== undefined) endTime = __perfRequireMark(endMark);
     } else if (startOrOptions && typeof startOrOptions === 'object') {
+      if (startOrOptions.detail !== undefined) detail = startOrOptions.detail;
       if (startOrOptions.start !== undefined) {
-        startTime = typeof startOrOptions.start === 'string'
-          ? ((__perfFindMark(startOrOptions.start) || {}).startTime || 0)
-          : startOrOptions.start;
+        startTime = typeof startOrOptions.start === 'string' ? __perfRequireMark(startOrOptions.start) : startOrOptions.start;
       }
       if (startOrOptions.end !== undefined) {
-        endTime = typeof startOrOptions.end === 'string'
-          ? ((__perfFindMark(startOrOptions.end) || {}).startTime || performance.now())
-          : startOrOptions.end;
+        endTime = typeof startOrOptions.end === 'string' ? __perfRequireMark(startOrOptions.end) : startOrOptions.end;
       } else if (startOrOptions.duration !== undefined) {
         endTime = startTime + startOrOptions.duration;
       }
     }
-    var entry = { name: String(name), entryType: 'measure', startTime: startTime, duration: endTime - startTime, detail: null };
+    var entry = { name: String(name), entryType: 'measure', startTime: startTime, duration: endTime - startTime, detail: detail };
     __perfEntries.push(entry);
     return entry;
   };

@@ -338,9 +338,10 @@ const char* kFormBootstrapScript = R"JS(
       if (this.tagName === 'INPUT' && (this.getAttribute('type') || '').toLowerCase() === 'hidden') return null;
       var result = [];
       if (this.id) {
-        var escapedId = this.id.replace(/"/g, '\\"');
-        var byFor = document.querySelectorAll('label[for="' + escapedId + '"]');
-        for (var i = 0; i < byFor.length; i++) result.push(byFor[i]);
+        var candidates = this.ownerDocument.querySelectorAll('label[for]');
+        for (var i = 0; i < candidates.length; i++) {
+          if (candidates[i].getAttribute('for') === this.id) result.push(candidates[i]);
+        }
       }
       var wrapping = this.closest('label');
       if (wrapping && result.indexOf(wrapping) === -1) result.push(wrapping);

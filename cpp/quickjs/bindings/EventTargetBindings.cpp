@@ -8,7 +8,7 @@ namespace {
 const char* kEventTargetBootstrapScript = R"JS(
 (function() {
   function EventTarget() {
-    this._listeners = {};
+    this._listeners = Object.create(null);
   }
 
   EventTarget.prototype.addEventListener = function(type, listener, options) {
@@ -36,20 +36,24 @@ const char* kEventTargetBootstrapScript = R"JS(
     var list = this._listeners[event.type];
     Object.defineProperty(event, 'target', { value: this, configurable: true });
     Object.defineProperty(event, 'currentTarget', { value: this, configurable: true });
-    if (list) {
-      var snapshot = list.slice();
-      for (var i = 0; i < snapshot.length; i++) {
-        var entry = snapshot[i];
-        if (entry.once) {
-          var idx = list.indexOf(entry);
-          if (idx !== -1) list.splice(idx, 1);
+    try {
+      if (list) {
+        var snapshot = list.slice();
+        for (var i = 0; i < snapshot.length; i++) {
+          var entry = snapshot[i];
+          if (list.indexOf(entry) === -1) continue;
+          if (entry.once) {
+            var idx = list.indexOf(entry);
+            if (idx !== -1) list.splice(idx, 1);
+          }
+          if (typeof entry.listener === 'function') entry.listener.call(this, event);
+          else entry.listener.handleEvent(event);
+          if (event.__immediatePropagationStopped) break;
         }
-        if (typeof entry.listener === 'function') entry.listener.call(this, event);
-        else entry.listener.handleEvent(event);
-        if (event.__immediatePropagationStopped) break;
       }
+    } finally {
+      Object.defineProperty(event, 'currentTarget', { value: null, configurable: true });
     }
-    Object.defineProperty(event, 'currentTarget', { value: null, configurable: true });
     return !event.defaultPrevented;
   };
 
