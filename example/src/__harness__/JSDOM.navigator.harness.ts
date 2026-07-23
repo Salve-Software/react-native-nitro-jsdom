@@ -81,6 +81,41 @@ describe('JSDOM navigator/matchMedia', () => {
     });
   });
 
+  it('history.pushState/replaceState clone state, so mutating the caller object after the call does not leak in', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const obj = { count: 1 };
+      history.pushState(obj, '');
+      obj.count = 999;
+      const afterPushMutation = history.state;
+      history.replaceState(obj, '');
+      obj.count = 42;
+      const afterReplaceMutation = history.state;
+      JSON.stringify({ afterPushMutation, afterReplaceMutation, sameReference: history.state === obj });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      afterPushMutation: { count: 1 }, afterReplaceMutation: { count: 1 }, sameReference: false,
+    });
+  });
+
+  it('history.go() truncates a fractional/NaN delta instead of landing on a non-integer index', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      history.pushState('a', '');
+      history.pushState('b', '');
+      history.go(-0.9);
+      const afterFractionalNoop = history.state;
+      history.go(-1.5);
+      const afterTruncatedToOne = history.state;
+      history.go(NaN);
+      const afterNaN = history.state;
+      JSON.stringify({ afterFractionalNoop, afterTruncatedToOne, afterNaN });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      afterFractionalNoop: 'b', afterTruncatedToOne: 'a', afterNaN: 'a',
+    });
+  });
+
   it('getSelection() returns a stub Selection that never has a range', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`

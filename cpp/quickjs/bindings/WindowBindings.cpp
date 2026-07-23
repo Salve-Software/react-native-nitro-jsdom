@@ -466,7 +466,12 @@ const char* kStructuredCloneBootstrapScript = R"JS(
 // in-memory entry stack rather than session history. pushState/replaceState
 // never fire popstate (per spec); go/back/forward do, since those are the
 // events CMS-widget routers actually listen for. `title` is accepted but
-// ignored (same as jsdom — nothing renders a document title).
+// ignored (same as jsdom — nothing renders a document title). State is
+// structuredClone()'d on write (per spec — matches pushState/replaceState's
+// documented "serializable" semantics), so callers mutating their object
+// after the call can't leak into a stored entry. `go()`'s delta is truncated
+// to an integer so a fractional/NaN input can't produce a non-integer
+// `_index`.
 
 const char* kHistoryBootstrapScript = R"JS(
 (function() {
@@ -482,18 +487,21 @@ const char* kHistoryBootstrapScript = R"JS(
     get: function() { return this._entries[this._index]; },
     enumerable: true,
   });
+  function cloneState(state) {
+    return state === undefined ? null : structuredClone(state);
+  }
   History.prototype.pushState = function(state, _title, url) {
     this._entries = this._entries.slice(0, this._index + 1);
-    this._entries.push(state === undefined ? null : state);
+    this._entries.push(cloneState(state));
     this._index++;
     if (url !== undefined && url !== null) location.href = url;
   };
   History.prototype.replaceState = function(state, _title, url) {
-    this._entries[this._index] = state === undefined ? null : state;
+    this._entries[this._index] = cloneState(state);
     if (url !== undefined && url !== null) location.href = url;
   };
   History.prototype.go = function(delta) {
-    delta = delta === undefined ? 0 : (Number(delta) || 0);
+    delta = delta === undefined ? 0 : Math.trunc(Number(delta) || 0);
     if (delta === 0) return;
     var next = this._index + delta;
     if (next < 0 || next > this._entries.length - 1) return;
