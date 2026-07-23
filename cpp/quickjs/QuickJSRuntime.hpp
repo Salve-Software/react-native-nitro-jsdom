@@ -39,6 +39,7 @@ struct EventListener {
   void* node;              // lxb_dom_node_t*
   std::string event_type;
   void* callback;          // JSValue* (heap-allocated, owned)
+  bool is_handler_property { false };
 };
 
 // ── RuntimeContext ─────────────────────────────────────────────────────────────

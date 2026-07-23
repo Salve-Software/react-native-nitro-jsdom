@@ -427,6 +427,83 @@ JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   return dispatch_event_on_target(ctx, rctx, argv[0], node);
 }
 
+const char* kHandlerEventTypes[] = { "click", "load", "error" };
+
+JSValue get_handler_prop_for_node(JSContext* ctx, RuntimeContext* rctx, void* node, const std::string& event_type) {
+  if (!rctx || !node) return JS_NULL;
+  for (auto& l : rctx->listeners) {
+    if (l.node == node && l.event_type == event_type && l.is_handler_property)
+      return JS_DupValue(ctx, *static_cast<JSValue*>(l.callback));
+  }
+  return JS_NULL;
+}
+
+JSValue set_handler_prop_for_node(JSContext* ctx, RuntimeContext* rctx, void* node, const std::string& event_type, JSValue val) {
+  if (!rctx || !node) return JS_UNDEFINED;
+  for (auto it = rctx->listeners.begin(); it != rctx->listeners.end(); ++it) {
+    if (it->node == node && it->event_type == event_type && it->is_handler_property) {
+      JSValue* stored = static_cast<JSValue*>(it->callback);
+      JS_FreeValue(ctx, *stored);
+      delete stored;
+      rctx->listeners.erase(it);
+      break;
+    }
+  }
+  if (JS_IsFunction(ctx, val)) {
+    EventListener listener;
+    listener.node = node;
+    listener.event_type = event_type;
+    listener.callback = new JSValue(JS_DupValue(ctx, val));
+    listener.is_handler_property = true;
+    rctx->listeners.push_back(std::move(listener));
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_get_handler(JSContext* ctx, JSValue this_val, int magic) {
+  auto* rctx = get_ctx(ctx);
+  auto* node = unwrap_node(ctx, this_val);
+  return get_handler_prop_for_node(ctx, rctx, node, kHandlerEventTypes[magic]);
+}
+
+JSValue js_el_set_handler(JSContext* ctx, JSValue this_val, JSValue val, int magic) {
+  auto* rctx = get_ctx(ctx);
+  auto* node = unwrap_node(ctx, this_val);
+  return set_handler_prop_for_node(ctx, rctx, node, kHandlerEventTypes[magic], val);
+}
+
+void* doc_node_of(RuntimeContext* rctx) {
+  if (!rctx || !rctx->document) return nullptr;
+  return lxb_dom_interface_node(lxb_dom_interface_document(
+      static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
+}
+
+JSValue js_doc_get_handler(JSContext* ctx, JSValue, int magic) {
+  auto* rctx = get_ctx(ctx);
+  return get_handler_prop_for_node(ctx, rctx, doc_node_of(rctx), kHandlerEventTypes[magic]);
+}
+
+JSValue js_doc_set_handler(JSContext* ctx, JSValue, JSValue val, int magic) {
+  auto* rctx = get_ctx(ctx);
+  return set_handler_prop_for_node(ctx, rctx, doc_node_of(rctx), kHandlerEventTypes[magic], val);
+}
+
+void define_element_handler(JSContext* ctx, JSValue obj, const char* name, int magic) {
+  JSAtom atom = JS_NewAtom(ctx, name);
+  JSValue get_fn = JS_NewCFunction2(ctx, (JSCFunction*)js_el_get_handler, name, 0, JS_CFUNC_getter_magic, magic);
+  JSValue set_fn = JS_NewCFunction2(ctx, (JSCFunction*)js_el_set_handler, name, 1, JS_CFUNC_setter_magic, magic);
+  JS_DefinePropertyGetSet(ctx, obj, atom, get_fn, set_fn, JS_PROP_CONFIGURABLE);
+  JS_FreeAtom(ctx, atom);
+}
+
+void define_doc_handler(JSContext* ctx, JSValue obj, const char* name, int magic) {
+  JSAtom atom = JS_NewAtom(ctx, name);
+  JSValue get_fn = JS_NewCFunction2(ctx, (JSCFunction*)js_doc_get_handler, name, 0, JS_CFUNC_getter_magic, magic);
+  JSValue set_fn = JS_NewCFunction2(ctx, (JSCFunction*)js_doc_set_handler, name, 1, JS_CFUNC_setter_magic, magic);
+  JS_DefinePropertyGetSet(ctx, obj, atom, get_fn, set_fn, JS_PROP_CONFIGURABLE);
+  JS_FreeAtom(ctx, atom);
+}
+
 } // namespace
 
 void EventBindings::install(JSContext* ctx) {
@@ -457,6 +534,10 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, node_proto, "addEventListener",    JS_NewCFunction(ctx, js_el_addEventListener,    "addEventListener",    2));
   JS_SetPropertyStr(ctx, node_proto, "removeEventListener", JS_NewCFunction(ctx, js_el_removeEventListener, "removeEventListener", 2));
   JS_SetPropertyStr(ctx, node_proto, "dispatchEvent",       JS_NewCFunction(ctx, js_el_dispatchEvent,       "dispatchEvent",       1));
+
+  define_element_handler(ctx, node_proto, "onclick", 0);
+  define_element_handler(ctx, node_proto, "onload",  1);
+  define_element_handler(ctx, node_proto, "onerror", 2);
   JS_FreeValue(ctx, node_proto);
 
   // ── addEventListener/removeEventListener/dispatchEvent on document ────────
@@ -465,6 +546,10 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "addEventListener",    JS_NewCFunction(ctx, js_doc_addEventListener,    "addEventListener",    2));
   JS_SetPropertyStr(ctx, doc, "removeEventListener", JS_NewCFunction(ctx, js_doc_removeEventListener, "removeEventListener", 2));
   JS_SetPropertyStr(ctx, doc, "dispatchEvent",       JS_NewCFunction(ctx, js_doc_dispatchEvent,       "dispatchEvent",       1));
+
+  define_doc_handler(ctx, doc, "onclick", 0);
+  define_doc_handler(ctx, doc, "onload",  1);
+  define_doc_handler(ctx, doc, "onerror", 2);
   JS_FreeValue(ctx, doc);
 
   // ── addEventListener/removeEventListener/dispatchEvent on window ──────────
@@ -479,6 +564,10 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, global, "addEventListener",    JS_NewCFunction(ctx, js_doc_addEventListener,    "addEventListener",    2));
   JS_SetPropertyStr(ctx, global, "removeEventListener", JS_NewCFunction(ctx, js_doc_removeEventListener, "removeEventListener", 2));
   JS_SetPropertyStr(ctx, global, "dispatchEvent",       JS_NewCFunction(ctx, js_doc_dispatchEvent,       "dispatchEvent",       1));
+
+  define_doc_handler(ctx, global, "onclick", 0);
+  define_doc_handler(ctx, global, "onload",  1);
+  define_doc_handler(ctx, global, "onerror", 2);
 
   JS_FreeValue(ctx, global);
 }

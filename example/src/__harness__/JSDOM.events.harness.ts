@@ -112,4 +112,54 @@ describe('JSDOM events', () => {
     `);
     expect(JSON.parse(result)).toEqual(['fired']);
   });
+
+  it('el.onclick fires on click and reassigning replaces the previous handler', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const log = [];
+      btn.onclick = () => log.push('first');
+      btn.dispatchEvent(new Event('click'));
+      btn.onclick = () => log.push('second');
+      btn.dispatchEvent(new Event('click'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['first', 'second']);
+  });
+
+  it('el.onclick coexists with addEventListener listeners for the same event type', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const log = [];
+      btn.addEventListener('click', () => log.push('listener'));
+      btn.onclick = () => log.push('handler');
+      btn.dispatchEvent(new Event('click'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['listener', 'handler']);
+  });
+
+  it('setting el.onclick to null removes the previously assigned handler', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const log = [];
+      btn.onclick = () => log.push('fired');
+      btn.onclick = null;
+      btn.dispatchEvent(new Event('click'));
+      JSON.stringify({ log, onclick: btn.onclick });
+    `);
+    expect(JSON.parse(result)).toEqual({ log: [], onclick: null });
+  });
+
+  it('window.onload and document.onload share one handler slot', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      document.onload = function first() {};
+      window.onload = function second() {};
+      JSON.stringify({ same: document.onload === window.onload });
+    `);
+    expect(JSON.parse(result)).toEqual({ same: true });
+  });
 });
