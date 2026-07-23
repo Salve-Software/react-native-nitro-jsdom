@@ -287,11 +287,13 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
 
     std::vector<JSValue> cbs_to_fire;
     std::vector<JSValue*> cb_ptrs;
+    std::vector<bool> cb_is_handler_property;
     for (auto& listener : rctx->listeners) {
       if (listener.node == level && listener.event_type == event_type) {
         JSValue* cb = static_cast<JSValue*>(listener.callback);
         cbs_to_fire.push_back(JS_DupValue(ctx, *cb));
         cb_ptrs.push_back(cb);
+        cb_is_handler_property.push_back(listener.is_handler_property);
       }
     }
 
@@ -332,6 +334,10 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
         JS_FreeValue(ctx, ex);
         JS_ThrowInternalError(ctx, "%s", err.c_str());
         return JS_EXCEPTION;
+      }
+      if (cb_is_handler_property[i] && JS_IsBool(ret) && JS_ToBool(ctx, ret) == 0 &&
+          get_bool_prop(ctx, event_obj, "cancelable")) {
+        JS_SetPropertyStr(ctx, event_obj, "defaultPrevented", JS_NewBool(ctx, true));
       }
       JS_FreeValue(ctx, ret);
     }

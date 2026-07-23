@@ -163,6 +163,42 @@ describe('JSDOM events', () => {
     expect(JSON.parse(result)).toEqual({ same: true });
   });
 
+  it('el.onclick returning false prevents the default action of a cancelable event', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      btn.onclick = () => false;
+      const event = new Event('click', { cancelable: true });
+      const returnValue = btn.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: false, defaultPrevented: true });
+  });
+
+  it('addEventListener() callback returning false does not prevent the default action', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      btn.addEventListener('click', () => false);
+      const event = new Event('click', { cancelable: true });
+      const returnValue = btn.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
+  });
+
+  it('el.onclick returning false has no effect when the event is not cancelable', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      btn.onclick = () => false;
+      const event = new Event('click', { cancelable: false });
+      const returnValue = btn.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
+  });
+
   it('element.click() dispatches a bubbling, cancelable click event', async () => {
     dom = JSDOM.create('<html><body><div id="parent"><button id="b"></button></div></body></html>');
     const result = await dom.evaluate(`
