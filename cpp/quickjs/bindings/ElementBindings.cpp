@@ -219,7 +219,7 @@ JSValue js_el_set_value(JSContext* ctx, JSValue this_val, JSValue val) {
     lxb_dom_node_t* child = node->first_child;
     while (child) { old_children.push_back(child); child = child->next; }
     if (!old_children.empty()) {
-      invalidate_node_cache_batch(ctx, rctx, old_children);
+      invalidate_node_cache_deep_batch(ctx, rctx, old_children);
       if (has_obs) rctx->mutation_observers->disconnectDetachedTargets(old_children);
     }
 
