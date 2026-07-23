@@ -7,6 +7,7 @@
 #include "bindings/DOMExceptionBindings.hpp"
 #include "bindings/ElementBindings.hpp"
 #include "bindings/DocumentBindings.hpp"
+#include "bindings/DOMParserBindings.hpp"
 #include "bindings/EventBindings.hpp"
 #include "bindings/TimerBindings.hpp"
 #include "bindings/WindowBindings.hpp"
@@ -36,13 +37,14 @@ namespace margelo::nitro::nitrojsdom {
 
 void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   JSContext* ctx = static_cast<JSContext*>(runtime->context());
-  (void)document;
+  register_document(ctx, document); // so doc_for_node() resolves nodes back to the primary document
 
   DOMExceptionBindings::install(ctx); // no dependencies; other modules throw DOMException instances
   LiveCollectionBindings::install(ctx);
   ElementBindings::install(ctx);   // registers the Element class + proto
   ShadowRootBindings::install(ctx); // needs Element's proto + js_node_class_id's proto
   DocumentBindings::install(ctx);  // creates globalThis.document
+  DOMParserBindings::install(ctx); // adds document.implementation + globalThis.DOMParser; needs globalThis.document
   CookieBindings::install(ctx);    // needs globalThis.document to exist
   TemplateBindings::install(ctx);  // needs Element's proto
   CustomElementsBindings::install(ctx); // needs Element/ShadowRoot protos + globalThis.document

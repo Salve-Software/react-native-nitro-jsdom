@@ -256,12 +256,20 @@ dom.dispose() // ← always pair with create()
 - [x] `node.normalize()`
 - [x] `node.compareDocumentPosition(other)`
 - [x] `XMLSerializer` (`serializeToString()` only — see below)
-- [ ] `DOMParser` (`parseFromString()`) / `document.implementation.createHTMLDocument()` —
-      both return a genuinely separate `Document`, and this sandbox's C++ layer
-      is architecturally one `LexborDocument` per runtime (`DocumentBindings`,
-      node identity caching, and MutationObserver are all wired to that one
-      singleton document). Supporting a second live document is an
-      architecture change, not a binding addition — deferred to its own pass.
+- [x] `DOMParser` (`parseFromString()`) / `document.implementation.createHTMLDocument()` —
+      each returns a genuinely separate, fully mutable `Document` backed by its
+      own `LexborDocument` instance (see `DOMParserBindings`). Node-creating
+      Element methods (textContent/innerHTML setters, insertAdjacentHTML,
+      matches()/closest(), before/after/replaceWith/append/prepend's string
+      coercion) resolve the correct owning document dynamically via
+      `doc_for_node()` instead of assuming the sandbox's primary document, so
+      mutating a parsed document is safe rather than corrupting either
+      document's memory arena. Not supported on secondary documents: Shadow
+      DOM, Custom Elements, `<template>`, MutationObserver, and live
+      HTMLCollections (`getElementsBy{ClassName,TagName}` return static
+      arrays instead) — those bindings are hardwired to the primary document.
+      Scripts inside parsed HTML never execute (these documents are inert,
+      per spec).
 - [x] `document.doctype` / `DocumentType` node
 - [x] Form validity API (`ValidityState`, `checkValidity()` / `reportValidity()` / `setCustomValidity()`,
       `element.validity` / `.willValidate` / `.validationMessage`) — covers

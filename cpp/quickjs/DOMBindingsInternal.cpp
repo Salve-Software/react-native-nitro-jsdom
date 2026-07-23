@@ -126,6 +126,26 @@ LexborDocument* get_doc(JSContext* ctx) {
   return rctx ? rctx->document : nullptr;
 }
 
+LexborDocument* doc_for_node(JSContext* ctx, void* node) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx) return nullptr;
+  if (node) {
+    auto* dom_node = static_cast<lxb_dom_node_t*>(node);
+    auto it = rctx->document_registry.find(dom_node->owner_document);
+    if (it != rctx->document_registry.end()) return it->second;
+  }
+  return rctx->document;
+}
+
+void register_document(JSContext* ctx, LexborDocument* doc) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !doc) return;
+  auto* html_doc = static_cast<lxb_html_document_t*>(doc->documentHtmlPtr());
+  if (!html_doc) return;
+  void* dom_doc = lxb_dom_interface_document(html_doc);
+  rctx->document_registry[dom_doc] = doc;
+}
+
 void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter, SetterFn setter) {
   JSAtom atom = JS_NewAtom(ctx, name);
   JSValue get_fn = JS_NewCFunction2(ctx, (JSCFunction*)getter, name, 0, JS_CFUNC_getter, 0);
