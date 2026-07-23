@@ -352,4 +352,35 @@ describe('JSDOM form elements', () => {
     `);
     expect(JSON.parse(result)).toEqual(['a', 'b', 'c', 'd']);
   });
+
+  it('element.labels collects both a for="id" label and a wrapping label, deduplicated', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <label for="x">By for</label>
+        <label id="wrap"><input id="x"><span>By wrap</span></label>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(document.getElementById('x').labels.map((l) => l.textContent));
+    `);
+    expect(JSON.parse(result)).toEqual(['By for', 'By wrap']);
+  });
+
+  it('element.labels returns [] when there is no associated label, and null for non-labelable elements and hidden inputs', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <input id="lonely">
+        <input id="hiddenInput" type="hidden">
+        <div id="notLabelable"></div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        lonely: document.getElementById('lonely').labels,
+        hiddenInput: document.getElementById('hiddenInput').labels,
+        notLabelable: document.getElementById('notLabelable').labels,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ lonely: [], hiddenInput: null, notLabelable: null });
+  });
 });

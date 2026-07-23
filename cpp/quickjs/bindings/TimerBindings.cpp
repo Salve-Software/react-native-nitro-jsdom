@@ -107,6 +107,83 @@ const char* kTimerBootstrapScript = R"JS(
   globalThis.queueMicrotask = function(callback) {
     Promise.resolve().then(function() { callback(); });
   };
+
+  globalThis.requestIdleCallback = function(callback, options) {
+    var timeout = options && options.timeout;
+    return setTimeout(function() {
+      callback({
+        didTimeout: false,
+        timeRemaining: function() { return 50; },
+      });
+    }, typeof timeout === 'number' ? Math.min(timeout, 1) : 1);
+  };
+  globalThis.cancelIdleCallback = function(id) {
+    clearTimeout(id);
+  };
+
+  var __perfEntries = [];
+  function __perfFindMark(name) {
+    for (var i = __perfEntries.length - 1; i >= 0; i--) {
+      if (__perfEntries[i].name === name && __perfEntries[i].entryType === 'mark') return __perfEntries[i];
+    }
+    return null;
+  }
+  performance.mark = function(name, options) {
+    var entry = {
+      name: String(name),
+      entryType: 'mark',
+      startTime: (options && options.startTime !== undefined) ? options.startTime : performance.now(),
+      duration: 0,
+      detail: (options && options.detail !== undefined) ? options.detail : null,
+    };
+    __perfEntries.push(entry);
+    return entry;
+  };
+  performance.measure = function(name, startOrOptions, endMark) {
+    var startTime = 0;
+    var endTime = performance.now();
+    if (typeof startOrOptions === 'string') {
+      var startEntry = __perfFindMark(startOrOptions);
+      if (startEntry) startTime = startEntry.startTime;
+      if (endMark) {
+        var endEntry = __perfFindMark(endMark);
+        if (endEntry) endTime = endEntry.startTime;
+      }
+    } else if (startOrOptions && typeof startOrOptions === 'object') {
+      if (startOrOptions.start !== undefined) {
+        startTime = typeof startOrOptions.start === 'string'
+          ? ((__perfFindMark(startOrOptions.start) || {}).startTime || 0)
+          : startOrOptions.start;
+      }
+      if (startOrOptions.end !== undefined) {
+        endTime = typeof startOrOptions.end === 'string'
+          ? ((__perfFindMark(startOrOptions.end) || {}).startTime || performance.now())
+          : startOrOptions.end;
+      } else if (startOrOptions.duration !== undefined) {
+        endTime = startTime + startOrOptions.duration;
+      }
+    }
+    var entry = { name: String(name), entryType: 'measure', startTime: startTime, duration: endTime - startTime, detail: null };
+    __perfEntries.push(entry);
+    return entry;
+  };
+  performance.getEntries = function() { return __perfEntries.slice(); };
+  performance.getEntriesByType = function(type) {
+    return __perfEntries.filter(function(e) { return e.entryType === type; });
+  };
+  performance.getEntriesByName = function(name, type) {
+    return __perfEntries.filter(function(e) { return e.name === name && (!type || e.entryType === type); });
+  };
+  performance.clearMarks = function(name) {
+    __perfEntries = __perfEntries.filter(function(e) {
+      return e.entryType !== 'mark' || (name !== undefined && e.name !== name);
+    });
+  };
+  performance.clearMeasures = function(name) {
+    __perfEntries = __perfEntries.filter(function(e) {
+      return e.entryType !== 'measure' || (name !== undefined && e.name !== name);
+    });
+  };
 })();
 )JS";
 

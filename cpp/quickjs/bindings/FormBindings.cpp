@@ -328,6 +328,25 @@ const char* kFormBootstrapScript = R"JS(
       return formControls(this);
     },
   });
+
+  var LABELABLE_TAGS = ['BUTTON', 'INPUT', 'METER', 'OUTPUT', 'PROGRESS', 'SELECT', 'TEXTAREA'];
+
+  Object.defineProperty(Element.prototype, 'labels', {
+    configurable: true,
+    get: function() {
+      if (LABELABLE_TAGS.indexOf(this.tagName) === -1) return null;
+      if (this.tagName === 'INPUT' && (this.getAttribute('type') || '').toLowerCase() === 'hidden') return null;
+      var result = [];
+      if (this.id) {
+        var escapedId = this.id.replace(/"/g, '\\"');
+        var byFor = document.querySelectorAll('label[for="' + escapedId + '"]');
+        for (var i = 0; i < byFor.length; i++) result.push(byFor[i]);
+      }
+      var wrapping = this.closest('label');
+      if (wrapping && result.indexOf(wrapping) === -1) result.push(wrapping);
+      return result;
+    },
+  });
 })();
 )JS";
 

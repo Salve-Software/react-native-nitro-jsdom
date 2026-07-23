@@ -401,6 +401,14 @@ const char* kNavigatorBootstrapScript = R"JS(
     cookieEnabled: false,
     hardwareConcurrency: 1,
   };
+  navigator.sendBeacon = function(url, data) {
+    try {
+      fetch(url, { method: 'POST', body: data }).catch(function() {});
+    } catch (e) {
+      return false;
+    }
+    return true;
+  };
   globalThis.navigator = navigator;
 })();
 )JS";

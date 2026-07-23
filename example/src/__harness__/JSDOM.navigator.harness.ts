@@ -24,6 +24,31 @@ describe('JSDOM navigator/matchMedia', () => {
     expect(JSON.parse(result)).toEqual({ hasUserAgent: true, language: 'en-US', onLine: true });
   });
 
+  it('navigator.sendBeacon() posts through onFetch and returns true synchronously', async () => {
+    let receivedUrl: string | undefined;
+    let receivedMethod: string | undefined;
+    let receivedBody: string | undefined;
+    dom = JSDOM.create('<html><body></body></html>', {
+      onFetch: async (url, init) => {
+        receivedUrl = url;
+        receivedMethod = init.method;
+        receivedBody = init.body;
+        return { status: 204, body: '' };
+      },
+    });
+    const result = await dom.evaluate(`
+      (async () => {
+        const returned = navigator.sendBeacon('https://example.com/analytics', '{"event":"view"}');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return JSON.stringify({ returned });
+      })()
+    `);
+    expect(JSON.parse(result)).toEqual({ returned: true });
+    expect(receivedUrl).toBe('https://example.com/analytics');
+    expect(receivedMethod).toBe('POST');
+    expect(receivedBody).toBe('{"event":"view"}');
+  });
+
   it('matchMedia returns a MediaQueryList-like stub that never matches', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`

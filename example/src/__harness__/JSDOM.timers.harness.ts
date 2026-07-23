@@ -87,4 +87,64 @@ describe('JSDOM timers and runtime globals', () => {
     expect(parsed.threw).toBe(true);
     expect(parsed.returnsSameRef).toBe(true);
   });
+
+  it('requestIdleCallback fires with an IdleDeadline and can be cancelled', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      (async () => {
+        let deadline = null;
+        requestIdleCallback((d) => { deadline = d; });
+
+        const cancelledId = requestIdleCallback(() => { throw new Error('should have been cancelled'); });
+        cancelIdleCallback(cancelledId);
+
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return JSON.stringify({
+          didTimeout: deadline && deadline.didTimeout,
+          timeRemainingIsNumber: deadline && typeof deadline.timeRemaining() === 'number',
+        });
+      })()
+    `);
+    expect(JSON.parse(result)).toEqual({ didTimeout: false, timeRemainingIsNumber: true });
+  });
+
+  it('performance.mark/measure record entries queryable by getEntriesByType/getEntriesByName', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      performance.mark('start');
+      performance.mark('end');
+      const measure = performance.measure('span', 'start', 'end');
+      JSON.stringify({
+        measureEntryType: measure.entryType,
+        marksByType: performance.getEntriesByType('mark').map((e) => e.name),
+        measuresByType: performance.getEntriesByType('measure').map((e) => e.name),
+        byName: performance.getEntriesByName('start').map((e) => e.entryType),
+        durationIsNumber: typeof measure.duration === 'number',
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      measureEntryType: 'measure',
+      marksByType: ['start', 'end'],
+      measuresByType: ['span'],
+      byName: ['mark'],
+      durationIsNumber: true,
+    });
+  });
+
+  it('performance.clearMarks/clearMeasures remove entries, scoped by name when given', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      performance.mark('a');
+      performance.mark('b');
+      performance.measure('m1', 'a');
+      performance.clearMarks('a');
+      const afterClearA = performance.getEntriesByType('mark').map((e) => e.name);
+      performance.clearMeasures();
+      const afterClearMeasures = performance.getEntriesByType('measure').length;
+      performance.clearMarks();
+      const afterClearAllMarks = performance.getEntriesByType('mark').length;
+      JSON.stringify({ afterClearA, afterClearMeasures, afterClearAllMarks });
+    `);
+    expect(JSON.parse(result)).toEqual({ afterClearA: ['b'], afterClearMeasures: 0, afterClearAllMarks: 0 });
+  });
 });
