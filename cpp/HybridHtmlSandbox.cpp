@@ -55,10 +55,14 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
   // or window.addEventListener(...) — the common embedded-widget bootstrap
   // pattern — see them. There's no real subresource loading in this sandbox,
   // so both fire back-to-back with nothing in between.
+  _runtime->contextState()->ready_state = "interactive";
   try {
-    _runtime->evaluate(
-        "document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));"
-        "document.dispatchEvent(new Event('load'));");
+    _runtime->evaluate("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));");
+  } catch (...) { }
+
+  _runtime->contextState()->ready_state = "complete";
+  try {
+    _runtime->evaluate("document.dispatchEvent(new Event('load'));");
   } catch (...) { }
 
   _initialized = true;
