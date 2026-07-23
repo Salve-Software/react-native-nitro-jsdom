@@ -281,6 +281,51 @@ describe('JSDOM Custom Elements', () => {
     expect(JSON.parse(result)).toEqual({ name: 'NotSupportedError', isDOMException: true });
   });
 
+  it('customElements.upgrade(root) upgrades elements a shadow-crossing define() rescan missed', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const log = [];
+      class LateEl extends HTMLElement {
+        connectedCallback() { log.push('connected'); }
+      }
+      const host = document.createElement('div');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<late-el></late-el>';
+      document.body.appendChild(host);
+
+      // define() happens after the shadow content already exists — its own
+      // document.querySelectorAll(name) rescan can't see inside the shadow tree.
+      customElements.define('late-el', LateEl);
+      const beforeUpgrade = shadow.querySelector('late-el') instanceof LateEl;
+
+      customElements.upgrade(shadow);
+      const afterUpgrade = shadow.querySelector('late-el') instanceof LateEl;
+
+      JSON.stringify({ beforeUpgrade, afterUpgrade, log });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      beforeUpgrade: false,
+      afterUpgrade: true,
+      log: ['connected'],
+    });
+  });
+
+  it('customElements.upgrade(root) upgrades a detached root itself, not just its descendants', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      class InclusiveEl extends HTMLElement {}
+      // Created and left detached before define() — define()'s own rescan
+      // (document.querySelectorAll) can't see a node outside the document tree.
+      const real = document.createElement('inclusive-el');
+      customElements.define('inclusive-el', InclusiveEl);
+      const before = real instanceof InclusiveEl;
+      customElements.upgrade(real);
+      const after = real instanceof InclusiveEl;
+      JSON.stringify({ before, after });
+    `);
+    expect(JSON.parse(result)).toEqual({ before: false, after: true });
+  });
+
   it('define() with a constructor already used for another name throws a NotSupportedError DOMException', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
