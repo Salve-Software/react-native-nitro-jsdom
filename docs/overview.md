@@ -371,6 +371,40 @@ dom.dispose() // ← always pair with create()
       reimplemented from scratch, since a plausible-looking backtracking bug
       here would be easy to miss in review.
 
+### v0.13 — Ergonomics Round 3
+> A fourth jsdom parity pass, picking up foundational properties/methods
+> that were still missing despite how much of the DOM surface is already
+> covered: `ownerDocument`, `importNode`, a standalone `EventTarget`, and a
+> handful of ergonomics/modern-globals items in the spirit of v0.11.
+- [x] `node.ownerDocument` — resolves to the real `document` global for
+      nodes attached under the primary document (`null` for the document
+      itself), or to the owning secondary `Document` object for
+      `DOMParser`/`createHTMLDocument()` nodes.
+- [x] `document.importNode(node, deep?)` — backed by Lexbor's own
+      `lxb_dom_document_import_node()` (the same primitive `cloneNode()` uses
+      internally). Only implemented on the primary document, to pull a node
+      out of a parsed/secondary document into the live one. `adoptNode()` is
+      not implemented: a spec-correct adopt moves the same node
+      (`adoptNode(n) === n`) without cloning, and Lexbor's arena-per-document
+      allocator has no primitive for that; faking it via import-and-discard
+      would break the node-identity guarantee real code might rely on.
+- [x] `new EventTarget()` — a standalone, constructible `EventTarget` for
+      scripts implementing their own pub-sub (including via `class X extends
+      EventTarget`) without attaching to an Element/document/window.
+- [x] `element.labels` — `<label for="id">` plus an ancestor-wrapping
+      `<label>`, deduplicated; static array (not a live `NodeList`), same
+      trade-off as `form.elements`.
+- [x] `requestIdleCallback`/`cancelIdleCallback`.
+- [x] `CharacterData.data`/`.length` on Text/Comment nodes (mirrors
+      `nodeValue`; `.length` is the JS string length, not the UTF-8 byte
+      count Lexbor stores internally).
+- [x] `performance.mark()`/`measure()`/`getEntries()`/`getEntriesByType()`/
+      `getEntriesByName()`/`clearMarks()`/`clearMeasures()`.
+- [x] `navigator.sendBeacon()` — a fire-and-forget POST through the same
+      `onFetch` bridge `fetch()` already uses.
+- [x] `element.innerText` — falls back to `textContent` (no layout engine to
+      compute rendered/collapsed text from).
+
 ---
 
 ## Repository Structure
