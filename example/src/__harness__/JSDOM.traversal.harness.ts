@@ -330,4 +330,65 @@ describe('JSDOM node traversal', () => {
     `);
     expect(result).toBe('true');
   });
+
+  it('ownerDocument resolves to the real document global for primary-document nodes, and to null for the document itself', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const d = document.getElementById('d');
+      JSON.stringify({
+        isDocument: d.ownerDocument === document,
+        detachedIsDocument: document.createElement('span').ownerDocument === document,
+        documentOwnerDocument: document.ownerDocument,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ isDocument: true, detachedIsDocument: true, documentOwnerDocument: null });
+  });
+
+  it('ownerDocument of a node from a secondary document resolves to that document, not the primary one', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const parsed = new DOMParser().parseFromString('<html><body><p id="x"></p></body></html>', 'text/html');
+      const p = parsed.getElementById('x');
+      JSON.stringify({
+        isParsedDoc: p.ownerDocument === parsed,
+        isPrimaryDoc: p.ownerDocument === document,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ isParsedDoc: true, isPrimaryDoc: false });
+  });
+
+  it('CharacterData.data mirrors nodeValue on Text/Comment nodes, .length is the JS string length', async () => {
+    dom = JSDOM.create('<html><body><p id="p">café</p><!-- 😀 --></body></html>');
+    const result = await dom.evaluate(`
+      const text = document.getElementById('p').firstChild;
+      const comment = document.body.childNodes[document.body.childNodes.length - 1];
+      const before = { data: text.data, length: text.length };
+      text.data = 'x😀y';
+      const after = { data: text.data, nodeValue: text.nodeValue, length: text.length };
+      JSON.stringify({
+        before, after,
+        commentData: comment.data, commentLength: comment.length,
+        elementDataIsUndefined: document.getElementById('p').data === undefined,
+        elementLengthIsUndefined: document.getElementById('p').length === undefined,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: { data: 'café', length: 4 },
+      after: { data: 'x😀y', nodeValue: 'x😀y', length: 4 },
+      commentData: ' 😀 ', commentLength: 4,
+      elementDataIsUndefined: true,
+      elementLengthIsUndefined: true,
+    });
+  });
+
+  it('innerText falls back to textContent (no layout engine to compute rendered text)', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span>a</span> b </div></body></html>');
+    const result = await dom.evaluate(`
+      const d = document.getElementById('d');
+      const before = d.innerText;
+      d.innerText = 'replaced';
+      JSON.stringify({ before, after: d.innerText, textContentAfter: d.textContent });
+    `);
+    expect(JSON.parse(result)).toEqual({ before: 'a b ', after: 'replaced', textContentAfter: 'replaced' });
+  });
 });

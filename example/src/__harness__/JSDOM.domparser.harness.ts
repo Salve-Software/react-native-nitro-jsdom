@@ -153,4 +153,49 @@ describe('JSDOM DOMParser / createHTMLDocument', () => {
     `);
     expect(JSON.parse(result)).toEqual({ name: 'html', none: null });
   });
+
+  it('document.importNode() copies a node from a parsed document into the primary document', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const parsed = new DOMParser().parseFromString(
+        '<html><body><div id="src"><span>a</span></div></body></html>', 'text/html'
+      );
+      const src = parsed.getElementById('src');
+
+      const shallow = document.importNode(src);
+      const deep = document.importNode(src, true);
+
+      JSON.stringify({
+        shallowChildCount: shallow.childNodes.length,
+        deepChildCount: deep.childNodes.length,
+        deepIsNotSameNode: deep !== src,
+        deepOwnerIsPrimary: deep.ownerDocument === document,
+        srcStillInParsedDoc: src.ownerDocument === parsed,
+        deepText: deep.textContent,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      shallowChildCount: 0,
+      deepChildCount: 1,
+      deepIsNotSameNode: true,
+      deepOwnerIsPrimary: true,
+      srcStillInParsedDoc: true,
+      deepText: 'a',
+    });
+  });
+
+  it('document.importNode() throws NotSupportedError for a document node, TypeError for a non-Node', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const parsed = new DOMParser().parseFromString('<html><body></body></html>', 'text/html');
+      let caughtDoc, caughtNonNode;
+      try { document.importNode(parsed); } catch (e) { caughtDoc = { name: e.name, isDOMException: e instanceof DOMException }; }
+      try { document.importNode('not a node'); } catch (e) { caughtNonNode = e.constructor.name; }
+      JSON.stringify({ caughtDoc, caughtNonNode });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      caughtDoc: { name: 'NotSupportedError', isDOMException: true },
+      caughtNonNode: 'TypeError',
+    });
+  });
 });
