@@ -58,7 +58,12 @@ const char* kBlobBootstrapScript = R"JS(
   function File(parts, name, options) {
     Blob.call(this, parts, options);
     this.name = String(name);
-    this.lastModified = (options && typeof options.lastModified === 'number') ? options.lastModified : Date.now();
+    if (options && options.lastModified !== undefined) {
+      var n = Number(options.lastModified);
+      this.lastModified = (isNaN(n) || !isFinite(n)) ? 0 : Math.trunc(n);
+    } else {
+      this.lastModified = Date.now();
+    }
   }
   File.prototype = Object.create(Blob.prototype);
   File.prototype.constructor = File;
