@@ -263,10 +263,12 @@ dom.dispose() // ← always pair with create()
       singleton document). Supporting a second live document is an
       architecture change, not a binding addition — deferred to its own pass.
 - [x] `document.doctype` / `DocumentType` node
-- [ ] Form validity API (`ValidityState`, `checkValidity()` / `reportValidity()` / `setCustomValidity()`) —
-      deferred as its own focused follow-up (per-input-type validation rules
-      are a meaningfully sized feature on their own, and the lowest-priority
-      item in this list).
+- [x] Form validity API (`ValidityState`, `checkValidity()` / `reportValidity()` / `setCustomValidity()`,
+      `element.validity` / `.willValidate` / `.validationMessage`) — covers
+      `required`, `pattern`, `min`/`max`/`minlength`/`maxlength`, and
+      `type="email"/"url"/"number"`. `step` is not modeled (`stepMismatch`
+      is always `false`); `reportValidity()` is an alias for `checkValidity()`
+      since there's no UI layer to report against (same as jsdom).
 
 ---
 
