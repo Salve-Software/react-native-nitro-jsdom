@@ -256,4 +256,60 @@ describe('JSDOM node traversal', () => {
     `);
     expect(JSON.parse(result)).toEqual({ isDisconnected: true });
   });
+
+  it('Node exposes the WHATWG numeric type constants as static properties', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        staticElement: Node.ELEMENT_NODE,
+        staticText: Node.TEXT_NODE,
+        staticComment: Node.COMMENT_NODE,
+        staticDocument: Node.DOCUMENT_NODE,
+        staticDocumentFragment: Node.DOCUMENT_FRAGMENT_NODE,
+        DocumentStatic: Document.DOCUMENT_NODE,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      staticElement: 1,
+      staticText: 3,
+      staticComment: 8,
+      staticDocument: 9,
+      staticDocumentFragment: 11,
+      DocumentStatic: 9,
+    });
+  });
+
+  it('node instances inherit the type constants and can compare nodeType against them', async () => {
+    dom = JSDOM.create('<html><body><div id="d">hi<!--c--></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const text = div.firstChild;
+      const comment = div.lastChild;
+      const fragment = document.createDocumentFragment();
+      JSON.stringify({
+        elMatches: div.nodeType === Node.ELEMENT_NODE,
+        textMatches: text.nodeType === Node.TEXT_NODE,
+        commentMatches: comment.nodeType === Node.COMMENT_NODE,
+        fragmentMatches: fragment.nodeType === Node.DOCUMENT_FRAGMENT_NODE,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      elMatches: true,
+      textMatches: true,
+      commentMatches: true,
+      fragmentMatches: true,
+    });
+  });
+
+  it('document exposes nodeType/nodeName and the type constants as a shortcut', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        docStatic: document.ELEMENT_NODE,
+        docNodeType: document.nodeType,
+        docNodeName: document.nodeName,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ docStatic: 1, docNodeType: 9, docNodeName: '#document' });
+  });
 });

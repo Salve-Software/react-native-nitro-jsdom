@@ -1282,6 +1282,8 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, node_proto, "parentNode",       js_el_get_parentNode,      nullptr);
   define_prop(ctx, node_proto, "parentElement",    js_el_get_parentElement,   nullptr);
 
+  define_node_type_constants(ctx, node_proto);
+
   JS_SetClassProto(ctx, js_node_class_id, JS_DupValue(ctx, node_proto));
 
   // ── Element proto: inherits Node, adds Element-specific APIs ─────────────
@@ -1329,7 +1331,9 @@ void ElementBindings::install(JSContext* ctx) {
   JSValue node_proto_ref    = JS_GetClassProto(ctx, js_node_class_id);
   JSValue element_proto_ref = JS_GetClassProto(ctx, js_element_class_id);
 
-  JS_FreeValue(ctx, define_global_constructor(ctx, "Node", node_proto_ref));
+  JSValue node_ctor = define_global_constructor(ctx, "Node", node_proto_ref);
+  define_node_type_constants(ctx, node_ctor);
+  JS_FreeValue(ctx, node_ctor);
   JSValue element_ctor = define_global_constructor(ctx, "Element", element_proto_ref);
   JSValue global = JS_GetGlobalObject(ctx);
   JS_SetPropertyStr(ctx, global, "HTMLElement", element_ctor);

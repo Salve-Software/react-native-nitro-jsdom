@@ -75,6 +75,11 @@ using SetterFn = JSValue (*)(JSContext*, JSValue, JSValue);
 
 void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter, SetterFn setter = nullptr);
 
+// Sets the WHATWG DOM Node.ELEMENT_NODE-style numeric constants (ELEMENT_NODE,
+// TEXT_NODE, COMMENT_NODE, ...) as read-only enumerable properties on `obj`.
+// Values match lxb_dom_node_type_t, which already mirrors the DOM spec numbering.
+void define_node_type_constants(JSContext* ctx, JSValue obj);
+
 // ── Global constructor helper (instanceof support) ────────────────────────────
 
 JSValue js_illegal_constructor(JSContext* ctx, JSValue this_val, int argc, JSValue* argv);

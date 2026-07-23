@@ -215,10 +215,15 @@ void DocumentBindings::install(JSContext* ctx) {
   RuntimeContext* rctx = get_ctx(ctx);
   bool hidden = !(rctx && rctx->pretend_to_be_visual);
   JS_SetPropertyStr(ctx, doc, "hidden", JS_NewBool(ctx, hidden));
+  JS_SetPropertyStr(ctx, doc, "nodeType", JS_NewInt32(ctx, 9 /* DOCUMENT_NODE */));
+  JS_SetPropertyStr(ctx, doc, "nodeName", JS_NewString(ctx, "#document"));
 
   JSValue document_proto = JS_NewObject(ctx);
   JS_SetPrototype(ctx, doc, document_proto);
-  JS_FreeValue(ctx, define_global_constructor(ctx, "Document", document_proto));
+  define_node_type_constants(ctx, document_proto);
+  JSValue document_ctor = define_global_constructor(ctx, "Document", document_proto);
+  define_node_type_constants(ctx, document_ctor);
+  JS_FreeValue(ctx, document_ctor);
   JS_FreeValue(ctx, document_proto);
 
   JS_SetPropertyStr(ctx, global, "document", doc);
