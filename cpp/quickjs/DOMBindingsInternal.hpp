@@ -56,6 +56,24 @@ std::string serialize_node(lxb_dom_node_t* node);
 RuntimeContext* get_ctx(JSContext* ctx);
 LexborDocument* get_doc(JSContext* ctx);
 
+// Resolves the LexborDocument that owns `node`'s tree — the sandbox's
+// primary document, or a secondary document created via
+// DOMParser.parseFromString()/document.implementation.createHTMLDocument()
+// (see DOMParserBindings). Any binding that *creates* a new node relative to
+// an existing one (textContent/innerHTML setters, insertAdjacentHTML,
+// before/after/replaceWith/append/prepend's string-to-text-node coercion,
+// matches()/closest()) must resolve the document this way instead of using
+// get_doc(ctx) directly — otherwise a node from a secondary document would
+// have children created in the *primary* document's memory arena, which is
+// undefined behavior once either document is destroyed. Falls back to the
+// primary document if `node`'s owner isn't registered (shouldn't happen).
+LexborDocument* doc_for_node(JSContext* ctx, void* node);
+
+// Registers `doc` in the runtime's document registry so doc_for_node() can
+// resolve nodes created inside it back to `doc`. Call once, right after the
+// document is constructed/parsed.
+void register_document(JSContext* ctx, LexborDocument* doc);
+
 // ── Node wrapper cache ────────────────────────────────────────────────────────
 
 void invalidate_node_cache(JSContext* ctx, RuntimeContext* rctx, void* node);
@@ -74,6 +92,17 @@ using GetterFn = JSValue (*)(JSContext*, JSValue);
 using SetterFn = JSValue (*)(JSContext*, JSValue, JSValue);
 
 void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter, SetterFn setter = nullptr);
+
+// Sets the WHATWG DOM Node.ELEMENT_NODE-style numeric constants (ELEMENT_NODE,
+// TEXT_NODE, COMMENT_NODE, ...) as read-only enumerable properties on `obj`.
+// Values match lxb_dom_node_type_t, which already mirrors the DOM spec numbering.
+void define_node_type_constants(JSContext* ctx, JSValue obj);
+
+// Builds the plain {name, publicId, systemId, nodeType, nodeName} object used
+// to represent a document's DocumentType node (see doc->doctype()). Shared by
+// DocumentBindings (which layers its own identity cache on top) and
+// DOMParserBindings (which doesn't cache — see its call site).
+JSValue build_doctype_object(JSContext* ctx, LexborDocument* doc, void* doctype);
 
 // ── Global constructor helper (instanceof support) ────────────────────────────
 

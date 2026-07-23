@@ -52,6 +52,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/StyleBindings.cpp
   ../cpp/quickjs/bindings/ElementBindings.cpp
   ../cpp/quickjs/bindings/DocumentBindings.cpp
+  ../cpp/quickjs/bindings/DOMParserBindings.cpp
   ../cpp/quickjs/bindings/EventBindings.cpp
   ../cpp/quickjs/bindings/TimerBindings.cpp
   ../cpp/quickjs/bindings/WindowBindings.cpp

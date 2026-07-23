@@ -126,6 +126,26 @@ LexborDocument* get_doc(JSContext* ctx) {
   return rctx ? rctx->document : nullptr;
 }
 
+LexborDocument* doc_for_node(JSContext* ctx, void* node) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx) return nullptr;
+  if (node) {
+    auto* dom_node = static_cast<lxb_dom_node_t*>(node);
+    auto it = rctx->document_registry.find(dom_node->owner_document);
+    if (it != rctx->document_registry.end()) return it->second;
+  }
+  return rctx->document;
+}
+
+void register_document(JSContext* ctx, LexborDocument* doc) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !doc) return;
+  auto* html_doc = static_cast<lxb_html_document_t*>(doc->documentHtmlPtr());
+  if (!html_doc) return;
+  void* dom_doc = lxb_dom_interface_document(html_doc);
+  rctx->document_registry[dom_doc] = doc;
+}
+
 void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter, SetterFn setter) {
   JSAtom atom = JS_NewAtom(ctx, name);
   JSValue get_fn = JS_NewCFunction2(ctx, (JSCFunction*)getter, name, 0, JS_CFUNC_getter, 0);
@@ -134,6 +154,39 @@ void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter,
       : JS_UNDEFINED;
   JS_DefinePropertyGetSet(ctx, obj, atom, get_fn, set_fn, JS_PROP_CONFIGURABLE);
   JS_FreeAtom(ctx, atom);
+}
+
+void define_node_type_constants(JSContext* ctx, JSValue obj) {
+  static const struct { const char* name; int32_t value; } kNodeTypeConstants[] = {
+    { "ELEMENT_NODE",                1  },
+    { "ATTRIBUTE_NODE",              2  },
+    { "TEXT_NODE",                   3  },
+    { "CDATA_SECTION_NODE",          4  },
+    { "ENTITY_REFERENCE_NODE",       5  },
+    { "ENTITY_NODE",                 6  },
+    { "PROCESSING_INSTRUCTION_NODE", 7  },
+    { "COMMENT_NODE",                8  },
+    { "DOCUMENT_NODE",               9  },
+    { "DOCUMENT_TYPE_NODE",          10 },
+    { "DOCUMENT_FRAGMENT_NODE",      11 },
+    { "NOTATION_NODE",               12 },
+  };
+  for (const auto& c : kNodeTypeConstants) {
+    JS_DefinePropertyValueStr(ctx, obj, c.name, JS_NewInt32(ctx, c.value), JS_PROP_ENUMERABLE);
+  }
+}
+
+JSValue build_doctype_object(JSContext* ctx, LexborDocument* doc, void* doctype) {
+  JSValue obj = JS_NewObject(ctx);
+  std::string name = doc->doctypeName(doctype);
+  JS_SetPropertyStr(ctx, obj, "name", JS_NewStringLen(ctx, name.data(), name.size()));
+  std::string publicId = doc->doctypePublicId(doctype);
+  JS_SetPropertyStr(ctx, obj, "publicId", JS_NewStringLen(ctx, publicId.data(), publicId.size()));
+  std::string systemId = doc->doctypeSystemId(doctype);
+  JS_SetPropertyStr(ctx, obj, "systemId", JS_NewStringLen(ctx, systemId.data(), systemId.size()));
+  JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 10));
+  JS_SetPropertyStr(ctx, obj, "nodeName", JS_NewStringLen(ctx, name.data(), name.size()));
+  return obj;
 }
 
 JSValue js_illegal_constructor(JSContext* ctx, JSValue, int, JSValue*) {

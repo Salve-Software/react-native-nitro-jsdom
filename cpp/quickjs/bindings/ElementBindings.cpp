@@ -223,7 +223,7 @@ JSValue js_el_set_value(JSContext* ctx, JSValue this_val, JSValue val) {
       if (has_obs) rctx->mutation_observers->disconnectDetachedTargets(old_children);
     }
 
-    get_doc(ctx)->setTextContentOnEl(el, str);
+    doc_for_node(ctx, el)->setTextContentOnEl(el, str);
 
     if (has_obs) {
       std::vector<void*> new_children;
@@ -340,7 +340,7 @@ JSValue js_el_set_textContent(JSContext* ctx, JSValue this_val, JSValue val) {
         if (has_observers) rctx->mutation_observers->disconnectDetachedTargets(old_children);
       }
     }
-    get_doc(ctx)->setTextContentOnEl(el, str);
+    doc_for_node(ctx, node)->setTextContentOnEl(el, str);
     if (has_observers) {
       std::vector<void*> new_children;
       lxb_dom_node_t* child = node->first_child;
@@ -385,7 +385,7 @@ JSValue js_el_set_innerHTML(JSContext* ctx, JSValue this_val, JSValue val) {
     if (has_observers) rctx->mutation_observers->disconnectDetachedTargets(old_children);
   }
 
-  get_doc(ctx)->setInnerHTMLOnEl(el, html);
+  doc_for_node(ctx, el)->setInnerHTMLOnEl(el, html);
   JS_FreeCString(ctx, html);
 
   if (has_observers) {
@@ -821,12 +821,15 @@ JSValue js_el_replaceChild(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   return JS_DupValue(ctx, argv[1]); // returns the replaced (old) child, per spec
 }
 
-lxb_dom_node_t* js_to_node_or_text(JSContext* ctx, JSValue val) {
+// `context_node` supplies the owning document for a string argument coerced
+// into a new text node (see doc_for_node()) — irrelevant when `val` is
+// already a node.
+lxb_dom_node_t* js_to_node_or_text(JSContext* ctx, JSValue val, lxb_dom_node_t* context_node) {
   auto* node = unwrap_node(ctx, val);
   if (node) return node;
   const char* str = JS_ToCString(ctx, val);
   if (!str) return nullptr;
-  void* text = get_doc(ctx)->createTextNode(str);
+  void* text = doc_for_node(ctx, context_node)->createTextNode(str);
   JS_FreeCString(ctx, str);
   return static_cast<lxb_dom_node_t*>(text);
 }
@@ -838,7 +841,7 @@ JSValue js_el_before(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) 
 
   std::vector<void*> inserted;
   for (int i = 0; i < argc; i++) {
-    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i], node);
     if (!n) continue;
     auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) { lxb_dom_node_insert_before(node, one); });
     inserted.insert(inserted.end(), batch.begin(), batch.end());
@@ -860,7 +863,7 @@ JSValue js_el_after(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
 
   std::vector<void*> inserted;
   for (int i = 0; i < argc; i++) {
-    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i], node);
     if (!n) continue;
     auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) {
       if (ref) lxb_dom_node_insert_before(ref, one); else lxb_dom_node_insert_child(parent, one);
@@ -884,7 +887,7 @@ JSValue js_el_replaceWith(JSContext* ctx, JSValue this_val, int argc, JSValue* a
 
   std::vector<void*> inserted;
   for (int i = 0; i < argc; i++) {
-    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i], node);
     if (!n) continue;
     auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) { lxb_dom_node_insert_before(node, one); });
     inserted.insert(inserted.end(), batch.begin(), batch.end());
@@ -906,7 +909,7 @@ JSValue js_el_append(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) 
 
   std::vector<void*> inserted;
   for (int i = 0; i < argc; i++) {
-    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i], parent_node);
     if (!n) continue;
     auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) { lxb_dom_node_insert_child(parent_node, one); });
     inserted.insert(inserted.end(), batch.begin(), batch.end());
@@ -927,7 +930,7 @@ JSValue js_el_prepend(JSContext* ctx, JSValue this_val, int argc, JSValue* argv)
 
   std::vector<void*> inserted;
   for (int i = 0; i < argc; i++) {
-    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i]);
+    lxb_dom_node_t* n = js_to_node_or_text(ctx, argv[i], parent_node);
     if (!n) continue;
     auto batch = expand_and_insert(n, [&](lxb_dom_node_t* one) {
       if (ref) lxb_dom_node_insert_before(ref, one); else lxb_dom_node_insert_child(parent_node, one);
@@ -948,11 +951,12 @@ JSValue js_el_closest(JSContext* ctx, JSValue this_val, int argc, JSValue* argv)
   const char* sel = JS_ToCString(ctx, argv[0]);
   if (!sel) return JS_NULL;
 
+  auto* doc = doc_for_node(ctx, lxb_dom_interface_node(el));
   JSValue result = JS_NULL;
   for (lxb_dom_node_t* node = lxb_dom_interface_node(el);
        node && node->type == LXB_DOM_NODE_TYPE_ELEMENT;
        node = node->parent) {
-    if (get_doc(ctx)->matchesSelector(lxb_dom_interface_element(node), sel)) {
+    if (doc->matchesSelector(lxb_dom_interface_element(node), sel)) {
       result = make_element(ctx, node);
       break;
     }
@@ -975,7 +979,7 @@ JSValue js_el_insertAdjacentHTML(JSContext* ctx, JSValue this_val, int argc, JSV
   JS_FreeCString(ctx, position);
 
   lxb_dom_node_t* node = lxb_dom_interface_node(el);
-  auto parsed = get_doc(ctx)->parseFragmentNodes(el, html);
+  auto parsed = doc_for_node(ctx, node)->parseFragmentNodes(el, html);
   JS_FreeCString(ctx, html);
   if (parsed.empty()) return JS_UNDEFINED;
 
@@ -1028,7 +1032,7 @@ JSValue js_el_matches(JSContext* ctx, JSValue this_val, int argc, JSValue* argv)
   if (!el || argc < 1) return JS_FALSE;
   const char* sel = JS_ToCString(ctx, argv[0]);
   if (!sel) return JS_FALSE;
-  bool result = get_doc(ctx)->matchesSelector(el, sel);
+  bool result = doc_for_node(ctx, el)->matchesSelector(el, sel);
   JS_FreeCString(ctx, sel);
   return JS_NewBool(ctx, result);
 }
@@ -1038,7 +1042,7 @@ JSValue js_el_querySelector(JSContext* ctx, JSValue this_val, int argc, JSValue*
   if (!el || argc < 1) return JS_NULL;
   const char* sel = JS_ToCString(ctx, argv[0]);
   if (!sel) return JS_NULL;
-  void* found = get_doc(ctx)->querySelectorFromEl(el, sel);
+  void* found = doc_for_node(ctx, el)->querySelectorFromEl(el, sel);
   JS_FreeCString(ctx, sel);
   return make_element(ctx, found);
 }
@@ -1048,7 +1052,7 @@ JSValue js_el_querySelectorAll(JSContext* ctx, JSValue this_val, int argc, JSVal
   if (!el || argc < 1) return JS_NewArray(ctx);
   const char* sel = JS_ToCString(ctx, argv[0]);
   if (!sel) return JS_NewArray(ctx);
-  auto results = get_doc(ctx)->querySelectorAllFromEl(el, sel);
+  auto results = doc_for_node(ctx, el)->querySelectorAllFromEl(el, sel);
   JS_FreeCString(ctx, sel);
   return make_element_array(ctx, results);
 }
@@ -1229,7 +1233,7 @@ JSValue js_el_normalize(JSContext* ctx, JSValue this_val, int, JSValue*) {
     invalidate_node_cache_batch(ctx, get_ctx(ctx), text_nodes);
   }
 
-  get_doc(ctx)->normalize(node);
+  doc_for_node(ctx, node)->normalize(node);
   return JS_UNDEFINED;
 }
 
@@ -1238,7 +1242,7 @@ JSValue js_el_compareDocumentPosition(JSContext* ctx, JSValue this_val, int argc
   if (!node || argc < 1) return JS_NewInt32(ctx, 0);
   auto* other = unwrap_node(ctx, argv[0]);
   if (!other) return JS_NewInt32(ctx, 0);
-  return JS_NewInt32(ctx, get_doc(ctx)->compareDocumentPosition(node, other));
+  return JS_NewInt32(ctx, doc_for_node(ctx, node)->compareDocumentPosition(node, other));
 }
 
 } // namespace
@@ -1281,6 +1285,8 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, node_proto, "previousSibling",  js_el_get_previousSibling, nullptr);
   define_prop(ctx, node_proto, "parentNode",       js_el_get_parentNode,      nullptr);
   define_prop(ctx, node_proto, "parentElement",    js_el_get_parentElement,   nullptr);
+
+  define_node_type_constants(ctx, node_proto);
 
   JS_SetClassProto(ctx, js_node_class_id, JS_DupValue(ctx, node_proto));
 
@@ -1329,7 +1335,9 @@ void ElementBindings::install(JSContext* ctx) {
   JSValue node_proto_ref    = JS_GetClassProto(ctx, js_node_class_id);
   JSValue element_proto_ref = JS_GetClassProto(ctx, js_element_class_id);
 
-  JS_FreeValue(ctx, define_global_constructor(ctx, "Node", node_proto_ref));
+  JSValue node_ctor = define_global_constructor(ctx, "Node", node_proto_ref);
+  define_node_type_constants(ctx, node_ctor);
+  JS_FreeValue(ctx, node_ctor);
   JSValue element_ctor = define_global_constructor(ctx, "Element", element_proto_ref);
   JSValue global = JS_GetGlobalObject(ctx);
   JS_SetPropertyStr(ctx, global, "HTMLElement", element_ctor);

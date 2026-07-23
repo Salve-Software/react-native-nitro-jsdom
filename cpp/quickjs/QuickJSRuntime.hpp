@@ -95,6 +95,24 @@ struct RuntimeContext {
   // back-pointer to an attached shadow root, so we track it ourselves.
   std::unordered_map<void*, void*> element_shadow_roots;
 
+  // Secondary documents created via DOMParser.parseFromString() /
+  // document.implementation.createHTMLDocument() (see DOMParserBindings).
+  // Owned here rather than by their JS wrapper's finalizer: QuickJS class
+  // finalizers only receive a JSRuntime*, not the JSContext needed to safely
+  // touch document_registry below, so they're freed together with the rest
+  // of the sandbox instead of individually via GC.
+  std::vector<std::unique_ptr<LexborDocument>> extra_documents;
+
+  // Raw lexbor document pointer (lxb_dom_document_t*) -> the LexborDocument
+  // wrapper that owns it (primary sandbox document, or one of
+  // extra_documents). Lets node-scoped bindings that create new nodes
+  // (textContent/innerHTML setters, insertAdjacentHTML, matches()/closest())
+  // resolve the *correct* owning document instead of assuming the sandbox's
+  // primary `document` — which would otherwise create nodes in the wrong
+  // document's memory arena when called on a DOMParser-produced element.
+  // See doc_for_node() in DOMBindingsInternal.
+  std::unordered_map<void*, LexborDocument*> document_registry;
+
   ~RuntimeContext() = default;
 };
 

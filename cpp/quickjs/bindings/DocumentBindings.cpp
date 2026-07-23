@@ -147,16 +147,7 @@ JSValue js_doc_get_doctype(JSContext* ctx, JSValue) {
     return JS_DupValue(ctx, *static_cast<JSValue*>(rctx->doctype_wrapper));
   }
 
-  JSValue obj = JS_NewObject(ctx);
-  std::string name = get_doc(ctx)->doctypeName(dt);
-  JS_SetPropertyStr(ctx, obj, "name",      JS_NewStringLen(ctx, name.data(), name.size()));
-  std::string publicId = get_doc(ctx)->doctypePublicId(dt);
-  JS_SetPropertyStr(ctx, obj, "publicId",  JS_NewStringLen(ctx, publicId.data(), publicId.size()));
-  std::string systemId = get_doc(ctx)->doctypeSystemId(dt);
-  JS_SetPropertyStr(ctx, obj, "systemId",  JS_NewStringLen(ctx, systemId.data(), systemId.size()));
-  JS_SetPropertyStr(ctx, obj, "nodeType",  JS_NewInt32(ctx, 10));
-  JS_SetPropertyStr(ctx, obj, "nodeName",  JS_NewStringLen(ctx, name.data(), name.size()));
-
+  JSValue obj = build_doctype_object(ctx, get_doc(ctx), dt);
   if (rctx) rctx->doctype_wrapper = new JSValue(JS_DupValue(ctx, obj));
   return obj;
 }
@@ -229,10 +220,15 @@ void DocumentBindings::install(JSContext* ctx) {
   RuntimeContext* rctx = get_ctx(ctx);
   bool hidden = !(rctx && rctx->pretend_to_be_visual);
   JS_SetPropertyStr(ctx, doc, "hidden", JS_NewBool(ctx, hidden));
+  JS_SetPropertyStr(ctx, doc, "nodeType", JS_NewInt32(ctx, 9 /* DOCUMENT_NODE */));
+  JS_SetPropertyStr(ctx, doc, "nodeName", JS_NewString(ctx, "#document"));
 
   JSValue document_proto = JS_NewObject(ctx);
   JS_SetPrototype(ctx, doc, document_proto);
-  JS_FreeValue(ctx, define_global_constructor(ctx, "Document", document_proto));
+  define_node_type_constants(ctx, document_proto);
+  JSValue document_ctor = define_global_constructor(ctx, "Document", document_proto);
+  define_node_type_constants(ctx, document_ctor);
+  JS_FreeValue(ctx, document_ctor);
   JS_FreeValue(ctx, document_proto);
 
   JS_SetPropertyStr(ctx, global, "document", doc);
