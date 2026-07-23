@@ -247,4 +247,52 @@ describe('JSDOM events', () => {
     `);
     expect(JSON.parse(result)).toEqual(['blur', true]);
   });
+
+  it('window.onerror fires for an uncaught synchronous error, and evaluate() still rejects', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    await dom.evaluate(`
+      window.__errors = [];
+      window.onerror = (message) => { window.__errors.push(message); };
+    `);
+    await expect(dom.evaluate(`null.boom`)).rejects.toThrow();
+    const result = await dom.evaluate('JSON.stringify(window.__errors.length)');
+    expect(JSON.parse(result)).toBe(1);
+  });
+
+  it('window "error" event carries message and error properties', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    await dom.evaluate(`
+      window.__lastError = null;
+      window.addEventListener('error', (e) => {
+        window.__lastError = { message: e.message, isError: e.error instanceof Error };
+      });
+    `);
+    await expect(dom.evaluate(`undefinedVar123`)).rejects.toThrow();
+    const result = await dom.evaluate('JSON.stringify(window.__lastError)');
+    const parsed = JSON.parse(result);
+    expect(parsed.isError).toBe(true);
+    expect(typeof parsed.message).toBe('string');
+  });
+
+  it('window fires unhandledrejection for an unhandled promise rejection, and evaluate() still rejects', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    await dom.evaluate(`
+      window.__reasons = [];
+      window.addEventListener('unhandledrejection', (e) => { window.__reasons.push(e.reason && e.reason.message); });
+    `);
+    await expect(dom.evaluate(`Promise.reject(new Error('nope'))`)).rejects.toThrow();
+    const result = await dom.evaluate('JSON.stringify(window.__reasons)');
+    expect(JSON.parse(result)).toEqual(['nope']);
+  });
+
+  it('window.onunhandledrejection fires for an unhandled promise rejection', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    await dom.evaluate(`
+      window.__called = false;
+      window.onunhandledrejection = () => { window.__called = true; };
+    `);
+    await expect(dom.evaluate(`Promise.reject(new Error('boom'))`)).rejects.toThrow();
+    const result = await dom.evaluate('window.__called');
+    expect(result).toBe('true');
+  });
 });

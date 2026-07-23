@@ -2,9 +2,9 @@
 #include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
+#include <cstdlib>
 #include <cstring>
 #include <optional>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -346,12 +346,12 @@ JSValue js_native_random_bytes(JSContext* ctx, JSValue, int argc, JSValue* argv)
   if (argc >= 1) JS_ToInt32(ctx, &count, argv[0]);
   if (count < 0) count = 0;
 
-  static thread_local std::mt19937 gen{std::random_device{}()};
-  std::uniform_int_distribution<int> dist(0, 255);
+  std::vector<uint8_t> bytes(static_cast<size_t>(count));
+  if (count > 0) arc4random_buf(bytes.data(), bytes.size());
 
   JSValue arr = JS_NewArray(ctx);
   for (int32_t i = 0; i < count; i++) {
-    JS_SetPropertyUint32(ctx, arr, static_cast<uint32_t>(i), JS_NewInt32(ctx, dist(gen)));
+    JS_SetPropertyUint32(ctx, arr, static_cast<uint32_t>(i), JS_NewInt32(ctx, bytes[static_cast<size_t>(i)]));
   }
   return arr;
 }
@@ -372,6 +372,18 @@ const char* kCryptoBootstrapScript = R"JS(
     var view = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
     for (var i = 0; i < bytes.length; i++) view[i] = bytes[i];
     return typedArray;
+  };
+  globalThis.crypto.randomUUID = function() {
+    var bytes = __nativeRandomBytes(16);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    var hex = [];
+    for (var i = 0; i < 16; i++) {
+      var h = bytes[i].toString(16);
+      hex.push(h.length === 1 ? '0' + h : h);
+    }
+    return hex.slice(0, 4).join('') + '-' + hex.slice(4, 6).join('') + '-' +
+      hex.slice(6, 8).join('') + '-' + hex.slice(8, 10).join('') + '-' + hex.slice(10, 16).join('');
   };
 })();
 )JS";
