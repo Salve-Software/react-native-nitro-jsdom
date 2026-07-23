@@ -167,4 +167,93 @@ describe('JSDOM node traversal', () => {
       equalNodeDifferent: false,
     });
   });
+
+  it('normalize() merges adjacent text nodes and drops empty ones', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      div.appendChild(document.createTextNode('a'));
+      div.appendChild(document.createTextNode('b'));
+      div.appendChild(document.createTextNode(''));
+      div.appendChild(document.createTextNode('c'));
+      div.normalize();
+      JSON.stringify({
+        childNodes: div.childNodes.length,
+        text: div.firstChild.textContent,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ childNodes: 1, text: 'abc' });
+  });
+
+  it('normalize() removes an all-empty run of adjacent text nodes entirely', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      div.appendChild(document.createTextNode(''));
+      div.appendChild(document.createTextNode(''));
+      div.normalize();
+      JSON.stringify({ childNodes: div.childNodes.length });
+    `);
+    expect(JSON.parse(result)).toEqual({ childNodes: 0 });
+  });
+
+  it('normalize() recurses into descendant elements without touching unrelated siblings', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span id="s"></span></div></body></html>');
+    const result = await dom.evaluate(`
+      const span = document.getElementById('s');
+      span.appendChild(document.createTextNode('x'));
+      span.appendChild(document.createTextNode('y'));
+      document.getElementById('d').normalize();
+      JSON.stringify({ spanChildNodes: span.childNodes.length, spanText: span.textContent });
+    `);
+    expect(JSON.parse(result)).toEqual({ spanChildNodes: 1, spanText: 'xy' });
+  });
+
+  it('compareDocumentPosition() reports ancestor/descendant relationships', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const parent = document.getElementById('parent');
+      const child = document.getElementById('child');
+      const CONTAINS = 8, CONTAINED_BY = 16, PRECEDING = 2, FOLLOWING = 4;
+      JSON.stringify({
+        parentVsChild: parent.compareDocumentPosition(child),
+        childVsParent: child.compareDocumentPosition(parent),
+        expectedParentVsChild: CONTAINED_BY | FOLLOWING,
+        expectedChildVsParent: CONTAINS | PRECEDING,
+        selfVsSelf: parent.compareDocumentPosition(parent),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      parentVsChild: 20,
+      childVsParent: 10,
+      expectedParentVsChild: 20,
+      expectedChildVsParent: 10,
+      selfVsSelf: 0,
+    });
+  });
+
+  it('compareDocumentPosition() reports PRECEDING/FOLLOWING for sibling subtrees', async () => {
+    dom = JSDOM.create('<html><body><div id="a"></div><div id="b"></div></body></html>');
+    const result = await dom.evaluate(`
+      const a = document.getElementById('a');
+      const b = document.getElementById('b');
+      JSON.stringify({
+        aVsB: a.compareDocumentPosition(b),
+        bVsA: b.compareDocumentPosition(a),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ aVsB: 4, bVsA: 2 });
+  });
+
+  it('compareDocumentPosition() reports DISCONNECTED for nodes in different trees', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const detached = document.createElement('span');
+      const position = div.compareDocumentPosition(detached);
+      const DISCONNECTED = 1;
+      JSON.stringify({ isDisconnected: (position & DISCONNECTED) === DISCONNECTED });
+    `);
+    expect(JSON.parse(result)).toEqual({ isDisconnected: true });
+  });
 });

@@ -1210,6 +1210,37 @@ JSValue js_el_isEqualNode(JSContext* ctx, JSValue this_val, int argc, JSValue* a
   return JS_NewBool(ctx, nodes_equal(node, other));
 }
 
+void collect_text_descendants(lxb_dom_node_t* node, std::vector<void*>& out) {
+  for (lxb_dom_node_t* child = node->first_child; child; child = child->next) {
+    if (child->type == LXB_DOM_NODE_TYPE_TEXT) out.push_back(child);
+    else if (child->first_child) collect_text_descendants(child, out);
+  }
+}
+
+JSValue js_el_normalize(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node) return JS_UNDEFINED;
+
+  // normalize() only merges/drops Text nodes (leaves, no children of their
+  // own), so a flat invalidate is enough — no need for the *_deep variant.
+  std::vector<void*> text_nodes;
+  collect_text_descendants(node, text_nodes);
+  if (!text_nodes.empty()) {
+    invalidate_node_cache_batch(ctx, get_ctx(ctx), text_nodes);
+  }
+
+  get_doc(ctx)->normalize(node);
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_compareDocumentPosition(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node || argc < 1) return JS_NewInt32(ctx, 0);
+  auto* other = unwrap_node(ctx, argv[0]);
+  if (!other) return JS_NewInt32(ctx, 0);
+  return JS_NewInt32(ctx, get_doc(ctx)->compareDocumentPosition(node, other));
+}
+
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
@@ -1236,6 +1267,8 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, node_proto, "replaceWith",  JS_NewCFunction(ctx, js_el_replaceWith,  "replaceWith",  0));
   JS_SetPropertyStr(ctx, node_proto, "isSameNode",   JS_NewCFunction(ctx, js_el_isSameNode,   "isSameNode",   1));
   JS_SetPropertyStr(ctx, node_proto, "isEqualNode",  JS_NewCFunction(ctx, js_el_isEqualNode,  "isEqualNode",  1));
+  JS_SetPropertyStr(ctx, node_proto, "normalize",    JS_NewCFunction(ctx, js_el_normalize,    "normalize",    0));
+  JS_SetPropertyStr(ctx, node_proto, "compareDocumentPosition", JS_NewCFunction(ctx, js_el_compareDocumentPosition, "compareDocumentPosition", 1));
 
   define_prop(ctx, node_proto, "nodeType",         js_el_get_nodeType,        nullptr);
   define_prop(ctx, node_proto, "nodeName",         js_el_get_nodeName,        nullptr);
