@@ -66,7 +66,7 @@ JSValue js_shadow_set_innerHTML(JSContext* ctx, JSValue this_val, JSValue val) {
   std::vector<void*> old_children;
   lxb_dom_node_t* child = node->first_child;
   while (child) { old_children.push_back(child); child = child->next; }
-  if (!old_children.empty()) invalidate_node_cache_batch(ctx, rctx, old_children);
+  if (!old_children.empty()) invalidate_node_cache_deep_batch(ctx, rctx, old_children);
 
   get_doc(ctx)->setInnerHTMLOnShadowRoot(shadow, shadow->host, html);
   JS_FreeCString(ctx, html);
@@ -103,11 +103,13 @@ JSValue js_el_attachShadow(JSContext* ctx, JSValue this_val, int argc, JSValue* 
     return JS_ThrowTypeError(ctx, "attachShadow() requires an options object with a 'mode' property");
   }
   JSValue mode_val = JS_GetPropertyStr(ctx, argv[0], "mode");
+  if (JS_IsException(mode_val)) return JS_EXCEPTION;
   const char* mode_str = JS_ToCString(ctx, mode_val);
   JS_FreeValue(ctx, mode_val);
-  bool is_open = mode_str && strcmp(mode_str, "open") == 0;
-  bool is_closed = mode_str && strcmp(mode_str, "closed") == 0;
-  if (mode_str) JS_FreeCString(ctx, mode_str);
+  if (!mode_str) return JS_EXCEPTION;
+  bool is_open = strcmp(mode_str, "open") == 0;
+  bool is_closed = strcmp(mode_str, "closed") == 0;
+  JS_FreeCString(ctx, mode_str);
   if (!is_open && !is_closed) {
     return JS_ThrowTypeError(ctx, "attachShadow() options.mode must be 'open' or 'closed'");
   }

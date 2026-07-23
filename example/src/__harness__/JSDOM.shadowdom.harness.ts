@@ -105,4 +105,19 @@ describe('JSDOM Shadow DOM', () => {
     `);
     expect(JSON.parse(result)).toBe('TypeError');
   });
+
+  it('attachShadow() propagates the real exception when the mode getter throws, instead of masking it', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      let caught;
+      try {
+        host.attachShadow({ get mode() { throw new RangeError('boom'); } });
+      } catch (e) {
+        caught = { name: e.constructor.name, message: e.message };
+      }
+      JSON.stringify(caught);
+    `);
+    expect(JSON.parse(result)).toEqual({ name: 'RangeError', message: 'boom' });
+  });
 });

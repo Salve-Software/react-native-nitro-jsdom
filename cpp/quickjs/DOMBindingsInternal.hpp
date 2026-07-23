@@ -62,6 +62,12 @@ void invalidate_node_cache(JSContext* ctx, RuntimeContext* rctx, void* node);
 void invalidate_node_cache_batch(JSContext* ctx, RuntimeContext* rctx, const std::vector<void*>& nodes);
 void clear_node_cache(JSContext* ctx, RuntimeContext* rctx);
 
+// Same as invalidate_node_cache_batch, but also invalidates every descendant
+// of each given node. Use before destroying a subtree with
+// lxb_dom_node_destroy_deep(): that frees descendants too, and a JS wrapper
+// left pointing at a freed descendant is a use-after-free waiting to happen.
+void invalidate_node_cache_deep_batch(JSContext* ctx, RuntimeContext* rctx, const std::vector<void*>& roots);
+
 // ── Accessor property helper ──────────────────────────────────────────────────
 
 using GetterFn = JSValue (*)(JSContext*, JSValue);
