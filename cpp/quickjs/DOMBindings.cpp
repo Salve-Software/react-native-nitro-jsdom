@@ -27,6 +27,7 @@
 #include "bindings/XmlSerializerBindings.hpp"
 #include "bindings/LayoutStubBindings.hpp"
 #include "bindings/TreeWalkerBindings.hpp"
+#include "bindings/EventTargetBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -64,6 +65,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   XmlSerializerBindings::install(ctx); // pure serialization, no ordering requirement beyond ElementBindings
   LayoutStubBindings::install(ctx); // needs Element's proto + globalThis.document to exist
   TreeWalkerBindings::install(ctx); // needs Element's proto (Node traversal props) + globalThis.document to exist
+  EventTargetBindings::install(ctx); // no dependencies
 
   // ── localStorage / sessionStorage ──────────────────────────────────────────
   {

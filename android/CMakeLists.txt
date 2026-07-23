@@ -72,6 +72,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/XmlSerializerBindings.cpp
   ../cpp/quickjs/bindings/LayoutStubBindings.cpp
   ../cpp/quickjs/bindings/TreeWalkerBindings.cpp
+  ../cpp/quickjs/bindings/EventTargetBindings.cpp
   ${QUICKJS_SOURCES}
 )
 
