@@ -268,6 +268,15 @@ const char* kUrlBootstrapScript = R"JS(
   URL.prototype.toString = function() { return this._href; };
   URL.prototype.toJSON = function() { return this._href; };
 
+  URL.canParse = function(url, base) {
+    try {
+      new URL(url, base);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   globalThis.URL = URL;
 })();
 )JS";
