@@ -84,17 +84,18 @@ describe('JSDOM navigator/matchMedia', () => {
   it('history.pushState/replaceState clone state, so mutating the caller object after the call does not leak in', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
-      const obj = { count: 1 };
-      history.pushState(obj, '');
-      obj.count = 999;
+      const pushed = { count: 1 };
+      history.pushState(pushed, '');
+      pushed.count = 999;
       const afterPushMutation = history.state;
-      history.replaceState(obj, '');
-      obj.count = 42;
+      const replaced = { count: 2 };
+      history.replaceState(replaced, '');
+      replaced.count = 888;
       const afterReplaceMutation = history.state;
-      JSON.stringify({ afterPushMutation, afterReplaceMutation, sameReference: history.state === obj });
+      JSON.stringify({ afterPushMutation, afterReplaceMutation, sameReference: history.state === replaced });
     `);
     expect(JSON.parse(result)).toEqual({
-      afterPushMutation: { count: 1 }, afterReplaceMutation: { count: 1 }, sameReference: false,
+      afterPushMutation: { count: 1 }, afterReplaceMutation: { count: 2 }, sameReference: false,
     });
   });
 
