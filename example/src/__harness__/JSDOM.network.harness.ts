@@ -143,4 +143,15 @@ describe('JSDOM fetch/XHR/AbortController', () => {
       header: '1',
     });
   });
+
+  it('crypto.randomUUID() returns a well-formed v4 UUID and unique values', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const a = crypto.randomUUID();
+      const b = crypto.randomUUID();
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+      JSON.stringify({ aMatches: uuidRe.test(a), bMatches: uuidRe.test(b), distinct: a !== b });
+    `);
+    expect(JSON.parse(result)).toEqual({ aMatches: true, bMatches: true, distinct: true });
+  });
 });

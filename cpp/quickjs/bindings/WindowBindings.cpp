@@ -373,6 +373,18 @@ const char* kCryptoBootstrapScript = R"JS(
     for (var i = 0; i < bytes.length; i++) view[i] = bytes[i];
     return typedArray;
   };
+  globalThis.crypto.randomUUID = function() {
+    var bytes = __nativeRandomBytes(16);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    var hex = [];
+    for (var i = 0; i < 16; i++) {
+      var h = bytes[i].toString(16);
+      hex.push(h.length === 1 ? '0' + h : h);
+    }
+    return hex.slice(0, 4).join('') + '-' + hex.slice(4, 6).join('') + '-' +
+      hex.slice(6, 8).join('') + '-' + hex.slice(8, 10).join('') + '-' + hex.slice(10, 16).join('');
+  };
 })();
 )JS";
 
