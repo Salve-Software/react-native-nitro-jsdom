@@ -106,6 +106,101 @@ describe('JSDOM Shadow DOM', () => {
     expect(JSON.parse(result)).toBe('TypeError');
   });
 
+  it('assignedNodes()/assignedElements() route light-DOM children to matching named/default slots', async () => {
+    dom = JSDOM.create(
+      '<html><body><div id="host"><span slot="title">Title</span>text-in-default-slot<p>also-default</p></div></body></html>'
+    );
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<slot name="title"></slot><slot></slot>';
+      const titleSlot = shadow.querySelector('slot[name="title"]');
+      const defaultSlot = shadow.querySelector('slot:not([name])');
+      JSON.stringify({
+        titleAssigned: titleSlot.assignedElements().map((el) => el.textContent),
+        defaultAssignedElements: defaultSlot.assignedElements().map((el) => el.tagName),
+        defaultAssignedNodesLength: defaultSlot.assignedNodes().length,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      titleAssigned: ['Title'],
+      defaultAssignedElements: ['P'],
+      defaultAssignedNodesLength: 2, // the bare text node + <p>
+    });
+  });
+
+  it('assignedNodes({flatten: true}) falls back to the slot\'s own fallback content when nothing is assigned', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<slot name="empty"><em>fallback</em></slot>';
+      const slot = shadow.querySelector('slot');
+      JSON.stringify({
+        withoutFlatten: slot.assignedNodes().length,
+        withFlatten: slot.assignedNodes({ flatten: true }).map((n) => n.tagName),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ withoutFlatten: 0, withFlatten: ['EM'] });
+  });
+
+  it('assignedNodes()/assignedElements() return [] for non-<slot> elements', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      JSON.stringify({ nodes: div.assignedNodes(), elements: div.assignedElements() });
+    `);
+    expect(JSON.parse(result)).toEqual({ nodes: [], elements: [] });
+  });
+
+  it('slotchange fires when a light-DOM child is appended/removed on the host', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<slot></slot>';
+      const slot = shadow.querySelector('slot');
+      const log = [];
+      slot.addEventListener('slotchange', () => log.push(slot.assignedNodes().length));
+
+      const child = document.createElement('span');
+      host.appendChild(child);
+      const afterAppend = log.slice();
+
+      host.removeChild(child);
+      JSON.stringify({ afterAppend, afterRemove: log });
+    `);
+    expect(JSON.parse(result)).toEqual({ afterAppend: [1], afterRemove: [1, 0] });
+  });
+
+  it('slotchange fires when a light-DOM child\'s slot attribute changes', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <div id="host"><span id="c">hi</span></div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<slot name="a"></slot><slot name="b"></slot>';
+      const slotA = shadow.querySelector('slot[name="a"]');
+      const slotB = shadow.querySelector('slot[name="b"]');
+      const log = [];
+      slotA.addEventListener('slotchange', () => log.push('a'));
+      slotB.addEventListener('slotchange', () => log.push('b'));
+
+      const child = document.getElementById('c');
+      child.setAttribute('slot', 'a');
+      const afterFirst = log.slice();
+
+      child.setAttribute('slot', 'b');
+      JSON.stringify({ afterFirst, afterSecond: log });
+    `);
+    // Moving the child from slot "a" to slot "b" fires slotchange on both:
+    // "a" loses its assignment (1 -> 0), "b" gains one (0 -> 1).
+    expect(JSON.parse(result)).toEqual({ afterFirst: ['a'], afterSecond: ['a', 'a', 'b'] });
+  });
+
   it('attachShadow() propagates the real exception when the mode getter throws, instead of masking it', async () => {
     dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
     const result = await dom.evaluate(`
