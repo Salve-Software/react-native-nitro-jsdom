@@ -189,7 +189,7 @@ JSValue js_el_addEventListener(JSContext* ctx, JSValue this_val, int argc, JSVal
 
   void* node = lxb_dom_interface_node(el);
   for (auto& l : rctx->listeners) {
-    if (l.node == node && l.event_type == event_type) {
+    if (l.node == node && l.event_type == event_type && !l.is_handler_property) {
       JSValue* stored = static_cast<JSValue*>(l.callback);
       if (JS_VALUE_GET_TAG(*stored) == JS_VALUE_GET_TAG(argv[1]) &&
           JS_VALUE_GET_PTR(*stored) == JS_VALUE_GET_PTR(argv[1]))
@@ -219,7 +219,7 @@ JSValue js_el_removeEventListener(JSContext* ctx, JSValue this_val, int argc, JS
 
   void* node = lxb_dom_interface_node(el);
   for (auto it = rctx->listeners.begin(); it != rctx->listeners.end(); ) {
-    if (it->node == node && it->event_type == event_type) {
+    if (it->node == node && it->event_type == event_type && !it->is_handler_property) {
       JSValue* stored_cb = static_cast<JSValue*>(it->callback);
       if (JS_VALUE_GET_TAG(*stored_cb) == JS_VALUE_GET_TAG(argv[1]) &&
           JS_VALUE_GET_PTR(*stored_cb) == JS_VALUE_GET_PTR(argv[1])) {
@@ -316,7 +316,27 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
         JS_FreeValue(ctx, cbs_to_fire[i]);
         continue;
       }
-      JSValue ret = JS_Call(ctx, cbs_to_fire[i], current_target, 1, &event_obj);
+      JSValue ret;
+      if (cb_is_handler_property[i] && event_type == "error") {
+        JSValue message_val = JS_GetPropertyStr(ctx, event_obj, "message");
+        JSValue error_val = JS_GetPropertyStr(ctx, event_obj, "error");
+        JSValue global = JS_GetGlobalObject(ctx);
+        JSValue location_val = JS_GetPropertyStr(ctx, global, "location");
+        JSValue source_val = JS_GetPropertyStr(ctx, location_val, "href");
+        JS_FreeValue(ctx, location_val);
+        JS_FreeValue(ctx, global);
+        JSValue lineno_val = JS_NewInt32(ctx, 0);
+        JSValue colno_val = JS_NewInt32(ctx, 0);
+        JSValue args[5] = { message_val, source_val, lineno_val, colno_val, error_val };
+        ret = JS_Call(ctx, cbs_to_fire[i], current_target, 5, args);
+        JS_FreeValue(ctx, message_val);
+        JS_FreeValue(ctx, source_val);
+        JS_FreeValue(ctx, lineno_val);
+        JS_FreeValue(ctx, colno_val);
+        JS_FreeValue(ctx, error_val);
+      } else {
+        ret = JS_Call(ctx, cbs_to_fire[i], current_target, 1, &event_obj);
+      }
       JS_FreeValue(ctx, cbs_to_fire[i]);
       if (JS_IsException(ret)) {
         JS_FreeValue(ctx, ret);
@@ -373,7 +393,7 @@ JSValue js_doc_addEventListener(JSContext* ctx, JSValue, int argc, JSValue* argv
           static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
 
   for (auto& l : rctx->listeners) {
-    if (l.node == doc_node && l.event_type == event_type) {
+    if (l.node == doc_node && l.event_type == event_type && !l.is_handler_property) {
       JSValue* stored = static_cast<JSValue*>(l.callback);
       if (JS_VALUE_GET_TAG(*stored) == JS_VALUE_GET_TAG(argv[1]) &&
           JS_VALUE_GET_PTR(*stored) == JS_VALUE_GET_PTR(argv[1]))
