@@ -20,6 +20,10 @@
 #include "bindings/CSSOMBindings.hpp"
 #include "bindings/ShadowRootBindings.hpp"
 #include "bindings/CustomElementsBindings.hpp"
+#include "bindings/CookieBindings.hpp"
+#include "bindings/TemplateBindings.hpp"
+#include "bindings/SlotBindings.hpp"
+#include "bindings/XmlSerializerBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -39,6 +43,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   ElementBindings::install(ctx);   // registers the Element class + proto
   ShadowRootBindings::install(ctx); // needs Element's proto + js_node_class_id's proto
   DocumentBindings::install(ctx);  // creates globalThis.document
+  CookieBindings::install(ctx);    // needs globalThis.document to exist
+  TemplateBindings::install(ctx);  // needs Element's proto
   CustomElementsBindings::install(ctx); // needs Element/ShadowRoot protos + globalThis.document
   CSSOMBindings::install(ctx);     // needs Element's proto + globalThis.document to exist
   EventBindings::install(ctx);     // needs Element's proto + globalThis.document to exist
@@ -50,6 +56,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   BlobBindings::install(ctx);      // uses TextEncoder/TextDecoder + btoa, so must run after both
   FetchBindings::install(ctx);     // XHR bootstrap uses `new Event(...)`, so must run after EventBindings
   FormBindings::install(ctx);      // uses globalThis.Element + globalThis.Event, so must run after both
+  SlotBindings::install(ctx);      // uses Event/dispatchEvent + Element/ShadowRoot protos, so must run after EventBindings/ShadowRootBindings
+  XmlSerializerBindings::install(ctx); // pure serialization, no ordering requirement beyond ElementBindings
 
   // ── localStorage / sessionStorage ──────────────────────────────────────────
   {
