@@ -83,4 +83,64 @@ describe('JSDOM fetch/XHR/AbortController', () => {
       dom.evaluate(`fetch('https://example.com', { signal: AbortSignal.abort() })`)
     ).rejects.toThrow();
   });
+
+  it('Request constructor defaults method to GET and wraps headers in a Headers instance', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const req = new Request('https://example.com/a', { headers: { 'X-Test': '1' } });
+      JSON.stringify({
+        url: req.url,
+        method: req.method,
+        header: req.headers.get('x-test'),
+        bodyUsed: req.bodyUsed,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      url: 'https://example.com/a',
+      method: 'GET',
+      header: '1',
+      bodyUsed: false,
+    });
+  });
+
+  it('fetch(new Request(...)) forwards the request method/headers/body to onFetch', async () => {
+    dom = JSDOM.create('<html><body></body></html>', {
+      onFetch: async (url, init) => {
+        expect(url).toBe('https://example.com/ping');
+        expect(init.method).toBe('POST');
+        expect(init.body).toBe('{"ping":true}');
+        return { status: 200, body: 'ok' };
+      },
+    });
+    const result = await dom.evaluate(`
+      (async () => {
+        const req = new Request('https://example.com/ping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ping: true }),
+        });
+        const res = await fetch(req);
+        return res.text();
+      })()
+    `);
+    expect(result).toBe('ok');
+  });
+
+  it('new Request(existingRequest, init) inherits url/headers and overrides only what init sets', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const base = new Request('https://example.com/b', { method: 'POST', headers: { 'X-Test': '1' } });
+      const derived = new Request(base, { method: 'PUT' });
+      JSON.stringify({
+        url: derived.url,
+        method: derived.method,
+        header: derived.headers.get('x-test'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      url: 'https://example.com/b',
+      method: 'PUT',
+      header: '1',
+    });
+  });
 });

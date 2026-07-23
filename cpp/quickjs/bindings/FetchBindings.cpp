@@ -138,19 +138,48 @@ const char* kFetchBootstrapScript = R"JS(
   };
   globalThis.Response = Response;
 
+  function Request(input, init) {
+    init = init || {};
+    var fromRequest = input instanceof Request;
+    this.url = fromRequest ? input.url : String(input);
+    this.method = (init.method || (fromRequest ? input.method : 'GET')).toUpperCase();
+    this.headers = init.headers instanceof Headers ? init.headers
+      : new Headers(init.headers || (fromRequest ? input.headers : undefined));
+    var initBody = (init.body === undefined) ? (fromRequest ? input._body : undefined) : init.body;
+    this._body = (initBody === undefined || initBody === null) ? undefined : initBody;
+    this.signal = init.signal || (fromRequest ? input.signal : undefined);
+    this.bodyUsed = false;
+  }
+  Request.prototype.text = function() {
+    this.bodyUsed = true;
+    return Promise.resolve(this._body === undefined ? '' : String(this._body));
+  };
+  Request.prototype.json = function() {
+    this.bodyUsed = true;
+    try {
+      return Promise.resolve(JSON.parse(this._body));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  };
+  Request.prototype.clone = function() {
+    return new Request(this.url, { method: this.method, headers: this.headers, body: this._body, signal: this.signal });
+  };
+  globalThis.Request = Request;
+
   globalThis.fetch = function(input, init) {
     return new Promise(function(resolve, reject) {
       try {
-        init = init || {};
-        if (init.signal && init.signal.aborted) {
-          reject(init.signal.reason !== undefined ? init.signal.reason : new Error('The operation was aborted'));
+        var req = new Request(input, init);
+        if (req.signal && req.signal.aborted) {
+          reject(req.signal.reason !== undefined ? req.signal.reason : new Error('The operation was aborted'));
           return;
         }
-        var url = typeof input === 'string' ? input : (input && input.url);
-        var method = (init.method || 'GET').toUpperCase();
-        var headers = normalizeHeaders(init.headers);
+        var url = req.url;
+        var method = req.method;
+        var headers = normalizeHeaders(req.headers);
         var headersJson = JSON.stringify(headers);
-        var body = (init.body === undefined || init.body === null) ? undefined : String(init.body);
+        var body = req._body === undefined ? undefined : String(req._body);
 
         var raw = __nativeFetchSync(url, method, headersJson, body);
         if (raw.error) {
