@@ -383,6 +383,39 @@ JSValue js_doc_addEventListener(JSContext* ctx, JSValue, int argc, JSValue* argv
   return JS_UNDEFINED;
 }
 
+JSValue js_doc_removeEventListener(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_UNDEFINED;
+  if (!rctx->document) return JS_UNDEFINED;
+
+  const char* type_str = JS_ToCString(ctx, argv[0]);
+  if (!type_str) return JS_UNDEFINED;
+  std::string event_type(type_str);
+  JS_FreeCString(ctx, type_str);
+
+  void* doc_node = lxb_dom_interface_node(
+      lxb_dom_interface_document(
+          static_cast<lxb_html_document_t*>(rctx->document->documentHtmlPtr())));
+
+  for (auto it = rctx->listeners.begin(); it != rctx->listeners.end(); ) {
+    if (it->node == doc_node && it->event_type == event_type) {
+      JSValue* stored_cb = static_cast<JSValue*>(it->callback);
+      if (JS_VALUE_GET_TAG(*stored_cb) == JS_VALUE_GET_TAG(argv[1]) &&
+          JS_VALUE_GET_PTR(*stored_cb) == JS_VALUE_GET_PTR(argv[1])) {
+        JS_FreeValue(ctx, *stored_cb);
+        delete stored_cb;
+        rctx->listeners.erase(it);
+        break; // remove first matching listener only (DOM spec)
+      } else {
+        ++it;
+      }
+    } else {
+      ++it;
+    }
+  }
+  return JS_UNDEFINED;
+}
+
 JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   auto* rctx = get_ctx(ctx);
   if (!rctx || argc < 1) return JS_TRUE;
@@ -426,23 +459,26 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, node_proto, "dispatchEvent",       JS_NewCFunction(ctx, js_el_dispatchEvent,       "dispatchEvent",       1));
   JS_FreeValue(ctx, node_proto);
 
-  // ── addEventListener/dispatchEvent on document ─────────────────────────────
+  // ── addEventListener/removeEventListener/dispatchEvent on document ────────
   // DocumentBindings::install() must have already run so globalThis.document exists.
   JSValue doc = JS_GetPropertyStr(ctx, global, "document");
-  JS_SetPropertyStr(ctx, doc, "addEventListener", JS_NewCFunction(ctx, js_doc_addEventListener, "addEventListener", 2));
-  JS_SetPropertyStr(ctx, doc, "dispatchEvent",    JS_NewCFunction(ctx, js_doc_dispatchEvent,    "dispatchEvent",    1));
+  JS_SetPropertyStr(ctx, doc, "addEventListener",    JS_NewCFunction(ctx, js_doc_addEventListener,    "addEventListener",    2));
+  JS_SetPropertyStr(ctx, doc, "removeEventListener", JS_NewCFunction(ctx, js_doc_removeEventListener, "removeEventListener", 2));
+  JS_SetPropertyStr(ctx, doc, "dispatchEvent",       JS_NewCFunction(ctx, js_doc_dispatchEvent,       "dispatchEvent",       1));
   JS_FreeValue(ctx, doc);
 
-  // ── addEventListener/dispatchEvent on window ───────────────────────────────
+  // ── addEventListener/removeEventListener/dispatchEvent on window ──────────
   // window === globalThis (see QuickJSRuntime::initialize()) and has no native
   // node of its own to key listeners by, so js_doc_addEventListener/
-  // js_doc_dispatchEvent (which never read `this` — they always resolve the
-  // target through rctx->document) are reused verbatim. This means
-  // window.addEventListener(...) and document.addEventListener(...) share one
-  // listener list/target in this sandbox — a deliberate simplification, not a
-  // real separate Window EventTarget.
-  JS_SetPropertyStr(ctx, global, "addEventListener", JS_NewCFunction(ctx, js_doc_addEventListener, "addEventListener", 2));
-  JS_SetPropertyStr(ctx, global, "dispatchEvent",    JS_NewCFunction(ctx, js_doc_dispatchEvent,    "dispatchEvent",    1));
+  // js_doc_removeEventListener/js_doc_dispatchEvent (which never read `this`
+  // — they always resolve the target through rctx->document) are reused
+  // verbatim. This means window.addEventListener(...) and
+  // document.addEventListener(...) share one listener list/target in this
+  // sandbox — a deliberate simplification, not a real separate Window
+  // EventTarget.
+  JS_SetPropertyStr(ctx, global, "addEventListener",    JS_NewCFunction(ctx, js_doc_addEventListener,    "addEventListener",    2));
+  JS_SetPropertyStr(ctx, global, "removeEventListener", JS_NewCFunction(ctx, js_doc_removeEventListener, "removeEventListener", 2));
+  JS_SetPropertyStr(ctx, global, "dispatchEvent",       JS_NewCFunction(ctx, js_doc_dispatchEvent,       "dispatchEvent",       1));
 
   JS_FreeValue(ctx, global);
 }
