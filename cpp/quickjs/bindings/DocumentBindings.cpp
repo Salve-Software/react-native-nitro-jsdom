@@ -133,10 +133,19 @@ JSValue js_doc_get_documentElement(JSContext* ctx, JSValue) {
 // Node wrapper: DocumentType's `name` is an interned lxb_dom_attr_id_t (needs
 // LexborDocument::doctypeName(), not the generic nodeName getter), and it has
 // no other Node behavior real-world embedded scripts rely on (no children,
-// not appendChild-able).
+// not appendChild-able). Since it's a plain object rather than a cached
+// node-pointer-keyed wrapper, the constructed object is cached directly on
+// RuntimeContext (built once, on first access) so repeated `document.doctype`
+// reads return the same JS object — the document itself never gets
+// re-parsed mid-instance, so the cache never needs invalidation.
 JSValue js_doc_get_doctype(JSContext* ctx, JSValue) {
   void* dt = get_doc(ctx)->doctype();
   if (!dt) return JS_NULL;
+
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->doctype_wrapper) {
+    return JS_DupValue(ctx, *static_cast<JSValue*>(rctx->doctype_wrapper));
+  }
 
   JSValue obj = JS_NewObject(ctx);
   std::string name = get_doc(ctx)->doctypeName(dt);
@@ -147,6 +156,8 @@ JSValue js_doc_get_doctype(JSContext* ctx, JSValue) {
   JS_SetPropertyStr(ctx, obj, "systemId",  JS_NewStringLen(ctx, systemId.data(), systemId.size()));
   JS_SetPropertyStr(ctx, obj, "nodeType",  JS_NewInt32(ctx, 10));
   JS_SetPropertyStr(ctx, obj, "nodeName",  JS_NewStringLen(ctx, name.data(), name.size()));
+
+  if (rctx) rctx->doctype_wrapper = new JSValue(JS_DupValue(ctx, obj));
   return obj;
 }
 

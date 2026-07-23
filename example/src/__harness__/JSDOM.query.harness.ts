@@ -194,4 +194,10 @@ describe('JSDOM selectors, live collections, instanceof', () => {
     const noDoctype = await dom.evaluate('String(document.doctype)');
     expect(noDoctype).toBe('null');
   });
+
+  it('document.doctype returns the same object on repeated access', async () => {
+    dom = JSDOM.create('<!DOCTYPE html><html><body></body></html>');
+    const result = await dom.evaluate('document.doctype === document.doctype');
+    expect(result).toBe('true');
+  });
 });

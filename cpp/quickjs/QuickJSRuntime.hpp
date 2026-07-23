@@ -79,6 +79,13 @@ struct RuntimeContext {
   // Ensures the same native node always returns the same JS wrapper object.
   std::unordered_map<void*, void*> node_wrapper_cache;
 
+  // document.doctype's plain-object wrapper (heap-allocated JSValue*,
+  // DupValue'd strong ref) — not routed through node_wrapper_cache since
+  // it isn't keyed by a native node pointer (see DocumentBindings.cpp).
+  // Built lazily on first access and reused after that, so repeated
+  // `document.doctype` reads return the same JS object (identity-stable).
+  void* doctype_wrapper { nullptr };
+
   // host element pointer (lxb_dom_element_t*) → its shadow root
   // (lxb_dom_shadow_root_t*). Lexbor's element struct has no built-in
   // back-pointer to an attached shadow root, so we track it ourselves.
