@@ -242,12 +242,14 @@ dom.dispose() // ← always pair with create()
 > Gaps identified auditing against jsdom for the project's core use case
 > (CMS-driven HTML fragments with a small embedded script: countdown timers,
 > personalized greetings, discount badges), prioritized by how often that
-> class of script actually reaches for them. `Range`/`TreeWalker`/
-> `NodeIterator` and cross-frame messaging (`postMessage`, `MessageChannel`)
-> are deliberately excluded — they target full-page/SPA or multi-frame
-> scenarios this sandbox isn't built for. (`window.history` and
-> `window.getSelection()` were added later, in v0.11, as crash-prevention
-> stubs rather than real navigation/selection — see below.)
+> class of script actually reaches for them. `Range`/`Selection` and
+> cross-frame messaging (`postMessage`, `MessageChannel`) are deliberately
+> excluded — they target full-page/SPA or multi-frame scenarios this sandbox
+> isn't built for (`Range`'s text-node-splitting requirements in particular
+> make it a much larger lift than the traversal APIs below). (`window.history`
+> and `window.getSelection()` were added later, in v0.11, as crash-prevention
+> stubs rather than real navigation/selection; `TreeWalker`/`NodeIterator`
+> were added in v0.12 — see below for both.)
 - [x] `document.cookie` (get/set)
 - [x] `<template>` / `element.content` (DocumentFragment)
 - [x] Shadow DOM slotting (`<slot>`, `assignedNodes()`/`assignedElements()`, `slotchange`)
@@ -329,6 +331,45 @@ dom.dispose() // ← always pair with create()
       check real-world embedded scripts actually make against it;
       `visibility`/`opacity` fall back to their initial values; every other
       unset property returns `''`.
+
+### v0.12 — Layout Stubs & Tree Traversal
+> A third jsdom parity pass, covering the geometry/scroll surface real-world
+> scripts feature-detect or call defensively (`scrollIntoView`, `offsetWidth`,
+> `ResizeObserver`, ...) plus `TreeWalker`/`NodeIterator` as the one
+> traversal feature from the v0.10 exclusion list worth building after all —
+> unlike `Range`/`Selection`, it's pure JS over traversal properties that
+> already exist, no Lexbor text-node splitting required. `Range`/`Selection`
+> stay excluded for the same reason as before (see v0.10).
+- [x] `element.scrollIntoView()`/`scrollTo()`/`scrollBy()`/`scroll()` and the
+      `window` equivalents (plus `scrollX`/`scrollY`/`pageXOffset`/
+      `pageYOffset`) — no-ops/always `0`, matching jsdom's own stance without
+      a layout engine.
+- [x] `offsetWidth`/`offsetHeight`/`offsetTop`/`offsetLeft`/`offsetParent`,
+      `clientWidth`/`clientHeight`/`clientTop`/`clientLeft`, `scrollWidth`/
+      `scrollHeight` — always `0`/`null`. `scrollTop`/`scrollLeft` are the one
+      exception: real per-element state (jsdom does the same), so a script
+      reading back a value it just set gets that value rather than a
+      hardcoded `0`.
+- [x] `document.elementFromPoint()`/`elementsFromPoint()` — `null`/`[]`.
+- [x] `ResizeObserver`/`IntersectionObserver` — constructible,
+      `observe()`/`unobserve()`/`disconnect()` are no-ops, the callback never
+      fires (`IntersectionObserver` still reflects `root`/`rootMargin`/
+      `thresholds` from its constructor options, and `takeRecords()` returns
+      `[]`). jsdom itself doesn't expose either global at all; this project
+      adds them as defensive "don't throw `ReferenceError`" stubs instead,
+      matching the precedent set by `window.history`/`window.getSelection()`
+      in v0.11.
+- [x] `NodeFilter`, `TreeWalker`, `NodeIterator`, `document.createTreeWalker()`/
+      `createNodeIterator()` — a real traversal feature, not a stub: built in
+      pure JS over the Node traversal properties ElementBindings already
+      exposes (`firstChild`/`lastChild`/`nextSibling`/`previousSibling`/
+      `parentNode`/`nodeType`), no Lexbor access needed. The traversal
+      algorithms (`TreeWalker.previousSibling()`/`nextSibling()` especially —
+      they can descend into an accepted-`SKIP` subtree hunting for a
+      matching descendant, then backtrack) are ported directly from jsdom's
+      `TreeWalker-impl.js`/`NodeIterator-impl.js`/`helpers.js` rather than
+      reimplemented from scratch, since a plausible-looking backtracking bug
+      here would be easy to miss in review.
 
 ---
 
