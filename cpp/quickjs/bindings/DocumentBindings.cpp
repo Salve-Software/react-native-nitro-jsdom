@@ -152,6 +152,18 @@ JSValue js_doc_get_doctype(JSContext* ctx, JSValue) {
   return obj;
 }
 
+JSValue js_doc_get_activeElement(JSContext* ctx, JSValue) {
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->active_element) return make_element(ctx, rctx->active_element);
+  return make_element(ctx, get_doc(ctx)->body());
+}
+
+JSValue js_doc_get_readyState(JSContext* ctx, JSValue) {
+  auto* rctx = get_ctx(ctx);
+  const std::string& state = rctx ? rctx->ready_state : "loading";
+  return JS_NewStringLen(ctx, state.data(), state.size());
+}
+
 const char* kDocumentTitleBootstrapScript = R"JS(
 (function() {
   Object.defineProperty(document, 'title', {
@@ -202,6 +214,8 @@ void DocumentBindings::install(JSContext* ctx) {
   define_prop(ctx, doc, "images",          js_doc_get_images,          nullptr);
   define_prop(ctx, doc, "scripts",         js_doc_get_scripts,         nullptr);
   define_prop(ctx, doc, "links",           js_doc_get_links,           nullptr);
+  define_prop(ctx, doc, "activeElement",   js_doc_get_activeElement,   nullptr);
+  define_prop(ctx, doc, "readyState",      js_doc_get_readyState,      nullptr);
 
   RuntimeContext* rctx = get_ctx(ctx);
   bool hidden = !(rctx && rctx->pretend_to_be_visual);

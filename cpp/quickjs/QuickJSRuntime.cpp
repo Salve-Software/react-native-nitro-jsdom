@@ -2,6 +2,7 @@
 #include "DOMBindings.hpp"
 #include "DOMBindingsInternal.hpp"
 #include "MutationObservers.hpp"
+#include "bindings/EventBindings.hpp"
 #include "../lexbor/LexborDocument.hpp"
 #include "quickjs.h"
 #include <stdexcept>
@@ -243,6 +244,7 @@ void QuickJSRuntime::drainEventLoop() {
           }
           JS_FreeValue(ctx, str_val);
         }
+        EventBindings::dispatchErrorEvent(ctx, err, ex);
         JS_FreeValue(ctx, ex);
         throw std::runtime_error(err);
       }
@@ -266,6 +268,7 @@ void QuickJSRuntime::drainEventLoop() {
         }
         JS_FreeValue(ctx, str_val);
       }
+      EventBindings::dispatchUnhandledRejectionEvent(ctx, *stored);
       JS_FreeValue(ctx, *stored);
       delete stored;
       _ctxState->pending_rejection = nullptr;
@@ -394,6 +397,7 @@ void QuickJSRuntime::fireTimer(Timer* t) {
       }
       JS_FreeValue(ctx, str_val);
     }
+    EventBindings::dispatchErrorEvent(ctx, err, ex);
     JS_FreeValue(ctx, ex);
     throw std::runtime_error(err);
   }
@@ -440,6 +444,7 @@ std::string QuickJSRuntime::evaluate(const std::string& script) {
       JS_FreeValue(ctx, str_val);
     }
 
+    EventBindings::dispatchErrorEvent(ctx, err, ex);
     JS_FreeValue(ctx, ex);
     QJS_LOG("QuickJS exception: %s", err.c_str());
     throw std::runtime_error(err);

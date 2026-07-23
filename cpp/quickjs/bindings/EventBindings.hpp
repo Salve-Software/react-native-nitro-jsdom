@@ -10,12 +10,15 @@
 // attach addEventListener/dispatchEvent there too).
 
 #include "quickjs.h"
+#include <string>
 
 namespace margelo::nitro::nitrojsdom {
 
 class EventBindings {
 public:
   static void install(JSContext* ctx);
+  static void dispatchErrorEvent(JSContext* ctx, const std::string& message, JSValue error_value);
+  static void dispatchUnhandledRejectionEvent(JSContext* ctx, JSValue reason);
 };
 
 } // namespace margelo::nitro::nitrojsdom

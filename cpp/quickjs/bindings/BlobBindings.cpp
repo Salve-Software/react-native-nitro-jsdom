@@ -20,6 +20,16 @@ const char* kBlobBootstrapScript = R"JS(
     return Array.prototype.slice.call(new TextEncoder().encode(String(part)));
   }
 
+  function normalizeBlobType(type) {
+    if (type === undefined || type === null) return '';
+    var s = String(type);
+    for (var i = 0; i < s.length; i++) {
+      var code = s.charCodeAt(i);
+      if (code < 0x20 || code > 0x7e) return '';
+    }
+    return s.toLowerCase();
+  }
+
   function Blob(parts, options) {
     var bytes = [];
     if (parts) {
@@ -29,7 +39,7 @@ const char* kBlobBootstrapScript = R"JS(
     }
     this._bytes = bytes;
     this.size = bytes.length;
-    this.type = (options && options.type) ? String(options.type) : '';
+    this.type = normalizeBlobType(options && options.type);
   }
   Blob.prototype.slice = function(start, end, contentType) {
     var sliced = this._bytes.slice(start, end);
@@ -54,6 +64,23 @@ const char* kBlobBootstrapScript = R"JS(
     return Promise.resolve(buf);
   };
   globalThis.Blob = Blob;
+
+  function File(parts, name, options) {
+    Blob.call(this, parts, options);
+    var lastModified;
+    if (options && options.lastModified !== undefined) {
+      var n = Number(options.lastModified);
+      lastModified = (isNaN(n) || !isFinite(n)) ? 0 : Math.trunc(n);
+    } else {
+      lastModified = Date.now();
+    }
+
+    Object.defineProperty(this, 'name', { value: String(name), enumerable: true, configurable: true });
+    Object.defineProperty(this, 'lastModified', { value: lastModified, enumerable: true, configurable: true });
+  }
+  File.prototype = Object.create(Blob.prototype);
+  File.prototype.constructor = File;
+  globalThis.File = File;
 
   function FileReader() {
     this.readyState = 0;
