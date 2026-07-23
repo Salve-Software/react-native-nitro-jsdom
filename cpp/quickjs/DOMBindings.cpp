@@ -25,6 +25,7 @@
 #include "bindings/TemplateBindings.hpp"
 #include "bindings/SlotBindings.hpp"
 #include "bindings/XmlSerializerBindings.hpp"
+#include "bindings/LayoutStubBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -60,6 +61,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   FormBindings::install(ctx);      // uses globalThis.Element + globalThis.Event, so must run after both
   SlotBindings::install(ctx);      // uses Event/dispatchEvent + Element/ShadowRoot protos, so must run after EventBindings/ShadowRootBindings
   XmlSerializerBindings::install(ctx); // pure serialization, no ordering requirement beyond ElementBindings
+  LayoutStubBindings::install(ctx); // needs Element's proto + globalThis.document to exist
 
   // ── localStorage / sessionStorage ──────────────────────────────────────────
   {

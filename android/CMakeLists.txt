@@ -70,6 +70,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/TemplateBindings.cpp
   ../cpp/quickjs/bindings/SlotBindings.cpp
   ../cpp/quickjs/bindings/XmlSerializerBindings.cpp
+  ../cpp/quickjs/bindings/LayoutStubBindings.cpp
   ${QUICKJS_SOURCES}
 )
 
