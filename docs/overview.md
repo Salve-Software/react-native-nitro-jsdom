@@ -278,6 +278,34 @@ dom.dispose() // ← always pair with create()
       is always `false`); `reportValidity()` is an alias for `checkValidity()`
       since there's no UI layer to report against (same as jsdom).
 
+### v0.11 — DOM Ergonomics & Modern Globals
+> A second jsdom parity audit against the project's core use case, this time
+> focused on ergonomics gaps rather than missing interfaces: patterns
+> real-world embedded scripts reach for once the DOM shape is already there
+> (iterating query results, associating a form field back to its form,
+> cloning a state object, escaping a shadow boundary) plus a few modern
+> globals that had crept into common usage since the v0.5 parity audit.
+- [x] `NodeList`/`HTMLCollection.prototype.forEach` — added to both kinds
+      (spec-wise only `NodeList` has it), since this sandbox backs both with
+      the same `LiveCollection` class and splitting the two wasn't worth it
+      for the ergonomics win.
+- [x] `structuredClone()` — deep-clones `Array`/plain `Object`/`Date`/
+      `RegExp`/`Map`/`Set`/`ArrayBuffer`/typed arrays, preserves circular
+      references, and throws `DataCloneError` for functions/symbols/wrapped
+      DOM nodes/class instances, matching the spec's non-cloneable-value
+      behavior without implementing the full structured-clone algorithm
+      (no transfer list, no `MessagePort`).
+- [x] `node.getRootNode({composed})` — walks `parentNode` to the top of the
+      tree; with `composed: true`, continues through a `ShadowRoot`'s `.host`
+      into the light tree above.
+- [x] `element.form` / `form.elements` — resolves the owning `<form>` via
+      ancestor `closest('form')` or the `form="id"` attribute, for
+      `input`/`select`/`textarea`/`button`/`fieldset`/`output`; `.elements`
+      returns a static (not live) array, matching the static-array trade-off
+      already made for secondary-document `getElementsBy*()` in v0.10.
+- [x] `AbortSignal.any(signals)`
+- [x] `URL.canParse(url, base?)`
+
 ---
 
 ## Repository Structure
