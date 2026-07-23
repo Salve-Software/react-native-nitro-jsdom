@@ -53,7 +53,7 @@ describe('JSDOM navigator/matchMedia', () => {
     `);
     expect(JSON.parse(result)).toEqual({
       initialState: null, initialLength: 1,
-      state: { page: 2, replaced: true }, length: 2,
+      state: { page: 2, replaced: true }, length: 3,
       href: 'https://example.com/page-2b', popstateFired: false,
     });
   });
