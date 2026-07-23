@@ -461,6 +461,91 @@ const char* kStructuredCloneBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── window.history ────────────────────────────────────────────────────────
+// No real page navigation exists in this sandbox, so History tracks its own
+// in-memory entry stack rather than session history. pushState/replaceState
+// never fire popstate (per spec); go/back/forward do, since those are the
+// events CMS-widget routers actually listen for. `title` is accepted but
+// ignored (same as jsdom — nothing renders a document title).
+
+const char* kHistoryBootstrapScript = R"JS(
+(function() {
+  function History() {
+    this._entries = [null];
+    this._index = 0;
+  }
+  Object.defineProperty(History.prototype, 'length', {
+    get: function() { return this._entries.length; },
+    enumerable: true,
+  });
+  Object.defineProperty(History.prototype, 'state', {
+    get: function() { return this._entries[this._index]; },
+    enumerable: true,
+  });
+  History.prototype.pushState = function(state, _title, url) {
+    this._entries = this._entries.slice(0, this._index + 1);
+    this._entries.push(state === undefined ? null : state);
+    this._index++;
+    if (url !== undefined && url !== null) location.href = url;
+  };
+  History.prototype.replaceState = function(state, _title, url) {
+    this._entries[this._index] = state === undefined ? null : state;
+    if (url !== undefined && url !== null) location.href = url;
+  };
+  History.prototype.go = function(delta) {
+    delta = delta === undefined ? 0 : (Number(delta) || 0);
+    if (delta === 0) return;
+    var next = this._index + delta;
+    if (next < 0 || next > this._entries.length - 1) return;
+    this._index = next;
+    var ev = new Event('popstate');
+    ev.state = this._entries[this._index];
+    dispatchEvent(ev);
+  };
+  History.prototype.back = function() { this.go(-1); };
+  History.prototype.forward = function() { this.go(1); };
+
+  globalThis.History = History;
+  globalThis.history = new History();
+})();
+)JS";
+
+// ── window.getSelection ──────────────────────────────────────────────────
+// No layout engine backs this sandbox, so there is nothing to select — this
+// mirrors matchMedia's stance: an always-empty Selection rather than a
+// missing global, so defensive `window.getSelection().toString()` checks in
+// third-party scripts don't crash the sandbox.
+
+const char* kSelectionBootstrapScript = R"JS(
+(function() {
+  function Selection() {}
+  Object.defineProperty(Selection.prototype, 'rangeCount', { get: function() { return 0; }, enumerable: true });
+  Object.defineProperty(Selection.prototype, 'isCollapsed', { get: function() { return true; }, enumerable: true });
+  Object.defineProperty(Selection.prototype, 'anchorNode', { get: function() { return null; }, enumerable: true });
+  Object.defineProperty(Selection.prototype, 'anchorOffset', { get: function() { return 0; }, enumerable: true });
+  Object.defineProperty(Selection.prototype, 'focusNode', { get: function() { return null; }, enumerable: true });
+  Object.defineProperty(Selection.prototype, 'focusOffset', { get: function() { return 0; }, enumerable: true });
+  Object.defineProperty(Selection.prototype, 'type', { get: function() { return 'None'; }, enumerable: true });
+  Selection.prototype.toString = function() { return ''; };
+  Selection.prototype.removeAllRanges = function() {};
+  Selection.prototype.collapse = function() {};
+  Selection.prototype.collapseToStart = function() {};
+  Selection.prototype.collapseToEnd = function() {};
+  Selection.prototype.selectAllChildren = function() {};
+  Selection.prototype.addRange = function() {};
+  Selection.prototype.containsNode = function() { return false; };
+  Selection.prototype.getRangeAt = function(index) {
+    throw new DOMException(
+      "Failed to execute 'getRangeAt' on 'Selection': " + index + ' is not a valid index.', 'IndexSizeError');
+  };
+  Selection.prototype.empty = Selection.prototype.removeAllRanges;
+
+  var selectionInstance = new Selection();
+  globalThis.Selection = Selection;
+  globalThis.getSelection = function() { return selectionInstance; };
+})();
+)JS";
+
 // ── matchMedia ─────────────────────────────────────────────────────────────
 // No layout engine backs this sandbox, so every query reports "no match" —
 // mirrors jsdom's own stance that layout-dependent APIs return inert defaults
@@ -523,6 +608,20 @@ void WindowBindings::install(JSContext* ctx) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, location_result);
+
+  JSValue history_result = JS_Eval(ctx, kHistoryBootstrapScript, strlen(kHistoryBootstrapScript),
+                                    "<history-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(history_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, history_result);
+
+  JSValue selection_result = JS_Eval(ctx, kSelectionBootstrapScript, strlen(kSelectionBootstrapScript),
+                                      "<selection-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(selection_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, selection_result);
 
   JSValue crypto_result = JS_Eval(ctx, kCryptoBootstrapScript, strlen(kCryptoBootstrapScript),
                                    "<crypto-bootstrap>", JS_EVAL_TYPE_GLOBAL);
