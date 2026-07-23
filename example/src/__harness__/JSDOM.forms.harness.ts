@@ -310,4 +310,46 @@ describe('JSDOM form elements', () => {
     `);
     expect(result).toBe('true');
   });
+
+  it('element.form resolves via ancestor <form>, or the form= attribute, and is undefined for non-form-associated elements', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <form id="f1"><input id="nested"></form>
+        <form id="f2"></form>
+        <input id="remote" form="f2">
+        <div id="plain"></div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        nested: document.getElementById('nested').form.id,
+        remote: document.getElementById('remote').form.id,
+        plain: document.getElementById('plain').form === undefined,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ nested: 'f1', remote: 'f2', plain: true });
+  });
+
+  it('element.form is null when a form-associated element has no owning form', async () => {
+    dom = JSDOM.create('<html><body><input id="orphan"></body></html>');
+    const result = await dom.evaluate('document.getElementById("orphan").form === null');
+    expect(result).toBe('true');
+  });
+
+  it('form.elements lists all form-associated descendants, including disabled ones', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <form id="f">
+          <input id="a">
+          <input id="b" disabled>
+          <select id="c"></select>
+          <button id="d"></button>
+        </form>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(document.getElementById('f').elements.map((el) => el.id));
+    `);
+    expect(JSON.parse(result)).toEqual(['a', 'b', 'c', 'd']);
+  });
 });
