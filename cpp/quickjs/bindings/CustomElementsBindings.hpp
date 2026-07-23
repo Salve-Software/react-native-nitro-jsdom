@@ -32,7 +32,9 @@ namespace margelo::nitro::nitrojsdom {
 //   ancestor whose shadow-including subtree contains it) covers this case.
 // - customElements.upgrade(root) walks root's shadow-including INCLUSIVE
 //   descendants (root itself, if an element, plus everything reachable via
-//   the same light-DOM + shadow traversal the other hooks use).
+//   the same light-DOM + shadow traversal the other hooks use). Throws
+//   TypeError if root isn't a Node (matches the spec: null/undefined/plain
+//   objects are rejected, not silently no-op'd).
 // - attachShadow() is wrapped purely to tag the host element with an
 //   internal, mode-agnostic reference to its shadow root (bypassing the
 //   closed-mode privacy Element.prototype.shadowRoot enforces for user

@@ -326,6 +326,27 @@ describe('JSDOM Custom Elements', () => {
     expect(JSON.parse(result)).toEqual({ before: false, after: true });
   });
 
+  it('customElements.upgrade() with a non-Node argument throws a TypeError', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      function attempt(value) {
+        try { customElements.upgrade(value); return null; } catch (e) { return e.constructor.name; }
+      }
+      JSON.stringify({
+        nullResult: attempt(null),
+        undefinedResult: attempt(undefined),
+        fakeNodeResult: attempt({ nodeType: 1 }),
+        stringResult: attempt('div'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      nullResult: 'TypeError',
+      undefinedResult: 'TypeError',
+      fakeNodeResult: 'TypeError',
+      stringResult: 'TypeError',
+    });
+  });
+
   it('define() with a constructor already used for another name throws a NotSupportedError DOMException', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`

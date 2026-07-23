@@ -209,7 +209,10 @@ const char* kCustomElementsBootstrapScript = R"JS(
   // patches below — always pass a pre-existing container that was never
   // itself a fresh upgrade candidate).
   CustomElementRegistry.prototype.upgrade = function(root) {
-    if (!root) return;
+    if (!(root instanceof Node)) {
+      throw new TypeError(
+          "Failed to execute 'upgrade' on 'CustomElementRegistry': parameter 1 is not of type 'Node'");
+    }
     var ELEMENT_NODE = 1;
     if (root.nodeType === ELEMENT_NODE) upgradeElement(root);
     upgradeSubtree(root);
