@@ -66,6 +66,12 @@ struct RuntimeContext {
   Storage local_storage;
   Storage session_storage;
 
+  // In-memory document.cookie jar (name -> value). No real navigation/origin
+  // model exists in this sandbox, so cookie attributes (expires/path/domain/
+  // secure/samesite) are parsed off the setter's input and discarded rather
+  // than enforced — see CookieBindings.
+  Storage cookie_jar;
+
   bool pretend_to_be_visual { false };
   double time_origin_ms { 0 };
 
