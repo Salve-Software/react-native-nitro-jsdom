@@ -427,7 +427,7 @@ JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   return dispatch_event_on_target(ctx, rctx, argv[0], node);
 }
 
-const char* kHandlerEventTypes[] = { "click", "load", "error" };
+const char* kHandlerEventTypes[] = { "click", "load", "error", "unhandledrejection" };
 
 JSValue get_handler_prop_for_node(JSContext* ctx, RuntimeContext* rctx, void* node, const std::string& event_type) {
   if (!rctx || !node) return JS_NULL;
@@ -621,8 +621,36 @@ void EventBindings::install(JSContext* ctx) {
   define_doc_handler(ctx, global, "onclick", 0);
   define_doc_handler(ctx, global, "onload",  1);
   define_doc_handler(ctx, global, "onerror", 2);
+  define_doc_handler(ctx, global, "onunhandledrejection", 3);
 
   JS_FreeValue(ctx, global);
+}
+
+void EventBindings::dispatchErrorEvent(JSContext* ctx, const std::string& message, JSValue error_value) {
+  auto* rctx = get_ctx(ctx);
+  void* node = doc_node_of(rctx);
+  if (!rctx || !node) return;
+
+  JSValue evt = make_simple_event(ctx, "error", false, true);
+  JS_SetPropertyStr(ctx, evt, "message", JS_NewStringLen(ctx, message.data(), message.size()));
+  JS_SetPropertyStr(ctx, evt, "error", JS_DupValue(ctx, error_value));
+  JSValue r = dispatch_event_on_target(ctx, rctx, evt, static_cast<lxb_dom_node_t*>(node));
+  JS_FreeValue(ctx, evt);
+  if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
+  else JS_FreeValue(ctx, r);
+}
+
+void EventBindings::dispatchUnhandledRejectionEvent(JSContext* ctx, JSValue reason) {
+  auto* rctx = get_ctx(ctx);
+  void* node = doc_node_of(rctx);
+  if (!rctx || !node) return;
+
+  JSValue evt = make_simple_event(ctx, "unhandledrejection", false, true);
+  JS_SetPropertyStr(ctx, evt, "reason", JS_DupValue(ctx, reason));
+  JSValue r = dispatch_event_on_target(ctx, rctx, evt, static_cast<lxb_dom_node_t*>(node));
+  JS_FreeValue(ctx, evt);
+  if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
+  else JS_FreeValue(ctx, r);
 }
 
 } // namespace margelo::nitro::nitrojsdom
