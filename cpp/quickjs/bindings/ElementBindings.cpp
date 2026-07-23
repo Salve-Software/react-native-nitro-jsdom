@@ -1280,6 +1280,9 @@ JSValue js_el_get_ownerDocument(JSContext* ctx, JSValue this_val) {
     return doc_val;
   }
 
+  JSValue wrapper = get_document_wrapper(ctx, owner);
+  if (!JS_IsUndefined(wrapper)) return wrapper;
+
   void* html_doc = owner->documentHtmlPtr();
   void* doc_node = lxb_dom_interface_node(
       lxb_dom_interface_document(static_cast<lxb_html_document_t*>(html_doc)));

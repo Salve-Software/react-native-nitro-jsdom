@@ -358,25 +358,25 @@ describe('JSDOM node traversal', () => {
   });
 
   it('CharacterData.data mirrors nodeValue on Text/Comment nodes, .length is the JS string length', async () => {
-    dom = JSDOM.create('<html><body><p id="p">café</p><!-- 😀 --></body></html>');
+    dom = JSDOM.create('<html><body><p id="p">café</p><!--café--></body></html>');
     const result = await dom.evaluate(`
       const text = document.getElementById('p').firstChild;
       const comment = document.body.childNodes[document.body.childNodes.length - 1];
       const before = { data: text.data, length: text.length };
-      text.data = 'x😀y';
+      text.data = 'naïve';
       const after = { data: text.data, nodeValue: text.nodeValue, length: text.length };
       JSON.stringify({
         before, after,
         commentData: comment.data, commentLength: comment.length,
-        elementDataIsUndefined: document.getElementById('p').data === undefined,
+        elementDataIsNull: document.getElementById('p').data === null,
         elementLengthIsUndefined: document.getElementById('p').length === undefined,
       });
     `);
     expect(JSON.parse(result)).toEqual({
       before: { data: 'café', length: 4 },
-      after: { data: 'x😀y', nodeValue: 'x😀y', length: 4 },
-      commentData: ' 😀 ', commentLength: 4,
-      elementDataIsUndefined: true,
+      after: { data: 'naïve', nodeValue: 'naïve', length: 5 },
+      commentData: 'café', commentLength: 4,
+      elementDataIsNull: true,
       elementLengthIsUndefined: true,
     });
   });

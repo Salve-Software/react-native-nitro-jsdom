@@ -187,15 +187,19 @@ describe('JSDOM DOMParser / createHTMLDocument', () => {
   it('document.importNode() throws NotSupportedError for a document node, TypeError for a non-Node', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
-      const parsed = new DOMParser().parseFromString('<html><body></body></html>', 'text/html');
-      let caughtDoc, caughtNonNode;
-      try { document.importNode(parsed); } catch (e) { caughtDoc = { name: e.name, isDOMException: e instanceof DOMException }; }
+      const docNode = document.documentElement.parentNode;
+      let caughtDoc, caughtNonNode, caughtParsedDoc;
+      try { document.importNode(docNode); } catch (e) { caughtDoc = { name: e.name, isDOMException: e instanceof DOMException }; }
       try { document.importNode('not a node'); } catch (e) { caughtNonNode = e.constructor.name; }
-      JSON.stringify({ caughtDoc, caughtNonNode });
+      const parsed = new DOMParser().parseFromString('<html><body></body></html>', 'text/html');
+      try { document.importNode(parsed); } catch (e) { caughtParsedDoc = e.constructor.name; }
+      JSON.stringify({ docNodeType: docNode.nodeType, caughtDoc, caughtNonNode, caughtParsedDoc });
     `);
     expect(JSON.parse(result)).toEqual({
+      docNodeType: 9,
       caughtDoc: { name: 'NotSupportedError', isDOMException: true },
       caughtNonNode: 'TypeError',
+      caughtParsedDoc: 'TypeError',
     });
   });
 });

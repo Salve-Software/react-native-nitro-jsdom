@@ -99,6 +99,14 @@ QuickJSRuntime::~QuickJSRuntime() {
       delete stored;
       _ctxState->doctype_wrapper = nullptr;
     }
+
+    // Free cached secondary-document wrappers
+    for (auto& kv : _ctxState->document_wrappers) {
+      JSValue* stored = static_cast<JSValue*>(kv.second);
+      JS_FreeValue(ctx, *stored);
+      delete stored;
+    }
+    _ctxState->document_wrappers.clear();
   }
 
   if (_context) JS_FreeContext(reinterpret_cast<JSContext*>(_context));

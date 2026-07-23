@@ -146,6 +146,20 @@ void register_document(JSContext* ctx, LexborDocument* doc) {
   rctx->document_registry[dom_doc] = doc;
 }
 
+void register_document_wrapper(JSContext* ctx, LexborDocument* doc, JSValue wrapper) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !doc) return;
+  rctx->document_wrappers[doc] = new JSValue(JS_DupValue(ctx, wrapper));
+}
+
+JSValue get_document_wrapper(JSContext* ctx, LexborDocument* doc) {
+  auto* rctx = get_ctx(ctx);
+  if (!rctx || !doc) return JS_UNDEFINED;
+  auto it = rctx->document_wrappers.find(doc);
+  if (it == rctx->document_wrappers.end()) return JS_UNDEFINED;
+  return JS_DupValue(ctx, *static_cast<JSValue*>(it->second));
+}
+
 void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter, SetterFn setter) {
   JSAtom atom = JS_NewAtom(ctx, name);
   JSValue get_fn = JS_NewCFunction2(ctx, (JSCFunction*)getter, name, 0, JS_CFUNC_getter, 0);
