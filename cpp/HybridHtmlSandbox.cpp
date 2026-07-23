@@ -57,7 +57,7 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
   // so both fire back-to-back with nothing in between.
   _runtime->contextState()->ready_state = "interactive";
   try {
-    _runtime->evaluate("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));");
+    _runtime->evaluate("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true }));");
   } catch (...) { }
 
   _runtime->contextState()->ready_state = "complete";
