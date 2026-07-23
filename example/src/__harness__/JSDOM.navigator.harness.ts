@@ -36,7 +36,7 @@ describe('JSDOM navigator/matchMedia', () => {
   });
 
   it('history.pushState/replaceState track state and length without firing popstate', async () => {
-    dom = JSDOM.create('<html><body></body></html>');
+    dom = JSDOM.create('<html><body></body></html>', { url: 'https://example.com/' });
     const result = await dom.evaluate(`
       let popstateFired = false;
       addEventListener('popstate', () => { popstateFired = true; });
@@ -54,7 +54,7 @@ describe('JSDOM navigator/matchMedia', () => {
     expect(JSON.parse(result)).toEqual({
       initialState: null, initialLength: 1,
       state: { page: 2, replaced: true }, length: 2,
-      href: '/page-2b', popstateFired: false,
+      href: 'https://example.com/page-2b', popstateFired: false,
     });
   });
 
