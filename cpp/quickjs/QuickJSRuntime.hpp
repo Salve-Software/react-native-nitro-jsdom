@@ -39,6 +39,7 @@ struct EventListener {
   void* node;              // lxb_dom_node_t*
   std::string event_type;
   void* callback;          // JSValue* (heap-allocated, owned)
+  bool is_handler_property { false };
 };
 
 // ── RuntimeContext ─────────────────────────────────────────────────────────────
@@ -74,6 +75,9 @@ struct RuntimeContext {
 
   bool pretend_to_be_visual { false };
   double time_origin_ms { 0 };
+
+  void* active_element { nullptr };
+  std::string ready_state { "loading" };
 
   // node pointer → heap-allocated JSValue* (DupValue'd strong ref)
   // Ensures the same native node always returns the same JS wrapper object.

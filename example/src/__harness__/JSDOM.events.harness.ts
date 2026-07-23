@@ -112,4 +112,139 @@ describe('JSDOM events', () => {
     `);
     expect(JSON.parse(result)).toEqual(['fired']);
   });
+
+  it('el.onclick fires on click and reassigning replaces the previous handler', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const log = [];
+      btn.onclick = () => log.push('first');
+      btn.dispatchEvent(new Event('click'));
+      btn.onclick = () => log.push('second');
+      btn.dispatchEvent(new Event('click'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['first', 'second']);
+  });
+
+  it('el.onclick coexists with addEventListener listeners for the same event type', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const log = [];
+      btn.addEventListener('click', () => log.push('listener'));
+      btn.onclick = () => log.push('handler');
+      btn.dispatchEvent(new Event('click'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['listener', 'handler']);
+  });
+
+  it('setting el.onclick to null removes the previously assigned handler', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const log = [];
+      btn.onclick = () => log.push('fired');
+      btn.onclick = null;
+      btn.dispatchEvent(new Event('click'));
+      JSON.stringify({ log, onclick: btn.onclick });
+    `);
+    expect(JSON.parse(result)).toEqual({ log: [], onclick: null });
+  });
+
+  it('window.onload and document.onload share one handler slot', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      document.onload = function first() {};
+      window.onload = function second() {};
+      JSON.stringify({ same: document.onload === window.onload });
+    `);
+    expect(JSON.parse(result)).toEqual({ same: true });
+  });
+
+  it('el.onclick returning false prevents the default action of a cancelable event', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      btn.onclick = () => false;
+      const event = new Event('click', { cancelable: true });
+      const returnValue = btn.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: false, defaultPrevented: true });
+  });
+
+  it('addEventListener() callback returning false does not prevent the default action', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      btn.addEventListener('click', () => false);
+      const event = new Event('click', { cancelable: true });
+      const returnValue = btn.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
+  });
+
+  it('el.onclick returning false has no effect when the event is not cancelable', async () => {
+    dom = JSDOM.create('<html><body><button id="b"></button></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      btn.onclick = () => false;
+      const event = new Event('click', { cancelable: false });
+      const returnValue = btn.dispatchEvent(event);
+      JSON.stringify({ returnValue, defaultPrevented: event.defaultPrevented });
+    `);
+    expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
+  });
+
+  it('element.click() dispatches a bubbling, cancelable click event', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><button id="b"></button></div></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const parent = document.getElementById('parent');
+      const log = [];
+      btn.addEventListener('click', (e) => log.push({ where: 'btn', bubbles: e.bubbles, cancelable: e.cancelable }));
+      parent.addEventListener('click', () => log.push({ where: 'parent' }));
+      btn.click();
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual([
+      { where: 'btn', bubbles: true, cancelable: true },
+      { where: 'parent' },
+    ]);
+  });
+
+  it('element.focus() updates document.activeElement and fires focus/blur across elements', async () => {
+    dom = JSDOM.create('<html><body><input id="a"><input id="b"></body></html>');
+    const result = await dom.evaluate(`
+      const a = document.getElementById('a');
+      const b = document.getElementById('b');
+      const log = [];
+      a.addEventListener('focus', () => log.push('a:focus'));
+      a.addEventListener('blur', () => log.push('a:blur'));
+      b.addEventListener('focus', () => log.push('b:focus'));
+      a.focus();
+      log.push(document.activeElement.id);
+      b.focus();
+      log.push(document.activeElement.id);
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['a:focus', 'a', 'a:blur', 'b:focus', 'b']);
+  });
+
+  it('element.blur() clears document.activeElement back to document.body and fires blur', async () => {
+    dom = JSDOM.create('<html><body><input id="a"></body></html>');
+    const result = await dom.evaluate(`
+      const a = document.getElementById('a');
+      const log = [];
+      a.addEventListener('blur', () => log.push('blur'));
+      a.focus();
+      a.blur();
+      log.push(document.activeElement === document.body);
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['blur', true]);
+  });
 });

@@ -39,6 +39,60 @@ describe('JSDOM Blob / FileReader', () => {
     expect(JSON.parse(result)).toEqual({ result: 'abc', events: ['load', 'loadend'], readyState: 2 });
   });
 
+  it('File extends Blob with name/lastModified and inherits text()', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const file = new File(['hello'], 'greeting.txt', { type: 'text/plain', lastModified: 1700000000000 });
+      file.text().then((text) => JSON.stringify({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified,
+        isBlob: file instanceof Blob,
+        text,
+      }));
+    `);
+    expect(JSON.parse(result)).toEqual({
+      name: 'greeting.txt',
+      size: 5,
+      type: 'text/plain',
+      lastModified: 1700000000000,
+      isBlob: true,
+      text: 'hello',
+    });
+  });
+
+  it('File defaults lastModified to the current time when not provided', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const before = Date.now();
+      const file = new File(['x'], 'a.txt');
+      const after = Date.now();
+      JSON.stringify(file.lastModified >= before && file.lastModified <= after);
+    `);
+    expect(JSON.parse(result)).toBe(true);
+  });
+
+  it('File coerces a non-number lastModified per Web IDL long long semantics', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        fromString: new File(['x'], 'a.txt', { lastModified: '123' }).lastModified,
+        fromFloat: new File(['x'], 'a.txt', { lastModified: 123.9 }).lastModified,
+        fromNaN: new File(['x'], 'a.txt', { lastModified: NaN }).lastModified,
+        fromInfinity: new File(['x'], 'a.txt', { lastModified: Infinity }).lastModified,
+        fromNull: new File(['x'], 'a.txt', { lastModified: null }).lastModified,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      fromString: 123,
+      fromFloat: 123,
+      fromNaN: 0,
+      fromInfinity: 0,
+      fromNull: 0,
+    });
+  });
+
   it('FileReader.readAsDataURL() produces a base64 data URL', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`

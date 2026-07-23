@@ -94,6 +94,27 @@ describe('JSDOM lifecycle', () => {
     expect(JSON.parse(result)).toEqual(['doc:DOMContentLoaded', 'win:DOMContentLoaded', 'win:load']);
   });
 
+  it('document.readyState is "complete" once evaluate() sees the document', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate('document.readyState');
+    expect(result).toBe('complete');
+  });
+
+  it('document.readyState transitions loading -> interactive -> complete around DOMContentLoaded/load', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <script>
+          window.__states = [];
+          window.__states.push(document.readyState);
+          document.addEventListener('DOMContentLoaded', function() { window.__states.push(document.readyState); });
+          window.addEventListener('load', function() { window.__states.push(document.readyState); });
+        </script>
+      </body></html>
+    `);
+    const result = await dom.evaluate('JSON.stringify(window.__states)');
+    expect(JSON.parse(result)).toEqual(['loading', 'interactive', 'complete']);
+  });
+
   it('skips non-JS <script> types like application/ld+json', async () => {
     dom = JSDOM.create(`
       <html>
