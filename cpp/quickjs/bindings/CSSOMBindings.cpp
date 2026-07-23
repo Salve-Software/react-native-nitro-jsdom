@@ -227,6 +227,52 @@ const char* kCSSOMBootstrapScript = R"JS(
     },
     configurable: true,
   });
+
+  // ── getComputedStyle ──────────────────────────────────────────────────
+  // No layout/cascade engine backs this sandbox — there is no stylesheet
+  // specificity resolution or inheritance, only the element's own inline
+  // `style` attribute. `display` falls back to a small user-agent-stylesheet
+  // approximation (block/inline/inline-block/none by tag name, or 'none' for
+  // a `hidden` attribute) since "is this element visible" is the one
+  // getComputedStyle check real-world embedded scripts actually make;
+  // `visibility`/`opacity` fall back to their initial values. Every other
+  // unset property returns '', not a computed initial value.
+  var kBlockTags = { ADDRESS: 1, ARTICLE: 1, ASIDE: 1, BLOCKQUOTE: 1, DETAILS: 1, DIALOG: 1, DD: 1, DIV: 1,
+    DL: 1, DT: 1, FIELDSET: 1, FIGCAPTION: 1, FIGURE: 1, FOOTER: 1, FORM: 1, H1: 1, H2: 1, H3: 1, H4: 1,
+    H5: 1, H6: 1, HEADER: 1, HGROUP: 1, HR: 1, LI: 1, MAIN: 1, NAV: 1, OL: 1, P: 1, PRE: 1, SECTION: 1,
+    TABLE: 1, UL: 1, HTML: 1, BODY: 1 };
+  var kNoneTags = { SCRIPT: 1, STYLE: 1, HEAD: 1, TITLE: 1, META: 1, LINK: 1, TEMPLATE: 1 };
+  var kInlineBlockTags = { IMG: 1, BUTTON: 1, INPUT: 1, SELECT: 1, TEXTAREA: 1 };
+
+  function defaultDisplay(tagName) {
+    if (kNoneTags[tagName]) return 'none';
+    if (kInlineBlockTags[tagName]) return 'inline-block';
+    if (kBlockTags[tagName]) return 'block';
+    return 'inline';
+  }
+
+  function resolveProperty(el, kebabName) {
+    var v = el.style.getPropertyValue(kebabName);
+    if (v) return v;
+    if (kebabName === 'display') return el.hasAttribute('hidden') ? 'none' : defaultDisplay(el.tagName);
+    if (kebabName === 'visibility') return 'visible';
+    if (kebabName === 'opacity') return '1';
+    return '';
+  }
+
+  globalThis.getComputedStyle = function(el) {
+    if (!el || typeof el.tagName !== 'string') {
+      throw new TypeError("Failed to execute 'getComputedStyle': parameter 1 is not of type 'Element'.");
+    }
+    return new Proxy({}, {
+      get: function(_target, prop) {
+        if (prop === 'getPropertyValue') return function(name) { return resolveProperty(el, String(name)); };
+        if (prop === 'getPropertyPriority') return function() { return ''; };
+        if (typeof prop !== 'string') return undefined;
+        return resolveProperty(el, camelToKebab(prop));
+      },
+    });
+  };
 })();
 )JS";
 

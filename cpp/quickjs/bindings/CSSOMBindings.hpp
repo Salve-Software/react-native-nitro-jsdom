@@ -5,7 +5,9 @@
 namespace margelo::nitro::nitrojsdom {
 
 // Registers a minimal CSSOM: globalThis.CSSRule/CSSStyleRule/CSSStyleSheet,
-// Element.prototype.sheet (tag-checked for "style"), and document.styleSheets.
+// Element.prototype.sheet (tag-checked for "style"), document.styleSheets,
+// and globalThis.getComputedStyle (inline-style + tag-default-display only,
+// no real cascade — see the bootstrap script for the exact fallback rules).
 //
 // Rules are split by a hand-rolled top-level brace scanner rather than
 // Lexbor's CSS rule/declaration AST (lxb_css_rule_t) — mirrors how

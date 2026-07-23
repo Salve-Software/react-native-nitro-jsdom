@@ -93,4 +93,54 @@ describe('JSDOM CSSOM (document.styleSheets / CSSStyleRule)', () => {
     `);
     expect(JSON.parse(result)).toEqual({ length: 2, firstType: 0, secondSelector: '.b' });
   });
+
+  it('getComputedStyle reads inline style, camelCase and kebab-case alike', async () => {
+    dom = JSDOM.create('<html><body><div id="x" style="color: red; font-size: 12px;"></div></body></html>');
+    const result = await dom.evaluate(`
+      const cs = getComputedStyle(document.getElementById('x'));
+      JSON.stringify({
+        camel: cs.fontSize,
+        kebab: cs.getPropertyValue('font-size'),
+        color: cs.color,
+        missing: cs.backgroundColor,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ camel: '12px', kebab: '12px', color: 'red', missing: '' });
+  });
+
+  it('getComputedStyle falls back to tag-default display when not set inline', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <div id="block"></div>
+        <span id="inline"></span>
+        <img id="imgtag" />
+        <div id="hiddenAttr" hidden></div>
+        <div id="hiddenInline" style="display: none;"></div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      function displayOf(id) { return getComputedStyle(document.getElementById(id)).display; }
+      JSON.stringify({
+        block: displayOf('block'),
+        inline: displayOf('inline'),
+        img: displayOf('imgtag'),
+        hiddenAttr: displayOf('hiddenAttr'),
+        hiddenInline: displayOf('hiddenInline'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      block: 'block', inline: 'inline', img: 'inline-block', hiddenAttr: 'none', hiddenInline: 'none',
+    });
+  });
+
+  it('getComputedStyle defaults visibility/opacity and throws TypeError for a non-Element argument', async () => {
+    dom = JSDOM.create('<html><body><div id="x"></div></body></html>');
+    const result = await dom.evaluate(`
+      const cs = getComputedStyle(document.getElementById('x'));
+      let caught;
+      try { getComputedStyle({}); } catch (e) { caught = e.constructor.name; }
+      JSON.stringify({ visibility: cs.visibility, opacity: cs.opacity, caught });
+    `);
+    expect(JSON.parse(result)).toEqual({ visibility: 'visible', opacity: '1', caught: 'TypeError' });
+  });
 });

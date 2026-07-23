@@ -242,10 +242,12 @@ dom.dispose() // ← always pair with create()
 > Gaps identified auditing against jsdom for the project's core use case
 > (CMS-driven HTML fragments with a small embedded script: countdown timers,
 > personalized greetings, discount badges), prioritized by how often that
-> class of script actually reaches for them. Range/Selection, TreeWalker/
-> NodeIterator, `window.history`, and cross-frame messaging (`postMessage`,
-> `MessageChannel`) are deliberately excluded — they target full-page/SPA or
-> multi-frame scenarios this sandbox isn't built for.
+> class of script actually reaches for them. `Range`/`TreeWalker`/
+> `NodeIterator` and cross-frame messaging (`postMessage`, `MessageChannel`)
+> are deliberately excluded — they target full-page/SPA or multi-frame
+> scenarios this sandbox isn't built for. (`window.history` and
+> `window.getSelection()` were added later, in v0.11, as crash-prevention
+> stubs rather than real navigation/selection — see below.)
 - [x] `document.cookie` (get/set)
 - [x] `<template>` / `element.content` (DocumentFragment)
 - [x] Shadow DOM slotting (`<slot>`, `assignedNodes()`/`assignedElements()`, `slotchange`)
@@ -310,6 +312,23 @@ dom.dispose() // ← always pair with create()
       already made for secondary-document `getElementsBy*()` in v0.10.
 - [x] `AbortSignal.any(signals)`
 - [x] `URL.canParse(url, base?)`
+- [x] `window.history` (`pushState`/`replaceState`/`back`/`forward`/`go`/
+      `.state`/`.length`) — an in-memory entry stack, not real session
+      history (there is no page to navigate). `pushState`/`replaceState`
+      never fire `popstate` (per spec); `back`/`forward`/`go` do, since
+      that's the event CMS-widget routers actually listen for.
+- [x] `window.getSelection()` — always returns the same empty `Selection`
+      stub (`rangeCount: 0`, `toString() → ''`). No layout engine backs this
+      sandbox, so there is nothing to select; this exists purely so
+      defensive `window.getSelection()` guards in third-party scripts don't
+      throw `ReferenceError`.
+- [x] `getComputedStyle(el)` — resolves from the element's inline `style`
+      only, no stylesheet cascade/specificity/inheritance. `display` falls
+      back to a small tag-name table (block/inline/inline-block/none) or
+      `'none'` for a `hidden` attribute, since "is this visible" is the
+      check real-world embedded scripts actually make against it;
+      `visibility`/`opacity` fall back to their initial values; every other
+      unset property returns `''`.
 
 ---
 
