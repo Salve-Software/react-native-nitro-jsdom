@@ -1,3 +1,69 @@
+## [1.1.0](https://github.com/Salve-Software/react-native-nitro-jsdom/compare/v1.0.1...v1.1.0) (2026-07-23)
+
+### ✨ Features
+
+* **customelements:** add customElements.upgrade(root) ([7e2f115](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/7e2f115d2c6b7bbbc738ee0c7092b1ede426dbeb))
+* **dom:** add <template>.content ([ba186c6](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/ba186c6261cf6641f67f247417b22145c9b3798f))
+* **dom:** add Blob and FileReader ([fab5aeb](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/fab5aeb84175e631aa5f1613fda5d1f44bee732c))
+* **dom:** add CSSOM (document.styleSheets, CSSStyleRule, insertRule) ([b84048a](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/b84048a879541f821e7c8021f1a12e750b1d6b78))
+* **dom:** add document.cookie ([1c857be](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/1c857bea54f1982e996e099053087f2f44a004dc))
+* **dom:** add document.doctype and forms/images/scripts/links/getElementsByName ([a6ade18](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/a6ade18d9773aa4299b369623ec582d41beac2e7))
+* **dom:** add DOMContentLoaded/load events on document/window ([db4701b](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/db4701bf22db320f3db795e9bd238fb372e076ce))
+* **dom:** add DOMException with legacy error codes ([2ce3c3d](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/2ce3c3dc41972f582e865ec4082ceed5957ec379))
+* **dom:** add FormData and form submit flow ([064d4f0](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/064d4f0582cd127f8f16ff4c8604838627746cbb))
+* **dom:** add node.normalize() and compareDocumentPosition() ([2998d2c](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/2998d2ceeac383c7fcdd1bf38b8c8dc6b19a89c8))
+* **dom:** add Shadow DOM (attachShadow/shadowRoot) ([085b27e](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/085b27eaa26539f8aac7ec4bd58594f9c8f6480b))
+* **dom:** add template/doctype/normalize/comparePosition natives ([5ee4302](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/5ee4302454d08ba52034b7a3debe3d55cad9cf71))
+* **dom:** add value/checked form element properties ([4a8761b](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/4a8761b6a6a195d966db85e01ceaeb6946955d38))
+* **dom:** add XMLSerializer.serializeToString() ([ef05e1b](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/ef05e1b51cc462bc34eded83dbef748fd9358ff6))
+* **dom:** implement Custom Elements bindings ([cfa91e6](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/cfa91e65492f56ad380bde0caae8632565d10ff8))
+* **events:** add KeyboardEvent and MouseEvent constructors ([7e03e91](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/7e03e9174d506e9915cb3e587af6fdf1dc66a606))
+* **quickjs:** add AbortController/AbortSignal ([965ab96](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/965ab967b234436d420ca59b315d373b9cb94b42))
+* **quickjs:** add crypto.getRandomValues ([de258a7](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/de258a72d09f69a114911d8fefbb54608b430a05))
+* **quickjs:** add global URL/URLSearchParams ([dd68bc8](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/dd68bc8e65dd74cca556a2ed382b2d18e56b29d2))
+* **quickjs:** add requestAnimationFrame, performance.now, queueMicrotask ([f848f48](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/f848f48c7bee4d54179706745c1d2ae3d969074d))
+* **quickjs:** expose Node/Element/HTMLElement/Document globals ([8c252bb](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/8c252bbf8d9205e9e7ae4083a680512289be19c8))
+* **quickjs:** make children/childNodes/getElementsBy* live ([6061b3a](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/6061b3a9e7bebef6403055b14e8c6e3744e1509e))
+* **quickjs:** stub getBoundingClientRect() with a zeroed rect ([b325286](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/b3252860467077a9668c52b9f485b125dfe2c7ff))
+* **sandbox:** add atob/btoa globals ([c903a0f](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/c903a0f32f78156f6c063063d9dea24dc5279cb8))
+* **sandbox:** add navigator and matchMedia ([07a587f](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/07a587fdb68cd3d0de88ac8dd54bafce0a67b3b4))
+* **sandbox:** add TextEncoder/TextDecoder ([cf20ae2](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/cf20ae2d7d26a350866d474303a57b7d068f3898))
+* **sandbox:** wire up pretendToBeVisual to document.hidden ([92935b0](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/92935b0f2e82f70981147b2d32114470c8b63124))
+* **shadowdom:** add slot assignment and slotchange ([bfe6f1e](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/bfe6f1ef1aa581f13a27f9641efc0c0e9a28238e))
+
+### 🐛 Bug Fixes
+
+* **android:** register CustomElementsBindings.cpp in CMakeLists ([e63ed02](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/e63ed0254be913279455d5bacc7ea65647d62efd))
+* **customelements:** bound sync cost to the touched subtree ([325af7e](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/325af7eb938515d357653746a272054581f9fdc0))
+* **customelements:** make subtree sync shadow-aware ([f08f86d](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/f08f86d5d3ed2dae8603dfcf59e938e290967449))
+* **customelements:** throw TypeError for non-Node upgrade() root ([e680bb7](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/e680bb7601379d18183841b6bd11d51de71e74d0))
+* **deps:** add nkf/tsort gems for Ruby 4.0 stdlib removal ([051c753](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/051c7535291f127a6fef9782e739d7f27b851a20))
+* **dom:** add document/window removeEventListener ([5c95c98](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/5c95c985b656a68669cabbc193df297dbbedbb63))
+* **dom:** cache document.doctype for stable identity ([f05dc9a](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/f05dc9af08ee577152f065519fd81e2397f702fa))
+* **dom:** invalidate deep node cache in textarea value setter too ([71a5572](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/71a55724e3105867250ef8b1c6dc795fc9ace5d2))
+* **dom:** notify MutationObserver from select/textarea/checked setters ([11dd0c9](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/11dd0c947ef6e20a9680b0fbd923b014cb4794c1))
+* **dom:** preserve exceptions and invalidate full subtrees on destroy ([8d926f2](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/8d926f2554c0a0593651b93ad656e2f3a6217760))
+* **dom:** treat cookie expires/max-age as deletion ([d082acb](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/d082acb0e3e325882a1982bd222ffd9f149d54e9))
+* **lexbor:** skip non-JS <script type> execution ([3aa5e04](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/3aa5e04b5c5f48aa2eacdb2357cb2bbd7479b9c6))
+* **quickjs:** anchor performance.now() to a time origin ([3a4d0bb](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/3a4d0bb850f1b7fef048e7cbf8dc6494c3221653))
+* **quickjs:** guard LiveCollectionBindings class ID against reallocation ([6fde459](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/6fde4593b510eedef047a6e0ab12eda6ae94fc37))
+* **quickjs:** prevent evaluate() reentrancy deadlock ([e17961d](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/e17961dfb89409b8366606ac25643bb5ccb3a7f2))
+* **quickjs:** respect registration order for AbortSignal.onabort ([6bd3955](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/6bd395512b2132eb923a10b4952e721324e51518))
+* **quickjs:** use byteLength and a real CSPRNG in getRandomValues ([98f9e06](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/98f9e066b4cb2831e3f2e338db009765173ede47))
+* **sandbox:** catch script errors during initialize ([6899947](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/68999472120157264e27edd03645b569b6bc2fe1))
+* **sandbox:** preserve embedded NUL bytes in atob/btoa ([da7199a](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/da7199a6dfa4866854ac8ca8601c7a5e11918d84))
+
+### 📚 Documentation
+
+* **overview:** add v0.9/v0.10 to the roadmap ([59d9845](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/59d98453bae13f734bd3d1691339e18d11eecd79))
+* **overview:** check off v0.10 roadmap items ([4a5915a](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/4a5915aceabb61d1bfa979cb5eecfe5f8dd68157))
+* **testing:** document harness test convention for C++ bindings ([7b52e53](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/7b52e531b3921311f1986444b86428b132df0117))
+* **website:** add testing WebView logic guide ([ba75f58](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/ba75f587b56efadf9b48eea4840584f68ea48142))
+
+### 🛠️ Other changes
+
+* **ios:** bump CocoaPods version in Podfile.lock ([3ccb20c](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/3ccb20c743385c06939ee0b67784e5238c82e967))
+
 ## [1.0.1](https://github.com/Salve-Software/react-native-nitro-jsdom/compare/v1.0.0...v1.0.1) (2026-07-19)
 
 ### 🐛 Bug Fixes
