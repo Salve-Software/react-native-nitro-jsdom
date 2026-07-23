@@ -75,44 +75,73 @@ const char* kCustomElementsBootstrapScript = R"JS(
     for (var i = 0; i < found.length; i++) upgradeElement(found[i]);
   }
 
-  function upgradeSubtree(root) {
-    if (!root || typeof root.querySelectorAll !== 'function') return;
+  // Returns the shadow root attached to `el`, if any, regardless of mode.
+  // Element.prototype.shadowRoot hides closed-mode roots from user script by
+  // spec, but our own upgrade/connectivity bookkeeping isn't user script —
+  // it needs to see into every shadow tree the same way the UA internally
+  // does. Populated by the attachShadow() patch further down.
+  function shadowRootOf(el) {
+    return el ? el.__ceShadowRoot : null;
+  }
+
+  // Collects every descendant of `root` (light DOM), recursing into root's
+  // OWN attached shadow root (a custom element's shadow content isn't a
+  // light-DOM child of anything — querySelectorAll('*') alone would never
+  // find it) as well as each descendant's shadow root, so custom elements
+  // living inside shadow trees aren't invisible to the subtree-scoped hooks
+  // below. Does not include `root` itself.
+  function collectDescendantsIncludingShadow(root, out) {
+    if (!root) return;
+    var rootSr = shadowRootOf(root);
+    if (rootSr) collectDescendantsIncludingShadow(rootSr, out);
+    if (typeof root.querySelectorAll !== 'function') return;
     var found = root.querySelectorAll('*');
+    for (var i = 0; i < found.length; i++) {
+      var el = found[i];
+      out.push(el);
+      var sr = shadowRootOf(el);
+      if (sr) collectDescendantsIncludingShadow(sr, out);
+    }
+  }
+
+  function upgradeSubtree(root) {
+    var found = [];
+    collectDescendantsIncludingShadow(root, found);
     for (var i = 0; i < found.length; i++) upgradeElement(found[i]);
   }
 
   // Fires disconnectedCallback for every already-upgraded, already-connected
-  // custom element currently in root's subtree. Call this on the OLD content
-  // of a node right BEFORE it's wholesale-replaced (innerHTML assignment
-  // unconditionally destroys every existing child), while it's still walkable.
+  // custom element currently in root's subtree (light DOM + nested shadow
+  // trees). Call this on the OLD content of a node right BEFORE it's
+  // wholesale-replaced (innerHTML assignment unconditionally destroys every
+  // existing child), while it's still walkable.
   function disconnectSubtree(root) {
-    if (!root || typeof root.querySelectorAll !== 'function') return;
-    var found = root.querySelectorAll('*');
+    var found = [];
+    collectDescendantsIncludingShadow(root, found);
     for (var i = 0; i < found.length; i++) {
       var el = found[i];
       if (el.__ceUpgraded && el.__ceConnected) fireConnectivityChange(el, false);
     }
   }
 
-  // Re-checks connectivity of `node` and its current descendants, firing
-  // connectedCallback/disconnectedCallback on transitions. Used by
-  // appendChild/removeChild, which know exactly which subtree moved, so this
-  // stays O(size of that subtree) regardless of how many custom elements
-  // exist elsewhere in the document.
+  // Re-checks connectivity of `node`, and every descendant across light DOM
+  // and nested shadow trees, firing connectedCallback/disconnectedCallback on
+  // transitions. Used by appendChild/removeChild, which know exactly which
+  // subtree moved, so this stays O(size of that subtree) regardless of how
+  // many custom elements exist elsewhere in the document.
   function syncConnectedSubtree(node) {
     if (!node) return;
     if (node.__ceUpgraded) {
       var connected = isConnected(node);
       if (connected !== node.__ceConnected) fireConnectivityChange(node, connected);
     }
-    if (typeof node.querySelectorAll === 'function') {
-      var found = node.querySelectorAll('*');
-      for (var i = 0; i < found.length; i++) {
-        var el = found[i];
-        if (!el.__ceUpgraded) continue;
-        var elConnected = isConnected(el);
-        if (elConnected !== el.__ceConnected) fireConnectivityChange(el, elConnected);
-      }
+    var found = [];
+    collectDescendantsIncludingShadow(node, found);
+    for (var i = 0; i < found.length; i++) {
+      var el = found[i];
+      if (!el.__ceUpgraded) continue;
+      var elConnected = isConnected(el);
+      if (elConnected !== el.__ceConnected) fireConnectivityChange(el, elConnected);
     }
   }
 
@@ -206,6 +235,15 @@ const char* kCustomElementsBootstrapScript = R"JS(
   patchInnerHTML(Element.prototype);
   patchInnerHTML(ShadowRoot.prototype);
 
+  // ── Track attached shadow roots for internal (mode-agnostic) traversal ───
+
+  var origAttachShadow = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function(options) {
+    var root = origAttachShadow.call(this, options);
+    Object.defineProperty(this, '__ceShadowRoot', { value: root, configurable: true });
+    return root;
+  };
+
   // ── Upgrade hooks: Element.prototype.insertAdjacentHTML ──────────────────
 
   // insertAdjacentHTML only ever adds content, never removes any — no
@@ -215,7 +253,10 @@ const char* kCustomElementsBootstrapScript = R"JS(
   Element.prototype.insertAdjacentHTML = function(position, html) {
     origInsertAdjacentHTML.call(this, position, html);
     upgradeSubtree(this);
-    if (this.parentNode) upgradeSubtree(this.parentNode);
+    var pos = String(position).toLowerCase();
+    if ((pos === 'beforebegin' || pos === 'afterend') && this.parentNode) {
+      upgradeSubtree(this.parentNode);
+    }
   };
 
   // ── Connect/disconnect hooks: Node.prototype.appendChild / removeChild ───

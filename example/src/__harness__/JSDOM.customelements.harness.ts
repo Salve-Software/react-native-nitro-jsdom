@@ -186,6 +186,35 @@ describe('JSDOM Custom Elements', () => {
     expect(JSON.parse(result)).toEqual({ isInstance: true });
   });
 
+  it('appendChild()/removeChild() of a host element also connects/disconnects custom elements inside its (closed) shadow root', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const log = [];
+      class NestedEl extends HTMLElement {
+        connectedCallback() { log.push('connected'); }
+        disconnectedCallback() { log.push('disconnected'); }
+      }
+      customElements.define('nested-el', NestedEl);
+
+      const host = document.createElement('div');
+      const shadow = host.attachShadow({ mode: 'closed' });
+      const nested = document.createElement('nested-el');
+      shadow.appendChild(nested);
+      const beforeHostConnect = log.slice();
+
+      document.body.appendChild(host);
+      const afterHostConnect = log.slice();
+
+      document.body.removeChild(host);
+      JSON.stringify({ beforeHostConnect, afterHostConnect, afterHostDisconnect: log });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      beforeHostConnect: [],
+      afterHostConnect: ['connected'],
+      afterHostDisconnect: ['connected', 'disconnected'],
+    });
+  });
+
   it('insertAdjacentHTML() upgrades the newly inserted elements', async () => {
     dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
     const result = await dom.evaluate(`
