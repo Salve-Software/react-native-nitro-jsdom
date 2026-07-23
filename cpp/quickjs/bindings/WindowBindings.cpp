@@ -2,9 +2,9 @@
 #include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
+#include <cstdlib>
 #include <cstring>
 #include <optional>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -346,12 +346,12 @@ JSValue js_native_random_bytes(JSContext* ctx, JSValue, int argc, JSValue* argv)
   if (argc >= 1) JS_ToInt32(ctx, &count, argv[0]);
   if (count < 0) count = 0;
 
-  static thread_local std::mt19937 gen{std::random_device{}()};
-  std::uniform_int_distribution<int> dist(0, 255);
+  std::vector<uint8_t> bytes(static_cast<size_t>(count));
+  if (count > 0) arc4random_buf(bytes.data(), bytes.size());
 
   JSValue arr = JS_NewArray(ctx);
   for (int32_t i = 0; i < count; i++) {
-    JS_SetPropertyUint32(ctx, arr, static_cast<uint32_t>(i), JS_NewInt32(ctx, dist(gen)));
+    JS_SetPropertyUint32(ctx, arr, static_cast<uint32_t>(i), JS_NewInt32(ctx, bytes[static_cast<size_t>(i)]));
   }
   return arr;
 }
