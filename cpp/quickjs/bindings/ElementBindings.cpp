@@ -1245,6 +1245,18 @@ JSValue js_el_compareDocumentPosition(JSContext* ctx, JSValue this_val, int argc
   return JS_NewInt32(ctx, doc_for_node(ctx, node)->compareDocumentPosition(node, other));
 }
 
+JSValue js_canonicalize_root_node(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_UNDEFINED;
+  auto* node = unwrap_node(ctx, argv[0]);
+  if (node && node->type == LXB_DOM_NODE_TYPE_DOCUMENT && doc_for_node(ctx, node) == get_doc(ctx)) {
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue doc_val = JS_GetPropertyStr(ctx, global, "document");
+    JS_FreeValue(ctx, global);
+    return doc_val;
+  }
+  return JS_DupValue(ctx, argv[0]);
+}
+
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
@@ -1341,10 +1353,31 @@ void ElementBindings::install(JSContext* ctx) {
   JSValue element_ctor = define_global_constructor(ctx, "Element", element_proto_ref);
   JSValue global = JS_GetGlobalObject(ctx);
   JS_SetPropertyStr(ctx, global, "HTMLElement", element_ctor);
+  JS_SetPropertyStr(ctx, global, "__nativeCanonicalizeRootNode",
+                     JS_NewCFunction(ctx, js_canonicalize_root_node, "__nativeCanonicalizeRootNode", 1));
   JS_FreeValue(ctx, global);
 
   JS_FreeValue(ctx, node_proto_ref);
   JS_FreeValue(ctx, element_proto_ref);
+
+  static const char* kGetRootNodeScript = R"JS(
+  (function() {
+    Node.prototype.getRootNode = function(options) {
+      var composed = !!(options && options.composed);
+      var node = this;
+      while (true) {
+        var parent = node.parentNode;
+        if (parent) { node = parent; continue; }
+        if (composed && node.host) { node = node.host; continue; }
+        return __nativeCanonicalizeRootNode(node);
+      }
+    };
+  })();
+  )JS";
+  JSValue root_node_result = JS_Eval(ctx, kGetRootNodeScript, strlen(kGetRootNodeScript),
+                                      "<get-root-node-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(root_node_result)) JS_FreeValue(ctx, JS_GetException(ctx));
+  JS_FreeValue(ctx, root_node_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom

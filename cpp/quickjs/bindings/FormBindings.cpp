@@ -300,6 +300,34 @@ const char* kFormBootstrapScript = R"JS(
   Element.prototype.reportValidity = function() {
     return this.checkValidity();
   };
+
+  // ── element.form / form.elements ────────────────────────────────────────
+  var FORM_ASSOCIATED_TAGS = ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'FIELDSET', 'OUTPUT'];
+
+  function formControls(form) {
+    return Array.prototype.slice.call(form.querySelectorAll('input, select, textarea, button, fieldset, output'));
+  }
+
+  Object.defineProperty(Element.prototype, 'form', {
+    configurable: true,
+    get: function() {
+      if (FORM_ASSOCIATED_TAGS.indexOf(this.tagName) === -1) return undefined;
+      var formId = this.getAttribute('form');
+      if (formId) {
+        var byId = document.getElementById(formId);
+        if (byId && byId.tagName === 'FORM') return byId;
+      }
+      return this.closest('form');
+    },
+  });
+
+  Object.defineProperty(Element.prototype, 'elements', {
+    configurable: true,
+    get: function() {
+      if (this.tagName !== 'FORM') return undefined;
+      return formControls(this);
+    },
+  });
 })();
 )JS";
 

@@ -200,4 +200,24 @@ describe('JSDOM selectors, live collections, instanceof', () => {
     const result = await dom.evaluate('document.doctype === document.doctype');
     expect(result).toBe('true');
   });
+
+  it('querySelectorAll()/getElementsBy*() results support forEach(value, index, collection)', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <p class="hit">a</p>
+        <p class="hit">b</p>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const seen = [];
+      document.querySelectorAll('.hit').forEach((el, i, collection) => {
+        seen.push({ text: el.textContent, index: i, collectionLength: collection.length });
+      });
+      JSON.stringify(seen);
+    `);
+    expect(JSON.parse(result)).toEqual([
+      { text: 'a', index: 0, collectionLength: 2 },
+      { text: 'b', index: 1, collectionLength: 2 },
+    ]);
+  });
 });

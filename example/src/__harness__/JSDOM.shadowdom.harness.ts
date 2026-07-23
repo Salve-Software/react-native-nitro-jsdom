@@ -215,4 +215,19 @@ describe('JSDOM Shadow DOM', () => {
     `);
     expect(JSON.parse(result)).toEqual({ name: 'RangeError', message: 'boom' });
   });
+
+  it('getRootNode() stops at the ShadowRoot by default, but crosses into the light DOM with {composed: true}', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<span id="inner">hi</span>';
+      const inner = shadow.querySelector('#inner');
+      JSON.stringify({
+        defaultRootIsShadow: inner.getRootNode() === shadow,
+        composedRootIsDocument: inner.getRootNode({ composed: true }) === document,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ defaultRootIsShadow: true, composedRootIsDocument: true });
+  });
 });

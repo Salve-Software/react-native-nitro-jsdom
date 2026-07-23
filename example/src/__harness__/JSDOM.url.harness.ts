@@ -71,4 +71,16 @@ describe('JSDOM URL/URLSearchParams', () => {
       entries: [['0', 'first'], ['a', '9']],
     });
   });
+
+  it('URL.canParse() reports parseability without throwing or constructing a URL', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        absolute: URL.canParse('https://example.com/x'),
+        relativeWithBase: URL.canParse('/path', 'https://example.com'),
+        invalid: URL.canParse('not a url'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ absolute: true, relativeWithBase: true, invalid: false });
+  });
 });

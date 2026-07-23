@@ -86,6 +86,20 @@ const char* kAbortBootstrapScript = R"JS(
     setTimeout(function() { s._abort(makeTimeoutError()); }, ms);
     return s;
   };
+  AbortSignal.any = function(signals) {
+    var s = new AbortSignal();
+    var list = [];
+    for (var i = 0; i < signals.length; i++) list.push(signals[i]);
+    for (var j = 0; j < list.length; j++) {
+      if (list[j].aborted) { s._abort(list[j].reason); break; }
+    }
+    if (!s.aborted) {
+      list.forEach(function(signal) {
+        signal.addEventListener('abort', function() { s._abort(signal.reason); });
+      });
+    }
+    return s;
+  };
 
   globalThis.AbortSignal = AbortSignal;
 

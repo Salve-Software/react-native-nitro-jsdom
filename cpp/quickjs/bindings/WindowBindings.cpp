@@ -405,6 +405,62 @@ const char* kNavigatorBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── structuredClone ────────────────────────────────────────────────────────
+
+const char* kStructuredCloneBootstrapScript = R"JS(
+(function() {
+  globalThis.structuredClone = function(value) {
+    var seen = new Map();
+    function clone(v) {
+      if (v === null || typeof v !== 'object') {
+        if (typeof v === 'function' || typeof v === 'symbol') {
+          throw new DOMException(String(v) + ' could not be cloned.', 'DataCloneError');
+        }
+        return v;
+      }
+      if (seen.has(v)) return seen.get(v);
+      if (v instanceof Date) return new Date(v.getTime());
+      if (v instanceof RegExp) return new RegExp(v.source, v.flags);
+      if (Array.isArray(v)) {
+        var arr = [];
+        seen.set(v, arr);
+        for (var i = 0; i < v.length; i++) arr.push(clone(v[i]));
+        return arr;
+      }
+      if (v instanceof Map) {
+        var m = new Map();
+        seen.set(v, m);
+        v.forEach(function(val, key) { m.set(clone(key), clone(val)); });
+        return m;
+      }
+      if (v instanceof Set) {
+        var s = new Set();
+        seen.set(v, s);
+        v.forEach(function(val) { s.add(clone(val)); });
+        return s;
+      }
+      if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(v)) {
+        return new v.constructor(v);
+      }
+      if (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) {
+        return v.slice(0);
+      }
+      var proto = Object.getPrototypeOf(v);
+      if (proto !== Object.prototype && proto !== null) {
+        throw new DOMException('The object could not be cloned.', 'DataCloneError');
+      }
+      var out = {};
+      seen.set(v, out);
+      for (var key in v) {
+        if (Object.prototype.hasOwnProperty.call(v, key)) out[key] = clone(v[key]);
+      }
+      return out;
+    }
+    return clone(value);
+  };
+})();
+)JS";
+
 // ── matchMedia ─────────────────────────────────────────────────────────────
 // No layout engine backs this sandbox, so every query reports "no match" —
 // mirrors jsdom's own stance that layout-dependent APIs return inert defaults
@@ -488,6 +544,13 @@ void WindowBindings::install(JSContext* ctx) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, match_media_result);
+
+  JSValue structured_clone_result = JS_Eval(ctx, kStructuredCloneBootstrapScript, strlen(kStructuredCloneBootstrapScript),
+                                             "<structured-clone-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(structured_clone_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, structured_clone_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom
