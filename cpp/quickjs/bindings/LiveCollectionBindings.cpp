@@ -138,6 +138,10 @@ const char* kIteratorBootstrapScript = R"JS(
       }
     };
   };
+
+  proto.forEach = function(callback, thisArg) {
+    for (var i = 0; i < this.length; i++) callback.call(thisArg, this[i], i, this);
+  };
   delete globalThis.__LiveCollectionProto;
 })();
 )JS";
