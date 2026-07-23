@@ -4,6 +4,7 @@
 #include "../QuickJSRuntime.hpp"
 #include "../../lexbor/LexborDocument.hpp"
 #include <cstring>
+#include <string>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -54,6 +55,35 @@ JSValue js_doc_getElementsByTagName(JSContext* ctx, JSValue, int argc, JSValue* 
   return result;
 }
 
+JSValue js_doc_getElementsByName(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) return JS_NewArray(ctx);
+  const char* name = JS_ToCString(ctx, argv[0]);
+  if (!name) return JS_NewArray(ctx);
+  std::string selector = "[name=\"" + std::string(name) + "\"]";
+  JS_FreeCString(ctx, name);
+  return LiveCollectionBindings::makeBySelector(ctx, nullptr, selector);
+}
+
+// document.forms/.images/.scripts/.links — live HTMLCollections backed by the
+// same LiveCollectionBindings::makeBySelector primitive that already backs
+// getElementsByClassName/getElementsByTagName. .links matches jsdom: any <a>
+// or <area> that actually has an href attribute (bare <a> anchors don't count).
+JSValue js_doc_get_forms(JSContext* ctx, JSValue) {
+  return LiveCollectionBindings::makeBySelector(ctx, nullptr, "form");
+}
+
+JSValue js_doc_get_images(JSContext* ctx, JSValue) {
+  return LiveCollectionBindings::makeBySelector(ctx, nullptr, "img");
+}
+
+JSValue js_doc_get_scripts(JSContext* ctx, JSValue) {
+  return LiveCollectionBindings::makeBySelector(ctx, nullptr, "script");
+}
+
+JSValue js_doc_get_links(JSContext* ctx, JSValue) {
+  return LiveCollectionBindings::makeBySelector(ctx, nullptr, "a[href], area[href]");
+}
+
 JSValue js_doc_createElement(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   if (argc < 1) return JS_NULL;
   const char* tag = JS_ToCString(ctx, argv[0]);
@@ -98,6 +128,28 @@ JSValue js_doc_get_documentElement(JSContext* ctx, JSValue) {
   return make_element(ctx, get_doc(ctx)->documentElement());
 }
 
+// document.doctype is exposed as a plain {name, publicId, systemId, nodeType,
+// nodeName} object rather than routed through make_element()/the generic
+// Node wrapper: DocumentType's `name` is an interned lxb_dom_attr_id_t (needs
+// LexborDocument::doctypeName(), not the generic nodeName getter), and it has
+// no other Node behavior real-world embedded scripts rely on (no children,
+// not appendChild-able).
+JSValue js_doc_get_doctype(JSContext* ctx, JSValue) {
+  void* dt = get_doc(ctx)->doctype();
+  if (!dt) return JS_NULL;
+
+  JSValue obj = JS_NewObject(ctx);
+  std::string name = get_doc(ctx)->doctypeName(dt);
+  JS_SetPropertyStr(ctx, obj, "name",      JS_NewStringLen(ctx, name.data(), name.size()));
+  std::string publicId = get_doc(ctx)->doctypePublicId(dt);
+  JS_SetPropertyStr(ctx, obj, "publicId",  JS_NewStringLen(ctx, publicId.data(), publicId.size()));
+  std::string systemId = get_doc(ctx)->doctypeSystemId(dt);
+  JS_SetPropertyStr(ctx, obj, "systemId",  JS_NewStringLen(ctx, systemId.data(), systemId.size()));
+  JS_SetPropertyStr(ctx, obj, "nodeType",  JS_NewInt32(ctx, 10));
+  JS_SetPropertyStr(ctx, obj, "nodeName",  JS_NewStringLen(ctx, name.data(), name.size()));
+  return obj;
+}
+
 const char* kDocumentTitleBootstrapScript = R"JS(
 (function() {
   Object.defineProperty(document, 'title', {
@@ -134,6 +186,7 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "querySelectorAll",       JS_NewCFunction(ctx, js_doc_querySelectorAll,       "querySelectorAll",       1));
   JS_SetPropertyStr(ctx, doc, "getElementsByClassName", JS_NewCFunction(ctx, js_doc_getElementsByClassName, "getElementsByClassName", 1));
   JS_SetPropertyStr(ctx, doc, "getElementsByTagName",   JS_NewCFunction(ctx, js_doc_getElementsByTagName,   "getElementsByTagName",   1));
+  JS_SetPropertyStr(ctx, doc, "getElementsByName",      JS_NewCFunction(ctx, js_doc_getElementsByName,      "getElementsByName",      1));
   JS_SetPropertyStr(ctx, doc, "createElement",          JS_NewCFunction(ctx, js_doc_createElement,          "createElement",          1));
   JS_SetPropertyStr(ctx, doc, "createTextNode",         JS_NewCFunction(ctx, js_doc_createTextNode,         "createTextNode",         1));
   JS_SetPropertyStr(ctx, doc, "createComment",          JS_NewCFunction(ctx, js_doc_createComment,          "createComment",          1));
@@ -142,6 +195,11 @@ void DocumentBindings::install(JSContext* ctx) {
   define_prop(ctx, doc, "body",            js_doc_get_body,            nullptr);
   define_prop(ctx, doc, "head",            js_doc_get_head,            nullptr);
   define_prop(ctx, doc, "documentElement", js_doc_get_documentElement, nullptr);
+  define_prop(ctx, doc, "doctype",         js_doc_get_doctype,         nullptr);
+  define_prop(ctx, doc, "forms",           js_doc_get_forms,           nullptr);
+  define_prop(ctx, doc, "images",          js_doc_get_images,          nullptr);
+  define_prop(ctx, doc, "scripts",         js_doc_get_scripts,         nullptr);
+  define_prop(ctx, doc, "links",           js_doc_get_links,           nullptr);
 
   RuntimeContext* rctx = get_ctx(ctx);
   bool hidden = !(rctx && rctx->pretend_to_be_visual);
