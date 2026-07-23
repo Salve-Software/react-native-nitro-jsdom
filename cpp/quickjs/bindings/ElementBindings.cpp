@@ -1345,6 +1345,25 @@ void ElementBindings::install(JSContext* ctx) {
 
   JS_FreeValue(ctx, node_proto_ref);
   JS_FreeValue(ctx, element_proto_ref);
+
+  static const char* kGetRootNodeScript = R"JS(
+  (function() {
+    Node.prototype.getRootNode = function(options) {
+      var composed = !!(options && options.composed);
+      var node = this;
+      while (true) {
+        var parent = node.parentNode;
+        if (parent) { node = parent; continue; }
+        if (composed && node.host) { node = node.host; continue; }
+        return node;
+      }
+    };
+  })();
+  )JS";
+  JSValue root_node_result = JS_Eval(ctx, kGetRootNodeScript, strlen(kGetRootNodeScript),
+                                      "<get-root-node-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(root_node_result)) JS_FreeValue(ctx, JS_GetException(ctx));
+  JS_FreeValue(ctx, root_node_result);
 }
 
 } // namespace margelo::nitro::nitrojsdom

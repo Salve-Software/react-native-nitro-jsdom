@@ -312,4 +312,23 @@ describe('JSDOM node traversal', () => {
     `);
     expect(JSON.parse(result)).toEqual({ docStatic: 1, docNodeType: 9, docNodeName: '#document' });
   });
+
+  it('getRootNode() walks up to the top-most ancestor', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const child = document.getElementById('child');
+      const root = child.getRootNode();
+      JSON.stringify({ rootIsHtml: root === document.documentElement, rootTag: root.tagName });
+    `);
+    expect(JSON.parse(result)).toEqual({ rootIsHtml: true, rootTag: 'HTML' });
+  });
+
+  it('getRootNode() on a detached node returns itself', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const detached = document.createElement('div');
+      detached.getRootNode() === detached;
+    `);
+    expect(result).toBe('true');
+  });
 });
