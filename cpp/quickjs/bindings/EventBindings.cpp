@@ -504,6 +504,53 @@ void define_doc_handler(JSContext* ctx, JSValue obj, const char* name, int magic
   JS_FreeAtom(ctx, atom);
 }
 
+JSValue make_simple_event(JSContext* ctx, const char* type, bool bubbles, bool cancelable) {
+  JSValue obj = JS_NewObjectClass(ctx, js_event_class_id);
+  JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, type));
+  JS_SetPropertyStr(ctx, obj, "bubbles", JS_NewBool(ctx, bubbles));
+  JS_SetPropertyStr(ctx, obj, "cancelable", JS_NewBool(ctx, cancelable));
+  JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
+  return obj;
+}
+
+void fire_simple_event(JSContext* ctx, RuntimeContext* rctx, const char* type, bool bubbles, bool cancelable, lxb_dom_node_t* node) {
+  JSValue evt = make_simple_event(ctx, type, bubbles, cancelable);
+  JSValue r = dispatch_event_on_target(ctx, rctx, evt, node);
+  JS_FreeValue(ctx, evt);
+  if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
+  else JS_FreeValue(ctx, r);
+}
+
+JSValue js_el_click(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  auto* rctx = get_ctx(ctx);
+  auto* node = unwrap_node(ctx, this_val);
+  if (!rctx || !node) return JS_UNDEFINED;
+  fire_simple_event(ctx, rctx, "click", true, true, node);
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_focus(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  auto* rctx = get_ctx(ctx);
+  auto* node = unwrap_node(ctx, this_val);
+  if (!rctx || !node || rctx->active_element == node) return JS_UNDEFINED;
+
+  void* previous = rctx->active_element;
+  rctx->active_element = node;
+  if (previous) fire_simple_event(ctx, rctx, "blur", false, false, static_cast<lxb_dom_node_t*>(previous));
+  fire_simple_event(ctx, rctx, "focus", false, false, node);
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_blur(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  auto* rctx = get_ctx(ctx);
+  auto* node = unwrap_node(ctx, this_val);
+  if (!rctx || !node || rctx->active_element != node) return JS_UNDEFINED;
+
+  rctx->active_element = nullptr;
+  fire_simple_event(ctx, rctx, "blur", false, false, node);
+  return JS_UNDEFINED;
+}
+
 } // namespace
 
 void EventBindings::install(JSContext* ctx) {
@@ -539,6 +586,12 @@ void EventBindings::install(JSContext* ctx) {
   define_element_handler(ctx, node_proto, "onload",  1);
   define_element_handler(ctx, node_proto, "onerror", 2);
   JS_FreeValue(ctx, node_proto);
+
+  JSValue element_proto = JS_GetClassProto(ctx, js_element_class_id);
+  JS_SetPropertyStr(ctx, element_proto, "click", JS_NewCFunction(ctx, js_el_click, "click", 0));
+  JS_SetPropertyStr(ctx, element_proto, "focus", JS_NewCFunction(ctx, js_el_focus, "focus", 0));
+  JS_SetPropertyStr(ctx, element_proto, "blur",  JS_NewCFunction(ctx, js_el_blur,  "blur",  0));
+  JS_FreeValue(ctx, element_proto);
 
   // ── addEventListener/removeEventListener/dispatchEvent on document ────────
   // DocumentBindings::install() must have already run so globalThis.document exists.

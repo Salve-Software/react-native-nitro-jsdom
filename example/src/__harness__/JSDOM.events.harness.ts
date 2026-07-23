@@ -162,4 +162,53 @@ describe('JSDOM events', () => {
     `);
     expect(JSON.parse(result)).toEqual({ same: true });
   });
+
+  it('element.click() dispatches a bubbling, cancelable click event', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><button id="b"></button></div></body></html>');
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('b');
+      const parent = document.getElementById('parent');
+      const log = [];
+      btn.addEventListener('click', (e) => log.push({ where: 'btn', bubbles: e.bubbles, cancelable: e.cancelable }));
+      parent.addEventListener('click', () => log.push({ where: 'parent' }));
+      btn.click();
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual([
+      { where: 'btn', bubbles: true, cancelable: true },
+      { where: 'parent' },
+    ]);
+  });
+
+  it('element.focus() updates document.activeElement and fires focus/blur across elements', async () => {
+    dom = JSDOM.create('<html><body><input id="a"><input id="b"></body></html>');
+    const result = await dom.evaluate(`
+      const a = document.getElementById('a');
+      const b = document.getElementById('b');
+      const log = [];
+      a.addEventListener('focus', () => log.push('a:focus'));
+      a.addEventListener('blur', () => log.push('a:blur'));
+      b.addEventListener('focus', () => log.push('b:focus'));
+      a.focus();
+      log.push(document.activeElement.id);
+      b.focus();
+      log.push(document.activeElement.id);
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['a:focus', 'a', 'a:blur', 'b:focus', 'b']);
+  });
+
+  it('element.blur() clears document.activeElement back to document.body and fires blur', async () => {
+    dom = JSDOM.create('<html><body><input id="a"></body></html>');
+    const result = await dom.evaluate(`
+      const a = document.getElementById('a');
+      const log = [];
+      a.addEventListener('blur', () => log.push('blur'));
+      a.focus();
+      a.blur();
+      log.push(document.activeElement === document.body);
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['blur', true]);
+  });
 });
