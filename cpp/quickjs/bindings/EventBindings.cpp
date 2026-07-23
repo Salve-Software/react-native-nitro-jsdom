@@ -433,6 +433,17 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "dispatchEvent",    JS_NewCFunction(ctx, js_doc_dispatchEvent,    "dispatchEvent",    1));
   JS_FreeValue(ctx, doc);
 
+  // ── addEventListener/dispatchEvent on window ───────────────────────────────
+  // window === globalThis (see QuickJSRuntime::initialize()) and has no native
+  // node of its own to key listeners by, so js_doc_addEventListener/
+  // js_doc_dispatchEvent (which never read `this` — they always resolve the
+  // target through rctx->document) are reused verbatim. This means
+  // window.addEventListener(...) and document.addEventListener(...) share one
+  // listener list/target in this sandbox — a deliberate simplification, not a
+  // real separate Window EventTarget.
+  JS_SetPropertyStr(ctx, global, "addEventListener", JS_NewCFunction(ctx, js_doc_addEventListener, "addEventListener", 2));
+  JS_SetPropertyStr(ctx, global, "dispatchEvent",    JS_NewCFunction(ctx, js_doc_dispatchEvent,    "dispatchEvent",    1));
+
   JS_FreeValue(ctx, global);
 }
 

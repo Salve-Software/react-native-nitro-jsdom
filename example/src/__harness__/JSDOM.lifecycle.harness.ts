@@ -79,6 +79,21 @@ describe('JSDOM lifecycle', () => {
     await dom.evaluate(`fetch('https://example.com')`);
   });
 
+  it('fires DOMContentLoaded then load, once each, on document and window listeners registered by inline scripts', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <script>
+          window.__events = [];
+          document.addEventListener('DOMContentLoaded', function() { window.__events.push('doc:DOMContentLoaded'); });
+          window.addEventListener('DOMContentLoaded', function() { window.__events.push('win:DOMContentLoaded'); });
+          window.addEventListener('load', function() { window.__events.push('win:load'); });
+        </script>
+      </body></html>
+    `);
+    const result = await dom.evaluate('JSON.stringify(window.__events)');
+    expect(JSON.parse(result)).toEqual(['doc:DOMContentLoaded', 'win:DOMContentLoaded', 'win:load']);
+  });
+
   it('skips non-JS <script> types like application/ld+json', async () => {
     dom = JSDOM.create(`
       <html>
