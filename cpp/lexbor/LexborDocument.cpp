@@ -1,11 +1,17 @@
 #include "LexborDocument.hpp"
 #include <lexbor/html/html.h>
+#include <lexbor/html/interfaces/template_element.h>
 #include <lexbor/css/css.h>
 #include <lexbor/selectors/selectors.h>
 #include <lexbor/dom/dom.h>
+#include <lexbor/dom/interfaces/character_data.h>
+#include <lexbor/dom/interfaces/document_type.h>
 #include <stdexcept>
 #include <cctype>
+#include <cstring>
 #include <unordered_set>
+#include <vector>
+#include <algorithm>
 
 namespace margelo::nitro::nitrojsdom {
 
@@ -300,7 +306,17 @@ void LexborDocument::setInnerHTMLOnShadowRoot(void* shadowRoot, void* hostElemen
 void LexborDocument::setInnerHTMLOnEl(void* element, const std::string& html) {
   auto* el  = static_cast<lxb_dom_element_t*>(element);
   auto* doc = static_cast<lxb_html_document_t*>(_document);
-  auto* root = lxb_dom_interface_node(el);
+
+  // <template>.innerHTML populates .content (a separate inert fragment), not
+  // the template element's own light-DOM children — matches the parser's own
+  // "in template" insertion mode behavior for parsed <template> markup.
+  size_t tag_len = 0;
+  const lxb_char_t* tag_name = lxb_dom_element_local_name(el, &tag_len);
+  bool is_template = tag_len == 8 && memcmp(tag_name, "template", 8) == 0;
+
+  lxb_dom_node_t* root = is_template
+      ? lxb_dom_interface_node(reinterpret_cast<lxb_html_template_element_t*>(el)->content)
+      : lxb_dom_interface_node(el);
 
   lxb_dom_node_t* frag = lxb_html_document_parse_fragment(doc, el,
       reinterpret_cast<const lxb_char_t*>(html.data()), html.size());
@@ -343,6 +359,157 @@ bool LexborDocument::matchesSelector(void* element, const std::string& sel) cons
     if (el == element) return true;
   }
   return false;
+}
+
+// ── <template> ────────────────────────────────────────────────────────────
+
+void* LexborDocument::templateContent(void* templateEl) const {
+  if (!templateEl) return nullptr;
+  auto* tpl = reinterpret_cast<lxb_html_template_element_t*>(templateEl);
+  return tpl->content;
+}
+
+// ── Doctype ──────────────────────────────────────────────────────────────────
+
+void* LexborDocument::doctype() const {
+  if (!_document) return nullptr;
+  auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
+  return dom_doc->doctype;
+}
+
+std::string LexborDocument::doctypeName(void* voidDoctype) const {
+  if (!voidDoctype) return "";
+  size_t len = 0;
+  const lxb_char_t* name = lxb_dom_document_type_name(
+      static_cast<lxb_dom_document_type_t*>(voidDoctype), &len);
+  return name ? std::string(reinterpret_cast<const char*>(name), len) : "";
+}
+
+std::string LexborDocument::doctypePublicId(void* voidDoctype) const {
+  if (!voidDoctype) return "";
+  size_t len = 0;
+  const lxb_char_t* id = lxb_dom_document_type_public_id(
+      static_cast<lxb_dom_document_type_t*>(voidDoctype), &len);
+  return id ? std::string(reinterpret_cast<const char*>(id), len) : "";
+}
+
+std::string LexborDocument::doctypeSystemId(void* voidDoctype) const {
+  if (!voidDoctype) return "";
+  size_t len = 0;
+  const lxb_char_t* id = lxb_dom_document_type_system_id(
+      static_cast<lxb_dom_document_type_t*>(voidDoctype), &len);
+  return id ? std::string(reinterpret_cast<const char*>(id), len) : "";
+}
+
+// ── Node.normalize() ─────────────────────────────────────────────────────────
+
+namespace {
+
+void normalize_children(lxb_dom_node_t* parent) {
+  lxb_dom_node_t* child = parent->first_child;
+  while (child) {
+    lxb_dom_node_t* next = child->next;
+
+    if (child->type == LXB_DOM_NODE_TYPE_TEXT) {
+      auto* cd = reinterpret_cast<lxb_dom_character_data_t*>(child);
+      std::string merged(reinterpret_cast<const char*>(cd->data.data), cd->data.length);
+      size_t old_len = cd->data.length;
+
+      lxb_dom_node_t* sibling = next;
+      while (sibling && sibling->type == LXB_DOM_NODE_TYPE_TEXT) {
+        auto* scd = reinterpret_cast<lxb_dom_character_data_t*>(sibling);
+        merged.append(reinterpret_cast<const char*>(scd->data.data), scd->data.length);
+        lxb_dom_node_t* dead = sibling;
+        sibling = sibling->next;
+        lxb_dom_node_remove(dead);
+        lxb_dom_node_destroy(dead);
+      }
+
+      if (merged.empty()) {
+        lxb_dom_node_remove(child);
+        lxb_dom_node_destroy(child);
+      } else {
+        lxb_dom_character_data_replace(cd,
+            reinterpret_cast<const lxb_char_t*>(merged.data()), merged.size(),
+            0, old_len);
+      }
+      next = sibling;
+    } else if (child->first_child) {
+      normalize_children(child);
+    }
+
+    child = next;
+  }
+}
+
+} // namespace
+
+void LexborDocument::normalize(void* voidNode) {
+  auto* node = static_cast<lxb_dom_node_t*>(voidNode);
+  if (!node) return;
+  normalize_children(node);
+}
+
+// ── Node.compareDocumentPosition() ──────────────────────────────────────────
+
+namespace {
+
+constexpr int kDocumentPositionDisconnected         = 0x01;
+constexpr int kDocumentPositionPreceding            = 0x02;
+constexpr int kDocumentPositionFollowing            = 0x04;
+constexpr int kDocumentPositionContains             = 0x08;
+constexpr int kDocumentPositionContainedBy           = 0x10;
+constexpr int kDocumentPositionImplementationSpecific = 0x20;
+
+lxb_dom_node_t* root_of(lxb_dom_node_t* n) {
+  while (n->parent) n = n->parent;
+  return n;
+}
+
+bool is_ancestor(lxb_dom_node_t* ancestor, lxb_dom_node_t* node) {
+  for (auto* p = node->parent; p; p = p->parent) {
+    if (p == ancestor) return true;
+  }
+  return false;
+}
+
+} // namespace
+
+int LexborDocument::compareDocumentPosition(void* voidA, void* voidB) const {
+  auto* a = static_cast<lxb_dom_node_t*>(voidA);
+  auto* b = static_cast<lxb_dom_node_t*>(voidB);
+  if (!a || !b || a == b) return 0;
+
+  if (root_of(a) != root_of(b)) {
+    return kDocumentPositionDisconnected | kDocumentPositionImplementationSpecific
+         | kDocumentPositionFollowing;
+  }
+
+  // b is a descendant of a
+  if (is_ancestor(a, b)) return kDocumentPositionContainedBy | kDocumentPositionFollowing;
+  // a is a descendant of b
+  if (is_ancestor(b, a)) return kDocumentPositionContains | kDocumentPositionPreceding;
+
+  std::vector<lxb_dom_node_t*> chainA, chainB;
+  for (auto* p = a; p; p = p->parent) chainA.push_back(p);
+  for (auto* p = b; p; p = p->parent) chainB.push_back(p);
+  std::reverse(chainA.begin(), chainA.end());
+  std::reverse(chainB.begin(), chainB.end());
+
+  size_t i = 0;
+  while (i < chainA.size() && i < chainB.size() && chainA[i] == chainB[i]) i++;
+  // chainA[i-1] == chainB[i-1] is the lowest common ancestor (guaranteed to
+  // exist since both nodes share the same root and neither contains the other).
+  lxb_dom_node_t* lca      = chainA[i - 1];
+  lxb_dom_node_t* branchA  = chainA[i];
+  lxb_dom_node_t* branchB  = chainB[i];
+
+  for (lxb_dom_node_t* c = lca->first_child; c; c = c->next) {
+    if (c == branchA) return kDocumentPositionFollowing;
+    if (c == branchB) return kDocumentPositionPreceding;
+  }
+  return kDocumentPositionDisconnected | kDocumentPositionImplementationSpecific
+       | kDocumentPositionFollowing;
 }
 
 } // namespace margelo::nitro::nitrojsdom
