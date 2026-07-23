@@ -246,19 +246,27 @@ dom.dispose() // ← always pair with create()
 > NodeIterator, `window.history`, and cross-frame messaging (`postMessage`,
 > `MessageChannel`) are deliberately excluded — they target full-page/SPA or
 > multi-frame scenarios this sandbox isn't built for.
-- [ ] `document.cookie` (get/set)
-- [ ] `<template>` / `element.content` (DocumentFragment)
-- [ ] Shadow DOM slotting (`<slot>`, `assignedNodes()`/`assignedElements()`, `slotchange`)
-- [ ] `DOMContentLoaded` / `load` events on `document`/`window`
-- [ ] `customElements.upgrade(root)`
-- [ ] `document.forms` / `.images` / `.scripts` / `.links` collections
-- [ ] `document.getElementsByName()`
-- [ ] `node.normalize()`
-- [ ] `node.compareDocumentPosition(other)`
-- [ ] `DOMParser` / `XMLSerializer`
-- [ ] `document.implementation.createHTMLDocument()`
-- [ ] `document.doctype` / `DocumentType` node
-- [ ] Form validity API (`ValidityState`, `checkValidity()` / `reportValidity()` / `setCustomValidity()`)
+- [x] `document.cookie` (get/set)
+- [x] `<template>` / `element.content` (DocumentFragment)
+- [x] Shadow DOM slotting (`<slot>`, `assignedNodes()`/`assignedElements()`, `slotchange`)
+- [x] `DOMContentLoaded` / `load` events on `document`/`window`
+- [x] `customElements.upgrade(root)`
+- [x] `document.forms` / `.images` / `.scripts` / `.links` collections
+- [x] `document.getElementsByName()`
+- [x] `node.normalize()`
+- [x] `node.compareDocumentPosition(other)`
+- [x] `XMLSerializer` (`serializeToString()` only — see below)
+- [ ] `DOMParser` (`parseFromString()`) / `document.implementation.createHTMLDocument()` —
+      both return a genuinely separate `Document`, and this sandbox's C++ layer
+      is architecturally one `LexborDocument` per runtime (`DocumentBindings`,
+      node identity caching, and MutationObserver are all wired to that one
+      singleton document). Supporting a second live document is an
+      architecture change, not a binding addition — deferred to its own pass.
+- [x] `document.doctype` / `DocumentType` node
+- [ ] Form validity API (`ValidityState`, `checkValidity()` / `reportValidity()` / `setCustomValidity()`) —
+      deferred as its own focused follow-up (per-input-type validation rules
+      are a meaningfully sized feature on their own, and the lowest-priority
+      item in this list).
 
 ---
 

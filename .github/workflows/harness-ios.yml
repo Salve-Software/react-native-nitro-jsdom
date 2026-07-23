@@ -106,6 +106,12 @@ jobs:
 
       - name: Run React Native Harness
         uses: callstackincubator/react-native-harness@v1.2.0
+        env:
+          # The harness's own Node process (not the simulator/app) was hitting
+          # V8's default old-space ceiling (~2GB) near the end of the suite as
+          # more harness files were added — raise it well above what this repo
+          # needs.
+          NODE_OPTIONS: --max-old-space-size=6144
         with:
           app: ios/build/Build/Products/Debug-iphonesimulator/NitroJsdomExample.app
           runner: ios

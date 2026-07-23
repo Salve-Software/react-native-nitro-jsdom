@@ -90,6 +90,14 @@ QuickJSRuntime::~QuickJSRuntime() {
 
     // Free node wrapper cache
     clear_node_cache(ctx, _ctxState.get());
+
+    // Free the cached document.doctype wrapper
+    if (_ctxState->doctype_wrapper) {
+      JSValue* stored = static_cast<JSValue*>(_ctxState->doctype_wrapper);
+      JS_FreeValue(ctx, *stored);
+      delete stored;
+      _ctxState->doctype_wrapper = nullptr;
+    }
   }
 
   if (_context) JS_FreeContext(reinterpret_cast<JSContext*>(_context));

@@ -123,4 +123,81 @@ describe('JSDOM selectors, live collections, instanceof', () => {
     `);
     expect(result).toBe('0');
   });
+
+  it('document.images/.scripts finds all matching elements in document order', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <img id="i1" src="a.png">
+        <script>void 0;</script>
+        <div><img id="i2" src="b.png"></div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        imageIds: Array.from(document.images).map((el) => el.id),
+        scriptCount: document.scripts.length,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ imageIds: ['i1', 'i2'], scriptCount: 1 });
+  });
+
+  it('document.links finds <a>/<area> only when they have an href attribute', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <a id="withHref" href="/x">x</a>
+        <a id="noHref">no href</a>
+        <area id="areaWithHref" href="/y">
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(Array.from(document.links).map((el) => el.id));
+    `);
+    expect(JSON.parse(result)).toEqual(['withHref', 'areaWithHref']);
+  });
+
+  it('document.forms finds all <form> elements', async () => {
+    dom = JSDOM.create('<html><body><form id="f1"></form><div><form id="f2"></form></div></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify(Array.from(document.forms).map((el) => el.id));
+    `);
+    expect(JSON.parse(result)).toEqual(['f1', 'f2']);
+  });
+
+  it('document.getElementsByName finds elements by their name attribute', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <input name="choice" id="a">
+        <input name="choice" id="b">
+        <input name="other" id="c">
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(Array.from(document.getElementsByName('choice')).map((el) => el.id));
+    `);
+    expect(JSON.parse(result)).toEqual(['a', 'b']);
+  });
+
+  it('document.doctype exposes name/publicId/systemId, or null when absent', async () => {
+    dom = JSDOM.create('<!DOCTYPE html><html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        name: document.doctype.name,
+        publicId: document.doctype.publicId,
+        systemId: document.doctype.systemId,
+        nodeType: document.doctype.nodeType,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ name: 'html', publicId: '', systemId: '', nodeType: 10 });
+
+    dom.dispose();
+    dom = JSDOM.create('<html><body></body></html>');
+    const noDoctype = await dom.evaluate('String(document.doctype)');
+    expect(noDoctype).toBe('null');
+  });
+
+  it('document.doctype returns the same object on repeated access', async () => {
+    dom = JSDOM.create('<!DOCTYPE html><html><body></body></html>');
+    const result = await dom.evaluate('document.doctype === document.doctype');
+    expect(result).toBe('true');
+  });
 });

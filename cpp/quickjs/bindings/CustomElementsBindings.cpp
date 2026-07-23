@@ -203,6 +203,21 @@ const char* kCustomElementsBootstrapScript = R"JS(
     return this._pending[name].promise;
   };
 
+  // upgrade(root): shadow-including INCLUSIVE descendants — root itself (if
+  // it's an element) plus everything upgradeSubtree already walks (which is
+  // exclusive of root, since its other callers — innerHTML/insertAdjacentHTML
+  // patches below — always pass a pre-existing container that was never
+  // itself a fresh upgrade candidate).
+  CustomElementRegistry.prototype.upgrade = function(root) {
+    if (!(root instanceof Node)) {
+      throw new TypeError(
+          "Failed to execute 'upgrade' on 'CustomElementRegistry': parameter 1 is not of type 'Node'");
+    }
+    var ELEMENT_NODE = 1;
+    if (root.nodeType === ELEMENT_NODE) upgradeElement(root);
+    upgradeSubtree(root);
+  };
+
   globalThis.CustomElementRegistry = CustomElementRegistry;
   globalThis.customElements = new CustomElementRegistry();
 

@@ -50,6 +50,17 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
     }
   }
 
+  // Fire once parsing (and any inline <script> execution above) is done, so
+  // scripts that do document.addEventListener('DOMContentLoaded'/'load', ...)
+  // or window.addEventListener(...) — the common embedded-widget bootstrap
+  // pattern — see them. There's no real subresource loading in this sandbox,
+  // so both fire back-to-back with nothing in between.
+  try {
+    _runtime->evaluate(
+        "document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));"
+        "document.dispatchEvent(new Event('load'));");
+  } catch (...) { }
+
   _initialized = true;
 }
 

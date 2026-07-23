@@ -84,4 +84,32 @@ describe('JSDOM events', () => {
     `);
     expect(JSON.parse(result)).toEqual({ returnValue: true, defaultPrevented: false });
   });
+
+  it('document.removeEventListener() stops a previously registered listener from firing', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const log = [];
+      function handler() { log.push('fired'); }
+      document.addEventListener('custom', handler);
+      document.dispatchEvent(new Event('custom'));
+      document.removeEventListener('custom', handler);
+      document.dispatchEvent(new Event('custom'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['fired']);
+  });
+
+  it('window.removeEventListener() stops a previously registered listener from firing', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const log = [];
+      function handler() { log.push('fired'); }
+      window.addEventListener('custom', handler);
+      window.dispatchEvent(new Event('custom'));
+      window.removeEventListener('custom', handler);
+      window.dispatchEvent(new Event('custom'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['fired']);
+  });
 });

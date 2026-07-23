@@ -65,6 +65,10 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/CSSOMBindings.cpp
   ../cpp/quickjs/bindings/ShadowRootBindings.cpp
   ../cpp/quickjs/bindings/CustomElementsBindings.cpp
+  ../cpp/quickjs/bindings/CookieBindings.cpp
+  ../cpp/quickjs/bindings/TemplateBindings.cpp
+  ../cpp/quickjs/bindings/SlotBindings.cpp
+  ../cpp/quickjs/bindings/XmlSerializerBindings.cpp
   ${QUICKJS_SOURCES}
 )
 

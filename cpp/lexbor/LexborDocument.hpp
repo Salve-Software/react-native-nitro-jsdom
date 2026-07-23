@@ -42,6 +42,30 @@ public:
   // mode: 0 = open, 1 = closed (matches lxb_dom_shadow_root_mode_t).
   void* createShadowRoot(void* hostElement, int mode);
 
+  // ── <template> ─────────────────────────────────────────────────────────────
+  // Returns the lxb_dom_document_fragment_t* backing a <template> element's
+  // `content`. Lexbor allocates this at element-creation time (both for parsed
+  // and createElement()'d templates), so this is a plain field read.
+  void* templateContent(void* templateEl) const;
+
+  // ── Doctype ────────────────────────────────────────────────────────────────
+  // Returns the lxb_dom_document_type_t* for this document, or nullptr if the
+  // parsed HTML had no doctype.
+  void* doctype() const;
+  std::string doctypeName(void* doctype) const;
+  std::string doctypePublicId(void* doctype) const;
+  std::string doctypeSystemId(void* doctype) const;
+
+  // ── Node.normalize() ───────────────────────────────────────────────────────
+  // Merges adjacent Text node siblings and removes empty ones, recursively
+  // through node's subtree (node itself is not replaced, only its descendants).
+  void normalize(void* node);
+
+  // ── Node.compareDocumentPosition() ────────────────────────────────────────
+  // Returns the DOM DOCUMENT_POSITION_* bitmask describing nodeB's position
+  // relative to nodeA (mirrors `nodeA.compareDocumentPosition(nodeB)`).
+  int compareDocumentPosition(void* nodeA, void* nodeB) const;
+
   // ── Element content ───────────────────────────────────────────────────────
   void setTextContentOnEl(void* element, const std::string& text);
   void setInnerHTMLOnEl(void* element, const std::string& html);

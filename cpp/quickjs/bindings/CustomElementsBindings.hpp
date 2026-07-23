@@ -5,7 +5,7 @@
 namespace margelo::nitro::nitrojsdom {
 
 // Registers globalThis.customElements (CustomElementRegistry: define/get/
-// whenDefined) plus upgrade hooks. Pure JS, built entirely on top of
+// whenDefined/upgrade) plus upgrade hooks. Pure JS, built entirely on top of
 // already-exposed primitives (querySelectorAll, createElement, innerHTML,
 // appendChild, removeChild, setAttribute/removeAttribute, attachShadow) via
 // monkey-patching — no new native bindings.
@@ -28,6 +28,13 @@ namespace margelo::nitro::nitrojsdom {
 //   existing shadow root are not retroactively upgraded when a matching tag
 //   is define()'d afterward. (Populating that shadow root's innerHTML after
 //   the define() call still upgrades them, per the innerHTML trigger above.)
+//   Calling customElements.upgrade(root) manually on that shadow root (or any
+//   ancestor whose shadow-including subtree contains it) covers this case.
+// - customElements.upgrade(root) walks root's shadow-including INCLUSIVE
+//   descendants (root itself, if an element, plus everything reachable via
+//   the same light-DOM + shadow traversal the other hooks use). Throws
+//   TypeError if root isn't a Node (matches the spec: null/undefined/plain
+//   objects are rejected, not silently no-op'd).
 // - attachShadow() is wrapped purely to tag the host element with an
 //   internal, mode-agnostic reference to its shadow root (bypassing the
 //   closed-mode privacy Element.prototype.shadowRoot enforces for user
