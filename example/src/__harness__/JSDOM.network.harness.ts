@@ -108,6 +108,7 @@ describe('JSDOM fetch/XHR/AbortController', () => {
       onFetch: async (url, init) => {
         expect(url).toBe('https://example.com/ping');
         expect(init.method).toBe('POST');
+        expect(init.headers['content-type']).toBe('application/json');
         expect(init.body).toBe('{"ping":true}');
         return { status: 200, body: 'ok' };
       },
