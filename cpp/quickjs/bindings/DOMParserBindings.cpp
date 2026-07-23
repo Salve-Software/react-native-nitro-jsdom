@@ -13,7 +13,7 @@ JSClassID js_parsed_document_class_id = 0;
 JSClassDef js_parsed_document_class = { "Document", .finalizer = nullptr };
 
 LexborDocument* unwrap_parsed_doc(JSContext* ctx, JSValue val) {
-  return static_cast<LexborDocument*>(JS_GetOpaque2(ctx, val, js_parsed_document_class_id));
+  return static_cast<LexborDocument*>(JS_GetOpaque(val, js_parsed_document_class_id));
 }
 
 JSValue make_parsed_document(JSContext* ctx, LexborDocument* doc) {
@@ -138,17 +138,7 @@ JSValue js_pdoc_get_doctype(JSContext* ctx, JSValue this_val) {
   if (!doc) return JS_NULL;
   void* dt = doc->doctype();
   if (!dt) return JS_NULL;
-
-  JSValue obj = JS_NewObject(ctx);
-  std::string name = doc->doctypeName(dt);
-  JS_SetPropertyStr(ctx, obj, "name", JS_NewStringLen(ctx, name.data(), name.size()));
-  std::string publicId = doc->doctypePublicId(dt);
-  JS_SetPropertyStr(ctx, obj, "publicId", JS_NewStringLen(ctx, publicId.data(), publicId.size()));
-  std::string systemId = doc->doctypeSystemId(dt);
-  JS_SetPropertyStr(ctx, obj, "systemId", JS_NewStringLen(ctx, systemId.data(), systemId.size()));
-  JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 10));
-  JS_SetPropertyStr(ctx, obj, "nodeName", JS_NewStringLen(ctx, name.data(), name.size()));
-  return obj;
+  return build_doctype_object(ctx, doc, dt);
 }
 
 // ── DOMParser.parseFromString() / document.implementation.createHTMLDocument() ─

@@ -98,6 +98,12 @@ void define_prop(JSContext* ctx, JSValue obj, const char* name, GetterFn getter,
 // Values match lxb_dom_node_type_t, which already mirrors the DOM spec numbering.
 void define_node_type_constants(JSContext* ctx, JSValue obj);
 
+// Builds the plain {name, publicId, systemId, nodeType, nodeName} object used
+// to represent a document's DocumentType node (see doc->doctype()). Shared by
+// DocumentBindings (which layers its own identity cache on top) and
+// DOMParserBindings (which doesn't cache — see its call site).
+JSValue build_doctype_object(JSContext* ctx, LexborDocument* doc, void* doctype);
+
 // ── Global constructor helper (instanceof support) ────────────────────────────
 
 JSValue js_illegal_constructor(JSContext* ctx, JSValue this_val, int argc, JSValue* argv);

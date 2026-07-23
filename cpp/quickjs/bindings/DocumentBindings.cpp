@@ -147,16 +147,7 @@ JSValue js_doc_get_doctype(JSContext* ctx, JSValue) {
     return JS_DupValue(ctx, *static_cast<JSValue*>(rctx->doctype_wrapper));
   }
 
-  JSValue obj = JS_NewObject(ctx);
-  std::string name = get_doc(ctx)->doctypeName(dt);
-  JS_SetPropertyStr(ctx, obj, "name",      JS_NewStringLen(ctx, name.data(), name.size()));
-  std::string publicId = get_doc(ctx)->doctypePublicId(dt);
-  JS_SetPropertyStr(ctx, obj, "publicId",  JS_NewStringLen(ctx, publicId.data(), publicId.size()));
-  std::string systemId = get_doc(ctx)->doctypeSystemId(dt);
-  JS_SetPropertyStr(ctx, obj, "systemId",  JS_NewStringLen(ctx, systemId.data(), systemId.size()));
-  JS_SetPropertyStr(ctx, obj, "nodeType",  JS_NewInt32(ctx, 10));
-  JS_SetPropertyStr(ctx, obj, "nodeName",  JS_NewStringLen(ctx, name.data(), name.size()));
-
+  JSValue obj = build_doctype_object(ctx, get_doc(ctx), dt);
   if (rctx) rctx->doctype_wrapper = new JSValue(JS_DupValue(ctx, obj));
   return obj;
 }

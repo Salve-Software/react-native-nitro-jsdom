@@ -176,6 +176,19 @@ void define_node_type_constants(JSContext* ctx, JSValue obj) {
   }
 }
 
+JSValue build_doctype_object(JSContext* ctx, LexborDocument* doc, void* doctype) {
+  JSValue obj = JS_NewObject(ctx);
+  std::string name = doc->doctypeName(doctype);
+  JS_SetPropertyStr(ctx, obj, "name", JS_NewStringLen(ctx, name.data(), name.size()));
+  std::string publicId = doc->doctypePublicId(doctype);
+  JS_SetPropertyStr(ctx, obj, "publicId", JS_NewStringLen(ctx, publicId.data(), publicId.size()));
+  std::string systemId = doc->doctypeSystemId(doctype);
+  JS_SetPropertyStr(ctx, obj, "systemId", JS_NewStringLen(ctx, systemId.data(), systemId.size()));
+  JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 10));
+  JS_SetPropertyStr(ctx, obj, "nodeName", JS_NewStringLen(ctx, name.data(), name.size()));
+  return obj;
+}
+
 JSValue js_illegal_constructor(JSContext* ctx, JSValue, int, JSValue*) {
   return JS_ThrowTypeError(ctx, "Illegal constructor");
 }
