@@ -75,6 +75,28 @@ describe('JSDOM fetch/XHR/AbortController', () => {
     });
   });
 
+  it('AbortSignal.any() aborts as soon as any input signal aborts, with its reason', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const a = new AbortController();
+      const b = new AbortController();
+      const combined = AbortSignal.any([a.signal, b.signal]);
+      const beforeAborted = combined.aborted;
+      b.abort('b failed');
+      JSON.stringify({ beforeAborted, afterAborted: combined.aborted, reason: combined.reason });
+    `);
+    expect(JSON.parse(result)).toEqual({ beforeAborted: false, afterAborted: true, reason: 'b failed' });
+  });
+
+  it('AbortSignal.any() is already aborted if any input signal is already aborted', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const combined = AbortSignal.any([AbortSignal.abort('preaborted'), new AbortController().signal]);
+      JSON.stringify({ aborted: combined.aborted, reason: combined.reason });
+    `);
+    expect(JSON.parse(result)).toEqual({ aborted: true, reason: 'preaborted' });
+  });
+
   it('fetch() rejects immediately when called with an already-aborted signal', async () => {
     dom = JSDOM.create('<html><body></body></html>', {
       onFetch: async () => ({ status: 200, body: 'should not be reached' }),
