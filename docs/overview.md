@@ -297,7 +297,12 @@ dom.dispose() // ← always pair with create()
       (no transfer list, no `MessagePort`).
 - [x] `node.getRootNode({composed})` — walks `parentNode` to the top of the
       tree; with `composed: true`, continues through a `ShadowRoot`'s `.host`
-      into the light tree above.
+      into the light tree above. For a node attached under the sandbox's
+      primary document, returns the real `document` global (not a raw native
+      node) so `el.getRootNode() === document` — the idiom real-world scripts
+      use to check attachment — works as expected. Secondary documents
+      (`DOMParser`/`createHTMLDocument()`) have no equivalent JS global to
+      substitute, so their root resolves to their native document node.
 - [x] `element.form` / `form.elements` — resolves the owning `<form>` via
       ancestor `closest('form')` or the `form="id"` attribute, for
       `input`/`select`/`textarea`/`button`/`fieldset`/`output`; `.elements`

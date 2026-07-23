@@ -313,14 +313,13 @@ describe('JSDOM node traversal', () => {
     expect(JSON.parse(result)).toEqual({ docStatic: 1, docNodeType: 9, docNodeName: '#document' });
   });
 
-  it('getRootNode() walks up to the top-most ancestor', async () => {
+  it('getRootNode() of an attached element is the document, matching the attachment-check idiom', async () => {
     dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
     const result = await dom.evaluate(`
       const child = document.getElementById('child');
-      const root = child.getRootNode();
-      JSON.stringify({ rootIsHtml: root === document.documentElement, rootTag: root.tagName });
+      child.getRootNode() === document;
     `);
-    expect(JSON.parse(result)).toEqual({ rootIsHtml: true, rootTag: 'HTML' });
+    expect(result).toBe('true');
   });
 
   it('getRootNode() on a detached node returns itself', async () => {

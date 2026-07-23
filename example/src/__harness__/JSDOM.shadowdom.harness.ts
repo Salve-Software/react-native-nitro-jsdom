@@ -225,9 +225,9 @@ describe('JSDOM Shadow DOM', () => {
       const inner = shadow.querySelector('#inner');
       JSON.stringify({
         defaultRootIsShadow: inner.getRootNode() === shadow,
-        composedRootIsHtml: inner.getRootNode({ composed: true }) === document.documentElement,
+        composedRootIsDocument: inner.getRootNode({ composed: true }) === document,
       });
     `);
-    expect(JSON.parse(result)).toEqual({ defaultRootIsShadow: true, composedRootIsHtml: true });
+    expect(JSON.parse(result)).toEqual({ defaultRootIsShadow: true, composedRootIsDocument: true });
   });
 });
