@@ -178,6 +178,37 @@ describe('JSDOM attributes/dataset/style', () => {
     });
   });
 
+  it('hidden/title/lang/dir reflect as element properties', async () => {
+    dom = JSDOM.create('<html><body><div id="d" title="tooltip" lang="pt-BR" dir="rtl"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const before = { hidden: div.hidden, title: div.title, lang: div.lang, dir: div.dir };
+
+      div.hidden = true;
+      div.title = 'new tooltip';
+      div.lang = 'en-US';
+      div.dir = 'ltr';
+
+      const after = {
+        hidden: div.hidden,
+        hiddenAttr: div.getAttribute('hidden'),
+        title: div.title,
+        lang: div.lang,
+        dir: div.dir,
+      };
+
+      div.hidden = false;
+      const afterUnhide = { hidden: div.hidden, hiddenAttr: div.getAttribute('hidden') };
+
+      JSON.stringify({ before, after, afterUnhide });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: { hidden: false, title: 'tooltip', lang: 'pt-BR', dir: 'rtl' },
+      after: { hidden: true, hiddenAttr: '', title: 'new tooltip', lang: 'en-US', dir: 'ltr' },
+      afterUnhide: { hidden: false, hiddenAttr: null },
+    });
+  });
+
   it('getBoundingClientRect() returns a zeroed rect instead of throwing', async () => {
     dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
     const result = await dom.evaluate(`

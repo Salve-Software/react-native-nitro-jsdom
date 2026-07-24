@@ -359,6 +359,51 @@ JSValue js_el_set_autofocus(JSContext* ctx, JSValue this_val, JSValue val) { ret
 JSValue js_el_get_selected(JSContext* ctx, JSValue this_val) { return bool_attr_get(ctx, this_val, "selected", 8); }
 JSValue js_el_set_selected(JSContext* ctx, JSValue this_val, JSValue val) { return bool_attr_set(ctx, this_val, val, "selected", 8); }
 
+JSValue js_el_get_hidden(JSContext* ctx, JSValue this_val) { return bool_attr_get(ctx, this_val, "hidden", 6); }
+JSValue js_el_set_hidden(JSContext* ctx, JSValue this_val, JSValue val) { return bool_attr_set(ctx, this_val, val, "hidden", 6); }
+
+JSValue string_attr_get(JSContext* ctx, JSValue this_val, const char* attr, size_t attr_len) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NewString(ctx, "");
+  size_t len = 0;
+  const lxb_char_t* val = lxb_dom_element_get_attribute(el, reinterpret_cast<const lxb_char_t*>(attr), attr_len, &len);
+  return val ? JS_NewStringLen(ctx, reinterpret_cast<const char*>(val), len) : JS_NewString(ctx, "");
+}
+
+JSValue string_attr_set(JSContext* ctx, JSValue this_val, JSValue val, const char* attr, size_t attr_len) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_UNDEFINED;
+  const char* str = JS_ToCString(ctx, val);
+  if (!str) return JS_UNDEFINED;
+  auto* attr_name = reinterpret_cast<const lxb_char_t*>(attr);
+
+  auto* rctx = get_ctx(ctx);
+  bool has_obs = rctx && rctx->mutation_observers && !rctx->mutation_observers->empty();
+  std::optional<std::string> old_val;
+  if (has_obs && rctx->mutation_observers->hasAttributeOldValueObserver()) {
+    size_t len = 0;
+    const lxb_char_t* v = lxb_dom_element_get_attribute(el, attr_name, attr_len, &len);
+    if (v) old_val = std::string(reinterpret_cast<const char*>(v), len);
+  }
+
+  lxb_dom_element_set_attribute(el, attr_name, attr_len, reinterpret_cast<const lxb_char_t*>(str), strlen(str));
+  JS_FreeCString(ctx, str);
+
+  if (has_obs) {
+    rctx->mutation_observers->notifyAttribute(ctx, lxb_dom_interface_node(el), attr, old_val);
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_get_title(JSContext* ctx, JSValue this_val) { return string_attr_get(ctx, this_val, "title", 5); }
+JSValue js_el_set_title(JSContext* ctx, JSValue this_val, JSValue val) { return string_attr_set(ctx, this_val, val, "title", 5); }
+
+JSValue js_el_get_lang(JSContext* ctx, JSValue this_val) { return string_attr_get(ctx, this_val, "lang", 4); }
+JSValue js_el_set_lang(JSContext* ctx, JSValue this_val, JSValue val) { return string_attr_set(ctx, this_val, val, "lang", 4); }
+
+JSValue js_el_get_dir(JSContext* ctx, JSValue this_val) { return string_attr_get(ctx, this_val, "dir", 3); }
+JSValue js_el_set_dir(JSContext* ctx, JSValue this_val, JSValue val) { return string_attr_set(ctx, this_val, val, "dir", 3); }
+
 JSValue js_el_get_textContent(JSContext* ctx, JSValue this_val) {
   lxb_dom_node_t* node = unwrap_node(ctx, this_val);
   if (!node) return JS_NewString(ctx, "");
@@ -1575,6 +1620,10 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, proto, "multiple",               js_el_get_multiple,            js_el_set_multiple);
   define_prop(ctx, proto, "autofocus",              js_el_get_autofocus,           js_el_set_autofocus);
   define_prop(ctx, proto, "selected",               js_el_get_selected,            js_el_set_selected);
+  define_prop(ctx, proto, "hidden",                 js_el_get_hidden,              js_el_set_hidden);
+  define_prop(ctx, proto, "title",                  js_el_get_title,               js_el_set_title);
+  define_prop(ctx, proto, "lang",                   js_el_get_lang,                js_el_set_lang);
+  define_prop(ctx, proto, "dir",                    js_el_get_dir,                 js_el_set_dir);
   define_prop(ctx, proto, "innerHTML",              js_el_get_innerHTML,           js_el_set_innerHTML);
   define_prop(ctx, proto, "outerHTML",              js_el_get_outerHTML,           nullptr);
   define_prop(ctx, proto, "innerText",              js_el_get_textContent,         js_el_set_textContent);
