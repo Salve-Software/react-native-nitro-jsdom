@@ -278,6 +278,40 @@ const char* kUrlBootstrapScript = R"JS(
   };
 
   globalThis.URL = URL;
+
+  function isAnchorElement(el) {
+    return !!el && (el.tagName === 'A' || el.tagName === 'AREA');
+  }
+
+  function anchorUrl(el) {
+    var raw = el.getAttribute('href');
+    if (raw === null) return null;
+    try { return new URL(raw, document.baseURI); } catch (e) { return null; }
+  }
+
+  Object.defineProperty(Element.prototype, 'href', {
+    configurable: true,
+    get: function() {
+      if (!isAnchorElement(this)) return undefined;
+      var u = anchorUrl(this);
+      return u ? u.href : '';
+    },
+    set: function(value) {
+      if (!isAnchorElement(this)) return;
+      this.setAttribute('href', String(value));
+    },
+  });
+
+  ['protocol', 'username', 'password', 'hostname', 'port', 'pathname', 'search', 'hash', 'host', 'origin'].forEach(function(part) {
+    Object.defineProperty(Element.prototype, part, {
+      configurable: true,
+      get: function() {
+        if (!isAnchorElement(this)) return undefined;
+        var u = anchorUrl(this);
+        return u ? u[part] : '';
+      },
+    });
+  });
 })();
 )JS";
 
