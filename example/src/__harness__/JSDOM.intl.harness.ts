@@ -48,6 +48,38 @@ describe('JSDOM Intl.NumberFormat/DateTimeFormat', () => {
     });
   });
 
+  it('Intl.NumberFormat requires an explicit currency and uses per-currency decimal precision', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      let threw;
+      try { new Intl.NumberFormat('en-US', { style: 'currency' }); threw = null; }
+      catch (e) { threw = { name: e.name, isTypeError: e instanceof TypeError }; }
+      JSON.stringify({
+        threw,
+        jpy: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'JPY' }).format(1234.5),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      threw: { name: 'TypeError', isTypeError: true },
+      jpy: '¥1,235',
+    });
+  });
+
+  it('Intl.DateTimeFormat dateStyle/timeStyle map to distinct component sets', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const d = new Date(2026, 6, 24, 9, 5, 3);
+      JSON.stringify({
+        dateStyles: ['short', 'medium', 'long', 'full'].map((s) => new Intl.DateTimeFormat('en-US', { dateStyle: s }).format(d)),
+        timeStyles: ['short', 'medium', 'long', 'full'].map((s) => new Intl.DateTimeFormat('en-US', { timeStyle: s }).format(d)),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      dateStyles: ['7/24/26', 'Jul 24, 2026', 'July 24, 2026', 'Friday, July 24, 2026'],
+      timeStyles: ['9:05 AM', '9:05:03 AM', '9:05:03 AM', '9:05:03 AM'],
+    });
+  });
+
   it('Intl.DateTimeFormat orders date parts by locale (MDY for en, DMY for pt) and names months/weekdays', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`
@@ -101,6 +133,23 @@ describe('JSDOM Intl.NumberFormat/DateTimeFormat', () => {
       number: '1,234.5',
       dateOnly: '7/24/2026',
       timeOnly: '09:05',
+    });
+  });
+
+  it('toLocaleString/toLocaleDateString/toLocaleTimeString apply their own defaults for an empty options object', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const d = new Date(2026, 6, 24, 9, 5, 3);
+      JSON.stringify({
+        toLocaleString: d.toLocaleString('en-US', {}),
+        toLocaleDateString: d.toLocaleDateString('en-US', {}),
+        toLocaleTimeString: d.toLocaleTimeString('en-US', {}),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      toLocaleString: '7/24/2026, 9:05:03 AM',
+      toLocaleDateString: '7/24/2026',
+      toLocaleTimeString: '9:05:03 AM',
     });
   });
 

@@ -48,6 +48,15 @@ const char* kIntlBootstrapScript = R"JS(
     USD: '$', EUR: '€', GBP: '£', JPY: '¥', BRL: 'R$', CAD: 'CA$', AUD: 'A$', CHF: 'CHF', CNY: 'CN¥', INR: '₹', MXN: 'MX$',
   };
 
+  var CURRENCY_DECIMALS = {
+    JPY: 0, KRW: 0, VND: 0, CLP: 0, ISK: 0, UGX: 0, XAF: 0, XOF: 0, XPF: 0,
+    BHD: 3, IQD: 3, JOD: 3, KWD: 3, OMR: 3, TND: 3,
+  };
+
+  function currencyDecimals(code) {
+    return CURRENCY_DECIMALS[code] !== undefined ? CURRENCY_DECIMALS[code] : 2;
+  }
+
   function localeLanguage(locales) {
     var tag = Array.isArray(locales) ? locales[0] : locales;
     tag = String(tag || 'en');
@@ -91,9 +100,13 @@ const char* kIntlBootstrapScript = R"JS(
     this._data = resolveLocale(locales);
     options = options || {};
     this._style = options.style || 'decimal';
-    this._currency = options.currency || 'USD';
-    var defaultMinFrac = this._style === 'currency' ? 2 : 0;
-    var defaultMaxFrac = this._style === 'currency' ? 2 : (this._style === 'percent' ? 0 : 3);
+    if (this._style === 'currency') {
+      if (!options.currency) throw new TypeError('Currency code is required with currency style.');
+      this._currency = options.currency;
+    }
+    var currDecimals = this._style === 'currency' ? currencyDecimals(this._currency) : undefined;
+    var defaultMinFrac = this._style === 'currency' ? currDecimals : 0;
+    var defaultMaxFrac = this._style === 'currency' ? currDecimals : (this._style === 'percent' ? 0 : 3);
     this._minFrac = options.minimumFractionDigits !== undefined ? options.minimumFractionDigits : defaultMinFrac;
     this._maxFrac = options.maximumFractionDigits !== undefined ? options.maximumFractionDigits : Math.max(defaultMaxFrac, this._minFrac);
     this._useGrouping = options.useGrouping !== undefined ? !!options.useGrouping : true;
@@ -123,13 +136,26 @@ const char* kIntlBootstrapScript = R"JS(
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
+  var DATE_STYLE_OPTIONS = {
+    short: { year: '2-digit', month: 'numeric', day: 'numeric' },
+    medium: { year: 'numeric', month: 'short', day: 'numeric' },
+    long: { year: 'numeric', month: 'long', day: 'numeric' },
+    full: { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
+  };
+  var TIME_STYLE_OPTIONS = {
+    short: { hour: 'numeric', minute: 'numeric' },
+    medium: { hour: 'numeric', minute: 'numeric', second: 'numeric' },
+    long: { hour: 'numeric', minute: 'numeric', second: 'numeric' },
+    full: { hour: 'numeric', minute: 'numeric', second: 'numeric' },
+  };
+
   function DateTimeFormat(locales, options) {
     this._data = resolveLocale(locales);
     options = options || {};
 
     if (options.dateStyle || options.timeStyle) {
-      var withDate = options.dateStyle ? { year: 'numeric', month: 'short', day: 'numeric' } : {};
-      var withTime = options.timeStyle ? { hour: 'numeric', minute: 'numeric' } : {};
+      var withDate = options.dateStyle ? (DATE_STYLE_OPTIONS[options.dateStyle] || DATE_STYLE_OPTIONS.medium) : {};
+      var withTime = options.timeStyle ? (TIME_STYLE_OPTIONS[options.timeStyle] || TIME_STYLE_OPTIONS.short) : {};
       options = Object.assign({}, withDate, withTime, options);
     } else if (Object.keys(options).length === 0) {
       options = { year: 'numeric', month: 'numeric', day: 'numeric' };
@@ -202,18 +228,20 @@ const char* kIntlBootstrapScript = R"JS(
   globalThis.Intl.NumberFormat = NumberFormat;
   globalThis.Intl.DateTimeFormat = DateTimeFormat;
 
+  function hasOwnKeys(o) { return !!o && Object.keys(o).length > 0; }
+
   Number.prototype.toLocaleString = function(locales, options) {
     return new NumberFormat(locales, options).format(this);
   };
 
   Date.prototype.toLocaleString = function(locales, options) {
-    return new DateTimeFormat(locales, options || { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }).format(this);
+    return new DateTimeFormat(locales, hasOwnKeys(options) ? options : { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).format(this);
   };
   Date.prototype.toLocaleDateString = function(locales, options) {
-    return new DateTimeFormat(locales, options || { year: 'numeric', month: 'numeric', day: 'numeric' }).format(this);
+    return new DateTimeFormat(locales, hasOwnKeys(options) ? options : { year: 'numeric', month: 'numeric', day: 'numeric' }).format(this);
   };
   Date.prototype.toLocaleTimeString = function(locales, options) {
-    return new DateTimeFormat(locales, options || { hour: 'numeric', minute: 'numeric', second: 'numeric' }).format(this);
+    return new DateTimeFormat(locales, hasOwnKeys(options) ? options : { hour: 'numeric', minute: 'numeric', second: 'numeric' }).format(this);
   };
 })();
 )JS";

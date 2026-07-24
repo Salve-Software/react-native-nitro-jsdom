@@ -564,17 +564,24 @@ dom.dispose() // ← always pair with create()
       polyfill, not real ICU/CLDR data (QuickJS has neither). Locale data
       only exists for `en` and `pt` (the two this project's users actually
       need); any other locale falls back to `en` formatting entirely rather
-      than guessing. Covers `style: 'decimal'/'percent'/'currency'` with a
-      flat currency-code → symbol table (no per-locale currency symbol
-      variants, e.g. real ICU's `en-US` showing `BRL` as `"R$"` but `pt-BR`
-      showing `USD` as `"US$"` — this always uses the same symbol regardless
-      of locale), `minimumFractionDigits`/`maximumFractionDigits`/
+      than guessing. Covers `style: 'decimal'/'percent'/'currency'`
+      (`currency` throws `TypeError` if omitted, matching spec; default
+      fraction digits come from a small per-currency table — `0` for JPY/
+      KRW/etc., `3` for BHD/KWD/etc., `2` otherwise) with a flat
+      currency-code → symbol table (no per-locale currency symbol variants,
+      e.g. real ICU's `en-US` showing `BRL` as `"R$"` but `pt-BR` showing
+      `USD` as `"US$"` — this always uses the same symbol regardless of
+      locale), `minimumFractionDigits`/`maximumFractionDigits`/
       `useGrouping`, and date formatting via `year`/`month`/`day`/`weekday`/
-      `hour`/`minute`/`second`/`hour12`/`dateStyle`/`timeStyle` with
-      locale-correct month/weekday names and date-part ordering (MDY for
-      `en`, DMY for `pt`) verified against real V8 `Intl` output. Not
-      modeled: calendar systems other than Gregorian, `Intl.PluralRules`/
-      `Intl.RelativeTimeFormat`/`Intl.ListFormat`, and `Intl.Locale`.
+      `hour`/`minute`/`second`/`hour12`/`dateStyle`/`timeStyle` — the latter
+      two map to distinct `short`/`medium`/`long`/`full` component sets
+      (verified against real V8 output), except `timeStyle`'s `long`/`full`
+      collapse to the same as `medium` since this sandbox models no
+      timezone/`timeZoneName` data. Locale-correct month/weekday names and
+      date-part ordering (MDY for `en`, DMY for `pt`) also verified against
+      real V8 `Intl` output. Not modeled: calendar systems other than
+      Gregorian, `Intl.PluralRules`/`Intl.RelativeTimeFormat`/
+      `Intl.ListFormat`, and `Intl.Locale`.
 
 ---
 
