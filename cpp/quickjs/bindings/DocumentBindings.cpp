@@ -360,6 +360,7 @@ void DocumentBindings::install(JSContext* ctx) {
   RuntimeContext* rctx = get_ctx(ctx);
   bool hidden = !(rctx && rctx->pretend_to_be_visual);
   JS_SetPropertyStr(ctx, doc, "hidden", JS_NewBool(ctx, hidden));
+  JS_SetPropertyStr(ctx, doc, "visibilityState", JS_NewString(ctx, hidden ? "hidden" : "visible"));
   JS_SetPropertyStr(ctx, doc, "nodeType", JS_NewInt32(ctx, 9 /* DOCUMENT_NODE */));
   JS_SetPropertyStr(ctx, doc, "nodeName", JS_NewString(ctx, "#document"));
   JS_SetPropertyStr(ctx, doc, "ownerDocument", JS_NULL);

@@ -113,6 +113,17 @@ describe('JSDOM lifecycle', () => {
     expect(visibleResult).toBe('false');
   });
 
+  it('document.visibilityState mirrors document.hidden', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const defaultResult = await dom.evaluate('document.visibilityState');
+    expect(defaultResult).toBe('hidden');
+    dom.dispose();
+
+    dom = JSDOM.create('<html><body></body></html>', { pretendToBeVisual: true });
+    const visibleResult = await dom.evaluate('document.visibilityState');
+    expect(visibleResult).toBe('visible');
+  });
+
   it('evaluate() rejects with a clear error when called reentrantly from a callback', async () => {
     dom = JSDOM.create('<html><body></body></html>', {
       onFetch: async () => {

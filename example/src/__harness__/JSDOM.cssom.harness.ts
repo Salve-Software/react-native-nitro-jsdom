@@ -143,4 +143,52 @@ describe('JSDOM CSSOM (document.styleSheets / CSSStyleRule)', () => {
     `);
     expect(JSON.parse(result)).toEqual({ visibility: 'visible', opacity: '1', caught: 'TypeError' });
   });
+
+  it('CSS.escape() escapes special characters and a leading digit/hyphen-digit per the CSSOM spec', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        idWithColon: CSS.escape('a:b'),
+        leadingDigit: CSS.escape('1a'),
+        leadingHyphenDigit: CSS.escape('-1a'),
+        lonelyHyphen: CSS.escape('-'),
+        plain: CSS.escape('plain-id_1'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      idWithColon: 'a\\:b',
+      leadingDigit: '\\31 a',
+      leadingHyphenDigit: '-\\31 a',
+      lonelyHyphen: '\\-',
+      plain: 'plain-id_1',
+    });
+  });
+
+  it('CSS.escape() output round-trips through querySelector on a dynamic id', async () => {
+    dom = JSDOM.create('<html><body><div id="weird:id.with.dots"></div></body></html>');
+    const result = await dom.evaluate(`
+      const dynamicId = 'weird:id.with.dots';
+      const el = document.querySelector('#' + CSS.escape(dynamicId));
+      String(el && el.id);
+    `);
+    expect(result).toBe('weird:id.with.dots');
+  });
+
+  it('CSS.supports() reports true for a plausible property/value pair and false for empty input', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        withValue: CSS.supports('display', 'flex'),
+        emptyValue: CSS.supports('display', ''),
+        conditionText: CSS.supports('display: flex'),
+        emptyCondition: CSS.supports(''),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      withValue: true,
+      emptyValue: false,
+      conditionText: true,
+      emptyCondition: false,
+    });
+  });
 });

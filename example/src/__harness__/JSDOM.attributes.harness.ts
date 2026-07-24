@@ -111,6 +111,73 @@ describe('JSDOM attributes/dataset/style', () => {
     });
   });
 
+  it('disabled/required/readOnly/multiple/autofocus/selected reflect as boolean properties', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <button id="btn">go</button>
+        <input id="inp">
+        <select id="sel" multiple>
+          <option id="opt1">a</option>
+          <option id="opt2" selected>b</option>
+        </select>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const btn = document.getElementById('btn');
+      const inp = document.getElementById('inp');
+      const sel = document.getElementById('sel');
+      const opt2 = document.getElementById('opt2');
+
+      const before = {
+        btnDisabled: btn.disabled,
+        inpRequired: inp.required,
+        inpReadOnly: inp.readOnly,
+        selMultiple: sel.multiple,
+        opt2Selected: opt2.selected,
+      };
+
+      btn.disabled = true;
+      inp.required = true;
+      inp.readOnly = true;
+      inp.autofocus = true;
+      opt2.selected = false;
+
+      const after = {
+        btnDisabled: btn.disabled,
+        btnDisabledAttr: btn.getAttribute('disabled'),
+        inpRequired: inp.required,
+        inpReadOnly: inp.readOnly,
+        inpAutofocus: inp.autofocus,
+        opt2Selected: opt2.selected,
+        opt2SelectedAttr: opt2.hasAttribute('selected'),
+      };
+
+      btn.disabled = false;
+      const afterRemove = { btnDisabled: btn.disabled, btnDisabledAttr: btn.getAttribute('disabled') };
+
+      JSON.stringify({ before, after, afterRemove });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: {
+        btnDisabled: false,
+        inpRequired: false,
+        inpReadOnly: false,
+        selMultiple: true,
+        opt2Selected: true,
+      },
+      after: {
+        btnDisabled: true,
+        btnDisabledAttr: '',
+        inpRequired: true,
+        inpReadOnly: true,
+        inpAutofocus: true,
+        opt2Selected: false,
+        opt2SelectedAttr: false,
+      },
+      afterRemove: { btnDisabled: false, btnDisabledAttr: null },
+    });
+  });
+
   it('getBoundingClientRect() returns a zeroed rect instead of throwing', async () => {
     dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
     const result = await dom.evaluate(`

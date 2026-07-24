@@ -125,6 +125,74 @@ const char* kFormBootstrapScript = R"JS(
     // Per spec, submit() bypasses the "submit" event and constraint validation.
     // There is no real navigation in this sandbox, so this is intentionally inert.
   };
+  Element.prototype.reset = function() {
+    if (!isFormElement(this)) return;
+    this.dispatchEvent(new Event('reset', { bubbles: true, cancelable: true }));
+  };
+
+  // ── select.options / .selectedIndex / .selectedOptions ────────────────────
+  function isSelectElement(el) {
+    return !!el && el.tagName === 'SELECT';
+  }
+
+  function selectOptionsArray(select) {
+    return Array.prototype.slice.call(select.querySelectorAll('option'));
+  }
+
+  Object.defineProperty(Element.prototype, 'options', {
+    configurable: true,
+    get: function() {
+      if (!isSelectElement(this)) return undefined;
+      var select = this;
+      var opts = selectOptionsArray(select);
+      opts.item = function(index) { return this[index] !== undefined ? this[index] : null; };
+      opts.namedItem = function(name) {
+        for (var i = 0; i < this.length; i++) {
+          if (this[i].id === name || this[i].getAttribute('name') === name) return this[i];
+        }
+        return null;
+      };
+      opts.add = function(option, before) {
+        var refNode = null;
+        if (typeof before === 'number') refNode = this[before] || null;
+        else if (before) refNode = before;
+        if (refNode) select.insertBefore(option, refNode);
+        else select.appendChild(option);
+      };
+      opts.remove = function(index) {
+        var target = this[index];
+        if (target) select.removeChild(target);
+      };
+      return opts;
+    },
+  });
+
+  Object.defineProperty(Element.prototype, 'selectedIndex', {
+    configurable: true,
+    get: function() {
+      if (!isSelectElement(this)) return -1;
+      var opts = selectOptionsArray(this);
+      for (var i = 0; i < opts.length; i++) {
+        if (opts[i].selected) return i;
+      }
+      return opts.length > 0 ? 0 : -1;
+    },
+    set: function(index) {
+      if (!isSelectElement(this)) return;
+      var opts = selectOptionsArray(this);
+      for (var i = 0; i < opts.length; i++) {
+        opts[i].selected = (i === index);
+      }
+    },
+  });
+
+  Object.defineProperty(Element.prototype, 'selectedOptions', {
+    configurable: true,
+    get: function() {
+      if (!isSelectElement(this)) return undefined;
+      return selectOptionsArray(this).filter(function(o) { return o.selected; });
+    },
+  });
 
   // ── Constraint Validation API (ValidityState, checkValidity, ...) ─────────
   // Covers the subset real-world CMS forms actually hit: required, pattern,

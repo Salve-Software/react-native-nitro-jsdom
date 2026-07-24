@@ -497,6 +497,38 @@ dom.dispose() // ← always pair with create()
 - [x] `Element.prototype.getClientRects()`/`webkitMatchesSelector()`.
 - [x] `window.reportError()`.
 
+### v0.17 — Boolean Attribute Reflection & Select Ergonomics
+> A gap list compiled by diffing this project against jsdom's own supported
+> interface set (`lib/jsdom/living/interfaces.js`), scoped down to what a
+> real-world CMS embedded script (countdown timer, personalized greeting,
+> discount badge) actually reaches for — dropping everything layout/rendering
+> or full-page-navigation related, which stays out of scope for the reasons
+> given throughout this roadmap.
+- [x] `element.disabled` / `.required` / `.readOnly` / `.multiple` /
+      `.autofocus` / `.selected` as direct boolean properties (same
+      attribute-presence-as-truthiness convention `.checked` already used) —
+      previously only reachable via `getAttribute`/`setAttribute`, which is
+      not how real-world scripts disable a button or mark a field required.
+- [x] `form.reset()` — dispatches the cancelable `reset` event (what widget
+      scripts actually listen for to run their own cleanup). Does not revert
+      field values: this sandbox has no separate default-value storage
+      (`element.value`/`.checked` read/write the live attribute directly), so
+      a script that already reassigned `.value` has overwritten its own
+      default with nothing left to revert to — the same simplification
+      `submit()` already made for the "submit" event.
+- [x] `select.options` (`HTMLOptionsCollection`-like: `item()`/`namedItem()`/
+      `add()`/`remove()`) / `.selectedIndex` / `.selectedOptions` — `select.value`
+      already worked; this rounds out the rest of the dropdown-widget surface.
+      Static array, not a live collection, same trade-off as `form.elements`/
+      `element.labels`.
+- [x] `CSS.escape()` — ports the CSSOM spec's own reference algorithm, so it's
+      exact rather than a best-effort stub; used by scripts building selectors
+      from dynamic IDs (`'#' + CSS.escape(dynamicId)`). `CSS.supports()` has
+      no real CSS engine to validate against, so it reports "supported" for
+      any syntactically-plausible property/value pair instead of parsing CSS.
+- [x] `document.visibilityState` (`'visible'` / `'hidden'`) — the companion to
+      `document.hidden`, which already existed; scripts commonly check both.
+
 ---
 
 ## Repository Structure
