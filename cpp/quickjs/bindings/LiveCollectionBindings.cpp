@@ -142,6 +142,30 @@ const char* kIteratorBootstrapScript = R"JS(
   proto.forEach = function(callback, thisArg) {
     for (var i = 0; i < this.length; i++) callback.call(thisArg, this[i], i, this);
   };
+
+  function arrayLikeIterator(self, mapEntry) {
+    var i = 0;
+    return {
+      next: function() {
+        if (i >= self.length) return { value: undefined, done: true };
+        var value = mapEntry(i, self[i]);
+        i++;
+        return { value: value, done: false };
+      },
+      [Symbol.iterator]: function() { return this; },
+    };
+  }
+
+  proto.entries = function() {
+    return arrayLikeIterator(this, function(i, v) { return [i, v]; });
+  };
+  proto.keys = function() {
+    return arrayLikeIterator(this, function(i) { return i; });
+  };
+  proto.values = function() {
+    return arrayLikeIterator(this, function(i, v) { return v; });
+  };
+
   delete globalThis.__LiveCollectionProto;
 })();
 )JS";
