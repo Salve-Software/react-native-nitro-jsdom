@@ -6,6 +6,9 @@
 #include <lexbor/dom/dom.h>
 #include <lexbor/dom/interfaces/character_data.h>
 #include <lexbor/dom/interfaces/document_type.h>
+#include <lexbor/dom/interfaces/element.h>
+#include <lexbor/ns/ns.h>
+#include <lexbor/tag/tag.h>
 #include <stdexcept>
 #include <cctype>
 #include <cstring>
@@ -228,6 +231,65 @@ void* LexborDocument::createElement(const std::string& tag) {
   auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
   return lxb_dom_document_create_element(dom_doc,
       reinterpret_cast<const lxb_char_t*>(tag.data()), tag.size(), nullptr);
+}
+
+void* LexborDocument::createElementNS(const std::string& nsUri, const std::string& qualifiedName) {
+  if (!_document) return nullptr;
+  auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
+
+  std::string prefix;
+  std::string localName = qualifiedName;
+  auto colon = qualifiedName.find(':');
+  if (colon != std::string::npos) {
+    prefix = qualifiedName.substr(0, colon);
+    localName = qualifiedName.substr(colon + 1);
+  }
+
+  bool known_tag = lxb_tag_data_by_name(dom_doc->tags,
+      reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size()) != nullptr;
+
+  if (!known_tag) {
+    return lxb_dom_element_create(dom_doc,
+        reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size(),
+        nsUri.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(nsUri.data()), nsUri.size(),
+        prefix.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(prefix.data()), prefix.size(),
+        nullptr, 0, true);
+  }
+
+  // Known tag + arbitrary ns crashes Lexbor's HTML interface dispatch, so
+  // resolve the ns id via a throwaway unknown-tag element first (safe path).
+  static const char* kNsProbeTag = "x-nitrojsdom-ns-probe";
+  lxb_dom_element_t* probe = lxb_dom_element_create(dom_doc,
+      reinterpret_cast<const lxb_char_t*>(kNsProbeTag), strlen(kNsProbeTag),
+      nsUri.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(nsUri.data()), nsUri.size(),
+      nullptr, 0, nullptr, 0, true);
+  if (!probe) return nullptr;
+  lxb_ns_id_t resolved_ns = probe->node.ns;
+  lxb_dom_element_destroy(probe);
+
+  lxb_dom_element_t* element = lxb_dom_document_create_element(dom_doc,
+      reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size(), nullptr);
+  if (!element) return nullptr;
+  element->node.ns = resolved_ns;
+
+  if (!prefix.empty()) {
+    const lxb_ns_prefix_data_t* ns_prefix = lxb_ns_prefix_append(dom_doc->prefix,
+        reinterpret_cast<const lxb_char_t*>(prefix.data()), prefix.size());
+    if (ns_prefix) element->node.prefix = ns_prefix->prefix_id;
+  }
+
+  return element;
+}
+
+std::string LexborDocument::namespaceURI(void* node) const {
+  if (!_document || !node) return "";
+  auto* dom_doc = lxb_dom_interface_document(static_cast<lxb_html_document_t*>(_document));
+  auto* n = static_cast<lxb_dom_node_t*>(node);
+  if (n->ns == LXB_NS__UNDEF) return "";
+  size_t len = 0;
+  const lxb_char_t* uri = lxb_ns_by_id(dom_doc->ns, static_cast<lxb_ns_id_t>(n->ns), &len);
+  if (!uri || len == 0) return "";
+  return std::string(reinterpret_cast<const char*>(uri), len);
 }
 
 void* LexborDocument::createTextNode(const std::string& text) {

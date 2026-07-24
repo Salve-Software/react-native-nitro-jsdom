@@ -106,6 +106,92 @@ JSValue js_doc_createTextNode(JSContext* ctx, JSValue, int argc, JSValue* argv) 
   return make_element(ctx, node);
 }
 
+// Implements the WHATWG "validate and extract a namespace and qualified name"
+// algorithm (https://dom.spec.whatwg.org/#validate-and-extract): splits
+// qualifiedName into prefix/localName and checks the namespace/prefix
+// consistency rules, throwing the spec-mandated DOMException on failure.
+// Full XML Name-production character validation (which characters are legal
+// in a Name) is not implemented — only structural checks (empty name, colon
+// placement, xml/xmlns reservations) — deliberately narrower than real
+// jsdom, since that character-class check is a much larger, separate lift.
+JSValue validate_and_extract_qname(JSContext* ctx, const std::string& ns,
+                                    const std::string& qualifiedName, bool ns_is_null,
+                                    std::string& out_prefix, std::string& out_local) {
+  if (qualifiedName.empty()) {
+    return throw_dom_exception(ctx, "InvalidCharacterError",
+        "The qualified name provided is empty.");
+  }
+
+  auto colon = qualifiedName.find(':');
+  auto last_colon = qualifiedName.rfind(':');
+  if (colon != last_colon) {
+    return throw_dom_exception(ctx, "InvalidCharacterError",
+        "The qualified name provided has more than one ':'.");
+  }
+
+  std::string prefix;
+  std::string local = qualifiedName;
+  if (colon != std::string::npos) {
+    prefix = qualifiedName.substr(0, colon);
+    local = qualifiedName.substr(colon + 1);
+    if (prefix.empty() || local.empty()) {
+      return throw_dom_exception(ctx, "InvalidCharacterError",
+          "The qualified name provided is malformed.");
+    }
+  }
+
+  if (!prefix.empty() && ns_is_null) {
+    return throw_dom_exception(ctx, "NamespaceError",
+        "A namespace is required for a prefixed qualified name.");
+  }
+  if (prefix == "xml" && ns != "http://www.w3.org/XML/1998/namespace") {
+    return throw_dom_exception(ctx, "NamespaceError",
+        "The 'xml' prefix requires the XML namespace.");
+  }
+  bool is_xmlns = (qualifiedName == "xmlns" || prefix == "xmlns");
+  if (is_xmlns && ns != "http://www.w3.org/2000/xmlns/") {
+    return throw_dom_exception(ctx, "NamespaceError",
+        "The 'xmlns' prefix/qualified name requires the XMLNS namespace.");
+  }
+  if (!is_xmlns && ns == "http://www.w3.org/2000/xmlns/") {
+    return throw_dom_exception(ctx, "NamespaceError",
+        "The XMLNS namespace requires the 'xmlns' prefix or qualified name.");
+  }
+
+  out_prefix = prefix;
+  out_local = local;
+  return JS_UNDEFINED;
+}
+
+JSValue js_doc_createElementNS(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 2) {
+    return JS_ThrowTypeError(ctx,
+        "Failed to execute 'createElementNS' on 'Document': 2 arguments required.");
+  }
+  // Per WebIDL, a nullable DOMString? argument only maps to the null
+  // namespace when explicitly `null` — `undefined` stringifies to "undefined"
+  // like any other DOMString argument, it is not treated as null.
+  bool ns_is_null = JS_IsNull(argv[0]);
+  std::string ns;
+  if (!ns_is_null) {
+    const char* ns_c = JS_ToCString(ctx, argv[0]);
+    if (!ns_c) return JS_EXCEPTION;
+    ns = ns_c;
+    JS_FreeCString(ctx, ns_c);
+  }
+  const char* qname = JS_ToCString(ctx, argv[1]);
+  if (!qname) return JS_EXCEPTION;
+  std::string qualifiedName = qname;
+  JS_FreeCString(ctx, qname);
+
+  std::string prefix, local;
+  JSValue validation_error = validate_and_extract_qname(ctx, ns, qualifiedName, ns_is_null, prefix, local);
+  if (JS_IsException(validation_error)) return validation_error;
+
+  void* el = get_doc(ctx)->createElementNS(ns, qualifiedName);
+  return make_element(ctx, el);
+}
+
 JSValue js_doc_createComment(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   if (argc < 1) return JS_NULL;
   const char* text = JS_ToCString(ctx, argv[0]);
@@ -227,6 +313,7 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "getElementsByTagName",   JS_NewCFunction(ctx, js_doc_getElementsByTagName,   "getElementsByTagName",   1));
   JS_SetPropertyStr(ctx, doc, "getElementsByName",      JS_NewCFunction(ctx, js_doc_getElementsByName,      "getElementsByName",      1));
   JS_SetPropertyStr(ctx, doc, "createElement",          JS_NewCFunction(ctx, js_doc_createElement,          "createElement",          1));
+  JS_SetPropertyStr(ctx, doc, "createElementNS",        JS_NewCFunction(ctx, js_doc_createElementNS,        "createElementNS",        2));
   JS_SetPropertyStr(ctx, doc, "createTextNode",         JS_NewCFunction(ctx, js_doc_createTextNode,         "createTextNode",         1));
   JS_SetPropertyStr(ctx, doc, "createComment",          JS_NewCFunction(ctx, js_doc_createComment,          "createComment",          1));
   JS_SetPropertyStr(ctx, doc, "createDocumentFragment", JS_NewCFunction(ctx, js_doc_createDocumentFragment, "createDocumentFragment", 0));
@@ -249,6 +336,10 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "nodeType", JS_NewInt32(ctx, 9 /* DOCUMENT_NODE */));
   JS_SetPropertyStr(ctx, doc, "nodeName", JS_NewString(ctx, "#document"));
   JS_SetPropertyStr(ctx, doc, "ownerDocument", JS_NULL);
+  // document uses its own object/prototype (not node_proto), so it doesn't
+  // inherit js_el_get_namespaceURI — set explicitly rather than leaving this
+  // undefined, matching real jsdom (a Document node has no namespace).
+  JS_SetPropertyStr(ctx, doc, "namespaceURI", JS_NULL);
 
   JSValue document_proto = JS_NewObject(ctx);
   JS_SetPrototype(ctx, doc, document_proto);

@@ -230,4 +230,47 @@ describe('JSDOM Shadow DOM', () => {
     `);
     expect(JSON.parse(result)).toEqual({ defaultRootIsShadow: true, composedRootIsDocument: true });
   });
+
+  it('a composed, bubbling event dispatched inside a shadow tree retargets through the host into the light DOM', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<button id="btn">click me</button>';
+      const btn = shadow.querySelector('#btn');
+
+      let sawOnDocument = false;
+      let pathAtDocument = null;
+      document.addEventListener('widget-click', (e) => {
+        sawOnDocument = true;
+        pathAtDocument = e.composedPath().map((n) => n.id || n.nodeName);
+      });
+
+      btn.dispatchEvent(new CustomEvent('widget-click', { bubbles: true, composed: true }));
+      JSON.stringify({ sawOnDocument, pathAtDocument });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      sawOnDocument: true,
+      pathAtDocument: ['btn', 'host', 'BODY', 'HTML', '#document'],
+    });
+  });
+
+  it('a bubbling but non-composed event dispatched inside a shadow tree does not escape to the light DOM', async () => {
+    dom = JSDOM.create('<html><body><div id="host"></div></body></html>');
+    const result = await dom.evaluate(`
+      const host = document.getElementById('host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = '<button id="btn">click me</button>';
+      const btn = shadow.querySelector('#btn');
+
+      let sawOnHost = false;
+      let sawOnDocument = false;
+      host.addEventListener('widget-click', () => { sawOnHost = true; });
+      document.addEventListener('widget-click', () => { sawOnDocument = true; });
+
+      btn.dispatchEvent(new CustomEvent('widget-click', { bubbles: true, composed: false }));
+      JSON.stringify({ sawOnHost, sawOnDocument });
+    `);
+    expect(JSON.parse(result)).toEqual({ sawOnHost: false, sawOnDocument: false });
+  });
 });

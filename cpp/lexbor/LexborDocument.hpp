@@ -38,6 +38,20 @@ public:
   void* createComment(const std::string& text);
   void* createDocumentFragment();
 
+  // ── Namespaces (createElementNS / Element.namespaceURI) ───────────────────
+  // qualifiedName may be "prefix:localName" or a bare "localName". nsUri may be
+  // empty for the null namespace. Lexbor registers arbitrary namespace URIs
+  // dynamically (lxb_ns_append), so any URI works, not just HTML/SVG/MathML.
+  // Note: lxb_tag_append_lower lowercases local_name internally, so
+  // mixed-case foreign tag/attribute names (e.g. SVG's "viewBox",
+  // "linearGradient") come back lowercased — a lexbor limitation, not
+  // something this binding can work around.
+  void* createElementNS(const std::string& nsUri, const std::string& qualifiedName);
+
+  // Returns the namespace URI for a node, or "" if the node has no namespace
+  // (LXB_NS__UNDEF) — callers should map "" to JS null.
+  std::string namespaceURI(void* node) const;
+
   // ── Shadow DOM ─────────────────────────────────────────────────────────────
   // mode: 0 = open, 1 = closed (matches lxb_dom_shadow_root_mode_t).
   void* createShadowRoot(void* hostElement, int mode);

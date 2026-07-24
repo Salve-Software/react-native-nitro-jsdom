@@ -220,4 +220,25 @@ describe('JSDOM selectors, live collections, instanceof', () => {
       { text: 'b', index: 1, collectionLength: 2 },
     ]);
   });
+
+  it('querySelectorAll()/getElementsBy*() results support entries()/keys()/values()', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <p class="hit">a</p>
+        <p class="hit">b</p>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const list = document.querySelectorAll('.hit');
+      const entries = Array.from(list.entries()).map(([i, el]) => [i, el.textContent]);
+      const keys = Array.from(list.keys());
+      const values = Array.from(list.values()).map((el) => el.textContent);
+      JSON.stringify({ entries, keys, values });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      entries: [[0, 'a'], [1, 'b']],
+      keys: [0, 1],
+      values: ['a', 'b'],
+    });
+  });
 });
