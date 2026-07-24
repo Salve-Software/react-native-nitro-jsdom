@@ -175,7 +175,7 @@ const char* kFormBootstrapScript = R"JS(
       for (var i = 0; i < opts.length; i++) {
         if (opts[i].selected) return i;
       }
-      return opts.length > 0 ? 0 : -1;
+      return (!this.multiple && opts.length > 0) ? 0 : -1;
     },
     set: function(index) {
       if (!isSelectElement(this)) return;
@@ -190,7 +190,10 @@ const char* kFormBootstrapScript = R"JS(
     configurable: true,
     get: function() {
       if (!isSelectElement(this)) return undefined;
-      return selectOptionsArray(this).filter(function(o) { return o.selected; });
+      var opts = selectOptionsArray(this);
+      var selected = opts.filter(function(o) { return o.selected; });
+      if (selected.length === 0 && !this.multiple && opts.length > 0) return [opts[0]];
+      return selected;
     },
   });
 

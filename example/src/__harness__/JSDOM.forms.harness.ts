@@ -483,11 +483,16 @@ describe('JSDOM form elements', () => {
           <option id="x" selected>X</option>
           <option id="y" selected>Y</option>
         </select>
+        <select id="multiEmpty" multiple>
+          <option id="m">M</option>
+          <option id="n">N</option>
+        </select>
       </body></html>
     `);
     const result = await dom.evaluate(`
       const sel = document.getElementById('sel');
       const multi = document.getElementById('multi');
+      const multiEmpty = document.getElementById('multiEmpty');
 
       const defaultIndex = sel.selectedIndex;
       sel.selectedIndex = 2;
@@ -499,13 +504,15 @@ describe('JSDOM form elements', () => {
       };
 
       const multiSelectedOptions = multi.selectedOptions.map((o) => o.id);
+      const multiEmptyState = { index: multiEmpty.selectedIndex, selectedOptions: multiEmpty.selectedOptions };
 
-      JSON.stringify({ defaultIndex, afterSet, multiSelectedOptions });
+      JSON.stringify({ defaultIndex, afterSet, multiSelectedOptions, multiEmptyState });
     `);
     expect(JSON.parse(result)).toEqual({
       defaultIndex: 0,
       afterSet: { index: 2, selectedOptions: ['c'], cSelected: true, aSelected: false },
       multiSelectedOptions: ['x', 'y'],
+      multiEmptyState: { index: -1, selectedOptions: [] },
     });
   });
 });
