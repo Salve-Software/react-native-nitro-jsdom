@@ -166,6 +166,23 @@ const char* kIteratorBootstrapScript = R"JS(
     return arrayLikeIterator(this, function(i, v) { return v; });
   };
 
+  proto.item = function(index) {
+    return index >= 0 && index < this.length ? this[index] : null;
+  };
+
+  // namedItem() is spec'd on HTMLCollection only (matches by id, then by
+  // name), not NodeList — but both share this one LiveCollection class (see
+  // the forEach() comment above), so this stays a no-op-safe lookup for
+  // NodeLists of non-Elements (text/comment nodes have no getAttribute).
+  proto.namedItem = function(name) {
+    for (var i = 0; i < this.length; i++) {
+      var item = this[i];
+      if (typeof item.getAttribute !== 'function') continue;
+      if (item.getAttribute('id') === name || item.getAttribute('name') === name) return item;
+    }
+    return null;
+  };
+
   delete globalThis.__LiveCollectionProto;
 })();
 )JS";

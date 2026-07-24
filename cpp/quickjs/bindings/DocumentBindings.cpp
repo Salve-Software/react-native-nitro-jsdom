@@ -210,6 +210,16 @@ JSValue js_doc_get_readyState(JSContext* ctx, JSValue) {
   return JS_NewStringLen(ctx, state.data(), state.size());
 }
 
+// A doctype-less document renders in quirks mode in every real browser (and
+// jsdom mirrors that), so this is a real, if approximate, signal rather than
+// a hardcoded stub — no actual quirks-mode CSS behavior differs here since
+// there's no layout engine to diverge.
+JSValue js_doc_get_compatMode(JSContext* ctx, JSValue) {
+  bool has_doctype = get_doc(ctx)->doctype() != nullptr;
+  const char* mode = has_doctype ? "CSS1Compat" : "BackCompat";
+  return JS_NewString(ctx, mode);
+}
+
 const char* kDocumentTitleBootstrapScript = R"JS(
 (function() {
   Object.defineProperty(document, 'title', {
@@ -264,6 +274,10 @@ void DocumentBindings::install(JSContext* ctx) {
   define_prop(ctx, doc, "links",           js_doc_get_links,           nullptr);
   define_prop(ctx, doc, "activeElement",   js_doc_get_activeElement,   nullptr);
   define_prop(ctx, doc, "readyState",      js_doc_get_readyState,      nullptr);
+  define_prop(ctx, doc, "compatMode",      js_doc_get_compatMode,      nullptr);
+
+  JS_SetPropertyStr(ctx, doc, "characterSet", JS_NewString(ctx, "UTF-8"));
+  JS_SetPropertyStr(ctx, doc, "contentType",  JS_NewString(ctx, "text/html"));
 
   RuntimeContext* rctx = get_ctx(ctx);
   bool hidden = !(rctx && rctx->pretend_to_be_visual);
