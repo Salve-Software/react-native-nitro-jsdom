@@ -43,10 +43,13 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
   _runtime->bindDocument(_document.get());
 
   if (runScripts) {
-    for (const auto& script : _document->getScriptContents()) {
+    auto* rctx = _runtime->contextState();
+    for (const auto& [scriptEl, script] : _document->getScriptContents()) {
+      rctx->current_script = scriptEl;
       try {
         _runtime->evaluate(script);
       } catch (...) { }
+      rctx->current_script = nullptr;
     }
   }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace margelo::nitro::nitrojsdom {
@@ -29,8 +30,8 @@ public:
   void* head() const;
   void* documentElement() const;
 
-  // ── Script extraction ────────────────────────────────────────────────────
-  std::vector<std::string> getScriptContents() const;
+  // ── Script extraction — (element, text content) pairs; void* = lxb_dom_element_t* ──
+  std::vector<std::pair<void*, std::string>> getScriptContents() const;
 
   // ── Node creation ─────────────────────────────────────────────────────────
   void* createElement(const std::string& tag);

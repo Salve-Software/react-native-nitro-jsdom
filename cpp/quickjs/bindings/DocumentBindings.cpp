@@ -269,6 +269,12 @@ JSValue js_doc_get_activeElement(JSContext* ctx, JSValue) {
   return make_element(ctx, get_doc(ctx)->body());
 }
 
+JSValue js_doc_get_currentScript(JSContext* ctx, JSValue) {
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->current_script) return make_element(ctx, rctx->current_script);
+  return JS_NULL;
+}
+
 JSValue js_doc_get_readyState(JSContext* ctx, JSValue) {
   auto* rctx = get_ctx(ctx);
   const std::string& state = rctx ? rctx->ready_state : "loading";
@@ -350,6 +356,7 @@ void DocumentBindings::install(JSContext* ctx) {
   define_prop(ctx, doc, "scripts",         js_doc_get_scripts,         nullptr);
   define_prop(ctx, doc, "links",           js_doc_get_links,           nullptr);
   define_prop(ctx, doc, "activeElement",   js_doc_get_activeElement,   nullptr);
+  define_prop(ctx, doc, "currentScript",   js_doc_get_currentScript,   nullptr);
   define_prop(ctx, doc, "readyState",      js_doc_get_readyState,      nullptr);
   define_prop(ctx, doc, "compatMode",      js_doc_get_compatMode,      nullptr);
   define_prop(ctx, doc, "baseURI",         js_doc_get_baseURI,         nullptr);

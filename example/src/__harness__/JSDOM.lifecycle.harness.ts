@@ -183,4 +183,33 @@ describe('JSDOM lifecycle', () => {
     const result = await dom.evaluate('window.__ran');
     expect(result).toBe('1');
   });
+
+  it('document.currentScript points at the executing <script> during initial execution, and is null afterwards', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <div id="widget-1">
+          <script id="s1">
+            window.__widget1Container = document.currentScript.parentElement.id;
+          </script>
+        </div>
+        <div id="widget-2">
+          <script id="s2">
+            window.__widget2Container = document.currentScript.parentElement.id;
+          </script>
+        </div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        widget1: window.__widget1Container,
+        widget2: window.__widget2Container,
+        afterExecution: document.currentScript,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      widget1: 'widget-1',
+      widget2: 'widget-2',
+      afterExecution: null,
+    });
+  });
 });
