@@ -1266,6 +1266,14 @@ JSValue js_el_getBoundingClientRect(JSContext* ctx, JSValue this_val, int, JSVal
   return rect;
 }
 
+JSValue js_el_getClientRects(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NewArray(ctx);
+  JSValue arr = JS_NewArray(ctx);
+  JS_SetPropertyUint32(ctx, arr, 0, js_el_getBoundingClientRect(ctx, this_val, argc, argv));
+  return arr;
+}
+
 JSValue js_el_isSameNode(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* node = unwrap_node(ctx, this_val);
   if (!node || argc < 1) return JS_FALSE;
@@ -1487,6 +1495,7 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "getAttributeNames",      JS_NewCFunction(ctx, js_el_getAttributeNames,      "getAttributeNames",      0));
   JS_SetPropertyStr(ctx, proto, "remove",                 JS_NewCFunction(ctx, js_el_remove,                 "remove",                 0));
   JS_SetPropertyStr(ctx, proto, "matches",                JS_NewCFunction(ctx, js_el_matches,                "matches",                1));
+  JS_SetPropertyStr(ctx, proto, "webkitMatchesSelector",  JS_NewCFunction(ctx, js_el_matches,                "webkitMatchesSelector",  1));
   JS_SetPropertyStr(ctx, proto, "querySelector",          JS_NewCFunction(ctx, js_el_querySelector,          "querySelector",          1));
   JS_SetPropertyStr(ctx, proto, "querySelectorAll",       JS_NewCFunction(ctx, js_el_querySelectorAll,       "querySelectorAll",       1));
   JS_SetPropertyStr(ctx, proto, "getElementsByClassName", JS_NewCFunction(ctx, js_el_getElementsByClassName, "getElementsByClassName", 1));
@@ -1496,6 +1505,7 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "append",                 JS_NewCFunction(ctx, js_el_append,                 "append",                 0));
   JS_SetPropertyStr(ctx, proto, "prepend",                JS_NewCFunction(ctx, js_el_prepend,                "prepend",                0));
   JS_SetPropertyStr(ctx, proto, "getBoundingClientRect",  JS_NewCFunction(ctx, js_el_getBoundingClientRect,  "getBoundingClientRect",  0));
+  JS_SetPropertyStr(ctx, proto, "getClientRects",         JS_NewCFunction(ctx, js_el_getClientRects,         "getClientRects",         0));
 
   define_prop(ctx, proto, "tagName",                js_el_get_tagName,             nullptr);
   define_prop(ctx, proto, "prefix",                 js_el_get_prefix,              nullptr);
@@ -1546,6 +1556,56 @@ void ElementBindings::install(JSContext* ctx) {
         if (composed && node.host) { node = node.host; continue; }
         return __nativeCanonicalizeRootNode(node);
       }
+    };
+
+    Object.defineProperty(Node.prototype, 'isConnected', {
+      get: function() { return this.getRootNode() === document; },
+      enumerable: true,
+      configurable: true,
+    });
+
+    function locateNamespace(node, prefix) {
+      if (!node) return null;
+      if (node.nodeType === 1) {
+        if (node.namespaceURI !== null && node.prefix === prefix) return node.namespaceURI;
+        var attrs = node.attributes;
+        for (var i = 0; i < attrs.length; i++) {
+          var a = attrs[i];
+          if (prefix === null && a.name === 'xmlns') return a.value || null;
+          if (prefix !== null && a.name === 'xmlns:' + prefix) return a.value || null;
+        }
+        return locateNamespace(node.parentElement, prefix);
+      }
+      if (node.nodeType === 9) {
+        return node.documentElement ? locateNamespace(node.documentElement, prefix) : null;
+      }
+      if (node.nodeType === 10 || node.nodeType === 11) return null;
+      return locateNamespace(node.parentElement, prefix);
+    }
+
+    Node.prototype.lookupNamespaceURI = function(prefix) {
+      if (prefix === undefined || prefix === '') prefix = null;
+      return locateNamespace(this, prefix);
+    };
+
+    Node.prototype.isDefaultNamespace = function(namespace) {
+      if (namespace === undefined || namespace === '') namespace = null;
+      return this.lookupNamespaceURI(null) === namespace;
+    };
+
+    Node.prototype.lookupPrefix = function(namespace) {
+      if (!namespace) return null;
+      var node = this.nodeType === 9 ? this.documentElement : this;
+      while (node && node.nodeType === 1) {
+        if (node.namespaceURI === namespace && node.prefix !== null) return node.prefix;
+        var attrs = node.attributes;
+        for (var i = 0; i < attrs.length; i++) {
+          var a = attrs[i];
+          if (a.name.indexOf('xmlns:') === 0 && a.value === namespace) return a.name.slice(6);
+        }
+        node = node.parentElement;
+      }
+      return null;
     };
   })();
   )JS";

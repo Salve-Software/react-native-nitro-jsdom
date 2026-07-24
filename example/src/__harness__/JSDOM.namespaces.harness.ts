@@ -199,4 +199,58 @@ describe('JSDOM namespaces (createElementNS/namespaceURI)', () => {
       xmlnsNamespaceRightQualified: null,
     });
   });
+
+  it('node.isConnected reflects attachment to the document', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const el = document.createElement('div');
+      const before = el.isConnected;
+      document.body.appendChild(el);
+      const afterAppend = el.isConnected;
+      el.remove();
+      const afterRemove = el.isConnected;
+      JSON.stringify({ before, afterAppend, afterRemove, bodyIsConnected: document.body.isConnected });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: false, afterAppend: true, afterRemove: false, bodyIsConnected: true,
+    });
+  });
+
+  it('lookupNamespaceURI()/isDefaultNamespace() resolve through xmlns attributes and ancestors', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const root = document.createElementNS('https://example.com/custom-ns', 'root');
+      root.setAttribute('xmlns:foo', 'https://example.com/foo-ns');
+      const child = document.createElement('child');
+      root.appendChild(child);
+      JSON.stringify({
+        rootDefaultNs: root.lookupNamespaceURI(null),
+        rootIsDefault: root.isDefaultNamespace('https://example.com/custom-ns'),
+        childFooNs: child.lookupNamespaceURI('foo'),
+        childUnknownPrefix: child.lookupNamespaceURI('bar'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      rootDefaultNs: 'https://example.com/custom-ns',
+      rootIsDefault: true,
+      childFooNs: 'https://example.com/foo-ns',
+      childUnknownPrefix: null,
+    });
+  });
+
+  it('lookupPrefix() finds the prefix declaring a given namespace on an ancestor', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const root = document.createElement('root');
+      root.setAttribute('xmlns:foo', 'https://example.com/foo-ns');
+      const child = document.createElement('child');
+      root.appendChild(child);
+      JSON.stringify({
+        found: child.lookupPrefix('https://example.com/foo-ns'),
+        notFound: child.lookupPrefix('https://example.com/nope'),
+        nullNamespace: child.lookupPrefix(null),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ found: 'foo', notFound: null, nullNamespace: null });
+  });
 });

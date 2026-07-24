@@ -113,4 +113,26 @@ describe('JSDOM layout stubs (no rendering engine backs any of this)', () => {
       defaultRootMargin: '0px', defaultThresholds: [0],
     });
   });
+
+  it('getClientRects() returns a one-item array shaped like getBoundingClientRect()', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const d = document.getElementById('d');
+      const rects = d.getClientRects();
+      JSON.stringify({ length: rects.length, first: rects[0] });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      length: 1,
+      first: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 },
+    });
+  });
+
+  it('webkitMatchesSelector() is an alias for matches()', async () => {
+    dom = JSDOM.create('<html><body><div id="d" class="hit"></div></body></html>');
+    const result = await dom.evaluate(`
+      const d = document.getElementById('d');
+      JSON.stringify({ matches: d.webkitMatchesSelector('.hit'), noMatch: d.webkitMatchesSelector('.miss') });
+    `);
+    expect(JSON.parse(result)).toEqual({ matches: true, noMatch: false });
+  });
 });

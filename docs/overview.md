@@ -491,6 +491,12 @@ dom.dispose() // ← always pair with create()
 - [x] `document.characterSet`/`document.contentType` — static `'UTF-8'`/
       `'text/html'`.
 
+### v0.16 — Node Namespace Methods & Misc Parity
+- [x] `Node.prototype.isConnected`.
+- [x] `Node.prototype.lookupNamespaceURI()`/`lookupPrefix()`/`isDefaultNamespace()`.
+- [x] `Element.prototype.getClientRects()`/`webkitMatchesSelector()`.
+- [x] `window.reportError()`.
+
 ---
 
 ## Repository Structure

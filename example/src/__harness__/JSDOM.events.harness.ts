@@ -320,6 +320,19 @@ describe('JSDOM events', () => {
     expect(typeof parsed.message).toBe('string');
   });
 
+  it('window.reportError() fires the same "error" event as an uncaught throw', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      let captured = null;
+      window.addEventListener('error', (e) => {
+        captured = { message: e.message, errorMessage: e.error && e.error.message };
+      });
+      reportError(new TypeError('custom failure'));
+      JSON.stringify(captured);
+    `);
+    expect(JSON.parse(result)).toEqual({ message: 'custom failure', errorMessage: 'custom failure' });
+  });
+
   it('window fires unhandledrejection for an unhandled promise rejection, and evaluate() still rejects', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     await dom.evaluate(`
