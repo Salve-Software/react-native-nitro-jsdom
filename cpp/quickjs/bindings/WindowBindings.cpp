@@ -1,5 +1,6 @@
 #include "WindowBindings.hpp"
 #include "DOMExceptionBindings.hpp"
+#include "EventBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include <cstdlib>
@@ -188,6 +189,23 @@ JSValue js_console_method(JSContext* ctx, JSValue, int argc, JSValue* argv, int 
   }
 
   rctx->console_callback(level, args);
+  return JS_UNDEFINED;
+}
+
+JSValue js_window_reportError(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  JSValue error_value = argc >= 1 ? argv[0] : JS_UNDEFINED;
+  std::string message = "Uncaught";
+  if (argc >= 1) {
+    JSValue msg_prop = JS_GetPropertyStr(ctx, argv[0], "message");
+    if (!JS_IsException(msg_prop) && !JS_IsUndefined(msg_prop)) {
+      const char* s = JS_ToCString(ctx, msg_prop);
+      if (s) { message = s; JS_FreeCString(ctx, s); }
+    } else if (JS_IsException(msg_prop)) {
+      JS_FreeValue(ctx, JS_GetException(ctx));
+    }
+    JS_FreeValue(ctx, msg_prop);
+  }
+  EventBindings::dispatchErrorEvent(ctx, message, error_value);
   return JS_UNDEFINED;
 }
 
@@ -670,6 +688,7 @@ void WindowBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, global, "alert",   JS_NewCFunction(ctx, js_window_alert,   "alert",   1));
   JS_SetPropertyStr(ctx, global, "confirm", JS_NewCFunction(ctx, js_window_confirm, "confirm", 1));
   JS_SetPropertyStr(ctx, global, "prompt",  JS_NewCFunction(ctx, js_window_prompt,  "prompt",  2));
+  JS_SetPropertyStr(ctx, global, "reportError", JS_NewCFunction(ctx, js_window_reportError, "reportError", 1));
   JS_SetPropertyStr(ctx, global, "atob",    JS_NewCFunction(ctx, js_window_atob,    "atob",    1));
   JS_SetPropertyStr(ctx, global, "btoa",    JS_NewCFunction(ctx, js_window_btoa,    "btoa",    1));
 
