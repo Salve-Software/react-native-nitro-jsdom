@@ -405,6 +405,57 @@ dom.dispose() // ← always pair with create()
 - [x] `element.innerText` — falls back to `textContent` (no layout engine to
       compute rendered/collapsed text from).
 
+### v0.14 — Namespaces, Event Retargeting & Console Ergonomics
+> A jsdom parity pass driven by a direct audit of this project against
+> real jsdom, rather than a stated real-world-script gap list: namespace
+> support for inline SVG (a use case `docs/overview.md` itself calls out —
+> discount badges/icons — but that the sandbox had no path to build until
+> now), `composed`/`composedPath()` event retargeting now that Shadow DOM is
+> a first-class feature, and small ergonomics items (`NodeList`/
+> `HTMLCollection` iterator methods, `console` parity, `navigator.clipboard`)
+> in the spirit of v0.11's round.
+- [x] `document.createElementNS(nsUri, qualifiedName)` / `node.namespaceURI` —
+      backed directly by Lexbor's own `lxb_dom_element_create()`, which
+      registers arbitrary namespace URIs dynamically (`lxb_ns_append`), so
+      this isn't limited to SVG/MathML — any namespace URI works, including
+      custom ones. `element.tagName`/`nodeName` now read the qualified name
+      (`prefix:localName`) instead of unconditionally uppercasing, and only
+      uppercase for elements in the HTML namespace, matching spec behavior
+      for foreign elements. Known Lexbor limitation: local/qualified names
+      are lowercased internally, so mixed-case SVG tag/attribute names (e.g.
+      `viewBox`, `linearGradient`) come back lowercased — not something this
+      binding can work around. `getAttributeNS`/`setAttributeNS` (namespaced
+      attributes, as opposed to namespaced elements) are not implemented.
+      Only available on the primary document, not `DOMParser`/
+      `createHTMLDocument()` secondary documents (same precedent as
+      `importNode`).
+- [x] `Event`/`CustomEvent`/`KeyboardEvent`/`MouseEvent` — `composed` (from
+      the constructor init dict) and `event.composedPath()`. A composed,
+      bubbling event dispatched inside a Shadow Root now retargets through
+      the shadow host into the light DOM (found via a reverse lookup in the
+      host↔shadow-root map `attachShadow()` already maintains) instead of
+      stopping at the shadow boundary; a non-composed one still stays
+      contained, matching spec default behavior for e.g. `click` (composed)
+      vs. a plain custom event (not composed unless declared so).
+      Simplification: this sandbox has no separate capture phase, so
+      `composedPath()` is only meaningful along the bubble chain — a
+      non-bubbling event's `composedPath()` is just `[target]`.
+- [x] `NodeList`/`HTMLCollection.prototype.entries()`/`keys()`/`values()` —
+      alongside the `forEach`/`Symbol.iterator` v0.11 already added, so
+      `Array.from(list.entries())` etc. work like real jsdom collections.
+- [x] `console.group()`/`groupCollapsed()`/`groupEnd()`/`trace()`/`assert()`/
+      `table()`/`count()`/`countReset()` — layered in pure JS on top of the
+      existing native `log`/`warn`/`error`/`info`/`debug` methods (the
+      `onConsole` bridge already stringifies everything it receives, so
+      these don't need new native plumbing). `table()` logs
+      `JSON.stringify(data)` rather than a real formatted table — there's no
+      terminal/DevTools surface backing this sandbox to format one for.
+- [x] `navigator.clipboard.writeText()`/`readText()` — jsdom itself doesn't
+      implement the Clipboard API at all (no OS clipboard to back it, same
+      reasoning as `window.history`/`getSelection()`); this is an in-memory
+      stand-in purely so a "copy discount code" embedded widget calling it
+      directly doesn't throw.
+
 ---
 
 ## Repository Structure
