@@ -73,6 +73,24 @@ describe('JSDOM events', () => {
     expect(JSON.parse(result)).toEqual([]);
   });
 
+  it('composedPath() reverts to empty on a saved event reference after dispatch completes', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const child = document.getElementById('child');
+      let savedEvent;
+      let pathDuringDispatch;
+      child.addEventListener('click', (e) => {
+        savedEvent = e;
+        pathDuringDispatch = e.composedPath().length;
+      });
+
+      const event = new Event('click', { bubbles: true });
+      child.dispatchEvent(event);
+      JSON.stringify({ pathDuringDispatch, pathAfterDispatch: savedEvent.composedPath() });
+    `);
+    expect(JSON.parse(result)).toEqual({ pathDuringDispatch: 5, pathAfterDispatch: [] });
+  });
+
   it('stopPropagation() halts bubbling to ancestors', async () => {
     dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
     const result = await dom.evaluate(`
