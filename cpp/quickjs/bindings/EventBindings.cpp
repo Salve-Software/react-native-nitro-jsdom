@@ -298,33 +298,33 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
   std::vector<lxb_dom_node_t*> chain;
   chain.push_back(target_node);
   if (bubbles) {
-    // Climb ancestors; when we run off the top of a shadow tree (parent ==
-    // nullptr) and the event is composed, retarget through the shadow host
-    // (found by reverse-lookup in element_shadow_roots) and keep climbing
-    // into the light tree above it — this is how a composed event (e.g.
-    // 'click') escapes a shadow boundary while a non-composed one stays
-    // contained. Simplification: this sandbox has no separate capture phase,
-    // so composedPath()/retargeting are only computed along the bubble chain
-    // — a non-bubbling event's composedPath() is just [target].
-    lxb_dom_node_t* boundary = target_node;
+    // Climb ancestors; when we reach the top of a shadow tree (a registered
+    // ShadowRoot — it has no `parent` in the node tree, since Lexbor doesn't
+    // link a shadow root into its host's child list) and the event is
+    // composed, retarget through the shadow host (found by reverse-lookup in
+    // element_shadow_roots) and keep climbing into the light tree above it —
+    // this is how a composed event (e.g. 'click') escapes a shadow boundary
+    // while a non-composed one stays contained. The ShadowRoot node itself is
+    // never added to the chain/composedPath (unlike real DOM, which does
+    // include it): this sandbox's ShadowRoot wrapper only exists via
+    // ShadowRootBindings' host-keyed cache, so building one here via the
+    // generic make_element() path (used for every other chain entry) would
+    // produce a broken, non-ShadowRoot-shaped object instead. Simplification:
+    // this sandbox has no separate capture phase, so composedPath()/
+    // retargeting are only computed along the bubble chain — a non-bubbling
+    // event's composedPath() is just [target].
     lxb_dom_node_t* p = target_node->parent;
-    while (true) {
-      if (p) {
-        chain.push_back(p);
-        boundary = p;
-        p = p->parent;
-        continue;
-      }
-      if (!composed) break;
+    while (p) {
       void* host = nullptr;
       for (auto& kv : rctx->element_shadow_roots) {
-        if (kv.second == static_cast<void*>(boundary)) { host = kv.first; break; }
+        if (kv.second == static_cast<void*>(p)) { host = kv.first; break; }
       }
-      if (!host) break;
-      lxb_dom_node_t* host_node = static_cast<lxb_dom_node_t*>(host);
-      chain.push_back(host_node);
-      boundary = host_node;
-      p = host_node->parent;
+      if (host) {
+        if (!composed) break;
+        p = static_cast<lxb_dom_node_t*>(host);
+      }
+      chain.push_back(p);
+      p = p->parent;
     }
   }
 
@@ -423,6 +423,7 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
         JS_FreeValue(ctx, msg_prop);
         JS_FreeValue(ctx, ex);
         JS_ThrowInternalError(ctx, "%s", err.c_str());
+        JS_SetPropertyStr(ctx, event_obj, "__composedPath", JS_NewArray(ctx));
         return JS_EXCEPTION;
       }
       if (cb_is_handler_property[i] && JS_IsBool(ret) && JS_ToBool(ctx, ret) == 0 &&
@@ -435,6 +436,10 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
   }
 
   bool defaultPrevented = get_bool_prop(ctx, event_obj, "defaultPrevented");
+  // Per spec, composedPath() only returns a populated path while the event is
+  // actively being dispatched — reset it so a reference to `event` saved by
+  // a listener returns [] if composedPath() is called after dispatch ends.
+  JS_SetPropertyStr(ctx, event_obj, "__composedPath", JS_NewArray(ctx));
   return JS_NewBool(ctx, !defaultPrevented);
 }
 

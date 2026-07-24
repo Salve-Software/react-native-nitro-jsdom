@@ -251,7 +251,7 @@ describe('JSDOM Shadow DOM', () => {
     `);
     expect(JSON.parse(result)).toEqual({
       sawOnDocument: true,
-      pathAtDocument: ['btn', 'host', '#document'],
+      pathAtDocument: ['btn', 'host', 'BODY', 'HTML', '#document'],
     });
   });
 

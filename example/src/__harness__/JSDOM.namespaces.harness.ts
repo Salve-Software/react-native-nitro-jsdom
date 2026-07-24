@@ -126,4 +126,77 @@ describe('JSDOM namespaces (createElementNS/namespaceURI)', () => {
     `);
     expect(JSON.parse(result)).toEqual({ plainGetAttribute: '#icon-star' });
   });
+
+  it('createElementNS(undefined, ...) stringifies to the literal "undefined" namespace, unlike null', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const el = document.createElementNS(undefined, 'div');
+      JSON.stringify({ namespaceURI: el.namespaceURI });
+    `);
+    expect(JSON.parse(result)).toEqual({ namespaceURI: 'undefined' });
+  });
+
+  it('document.namespaceURI is null', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate('String(document.namespaceURI)');
+    expect(result).toBe('null');
+  });
+
+  it('createElementNS() throws InvalidCharacterError for an empty or malformed qualified name', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      function tryCreate(ns, qname) {
+        try {
+          document.createElementNS(ns, qname);
+          return null;
+        } catch (e) {
+          return { name: e.name, isDOMException: e instanceof DOMException };
+        }
+      }
+      JSON.stringify({
+        empty: tryCreate('http://www.w3.org/2000/svg', ''),
+        tooManyColons: tryCreate('http://www.w3.org/2000/svg', 'a:b:c'),
+        emptyPrefix: tryCreate('http://www.w3.org/2000/svg', ':foo'),
+        emptyLocalName: tryCreate('http://www.w3.org/2000/svg', 'foo:'),
+      });
+    `);
+    const expectedError = { name: 'InvalidCharacterError', isDOMException: true };
+    expect(JSON.parse(result)).toEqual({
+      empty: expectedError,
+      tooManyColons: expectedError,
+      emptyPrefix: expectedError,
+      emptyLocalName: expectedError,
+    });
+  });
+
+  it('createElementNS() throws NamespaceError for prefix/namespace and xml/xmlns inconsistencies', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      function tryCreate(ns, qname) {
+        try {
+          document.createElementNS(ns, qname);
+          return null;
+        } catch (e) {
+          return { name: e.name, isDOMException: e instanceof DOMException };
+        }
+      }
+      JSON.stringify({
+        prefixWithoutNamespace: tryCreate(null, 'custom:widget'),
+        xmlPrefixWrongNamespace: tryCreate('http://example.com/', 'xml:lang'),
+        xmlPrefixRightNamespace: tryCreate('http://www.w3.org/XML/1998/namespace', 'xml:lang'),
+        xmlnsQualifiedWrongNamespace: tryCreate('http://example.com/', 'xmlns'),
+        xmlnsNamespaceWrongQualified: tryCreate('http://www.w3.org/2000/xmlns/', 'foo'),
+        xmlnsNamespaceRightQualified: tryCreate('http://www.w3.org/2000/xmlns/', 'xmlns'),
+      });
+    `);
+    const expectedError = { name: 'NamespaceError', isDOMException: true };
+    expect(JSON.parse(result)).toEqual({
+      prefixWithoutNamespace: expectedError,
+      xmlPrefixWrongNamespace: expectedError,
+      xmlPrefixRightNamespace: null,
+      xmlnsQualifiedWrongNamespace: expectedError,
+      xmlnsNamespaceWrongQualified: expectedError,
+      xmlnsNamespaceRightQualified: null,
+    });
+  });
 });
