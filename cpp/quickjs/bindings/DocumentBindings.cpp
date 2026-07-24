@@ -285,6 +285,18 @@ JSValue js_doc_get_compatMode(JSContext* ctx, JSValue) {
   return JS_NewString(ctx, mode);
 }
 
+// document uses its own object/prototype (not node_proto), so it doesn't
+// inherit the Node-level baseURI getter — mirrors js_el_get_baseURI in
+// ElementBindings.cpp (always location.href; no <base> element support).
+JSValue js_doc_get_baseURI(JSContext* ctx, JSValue) {
+  JSValue global = JS_GetGlobalObject(ctx);
+  JSValue location = JS_GetPropertyStr(ctx, global, "location");
+  JS_FreeValue(ctx, global);
+  JSValue href = JS_GetPropertyStr(ctx, location, "href");
+  JS_FreeValue(ctx, location);
+  return href;
+}
+
 const char* kDocumentTitleBootstrapScript = R"JS(
 (function() {
   Object.defineProperty(document, 'title', {
@@ -340,6 +352,7 @@ void DocumentBindings::install(JSContext* ctx) {
   define_prop(ctx, doc, "activeElement",   js_doc_get_activeElement,   nullptr);
   define_prop(ctx, doc, "readyState",      js_doc_get_readyState,      nullptr);
   define_prop(ctx, doc, "compatMode",      js_doc_get_compatMode,      nullptr);
+  define_prop(ctx, doc, "baseURI",         js_doc_get_baseURI,         nullptr);
 
   JS_SetPropertyStr(ctx, doc, "characterSet", JS_NewString(ctx, "UTF-8"));
   JS_SetPropertyStr(ctx, doc, "contentType",  JS_NewString(ctx, "text/html"));

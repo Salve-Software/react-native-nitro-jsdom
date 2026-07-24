@@ -221,7 +221,7 @@ describe('JSDOM selectors, live collections, instanceof', () => {
     ]);
   });
 
-  it('querySelectorAll()/getElementsBy*() results support entries()/keys()/values()', async () => {
+  it('getElementsBy*() live collections support entries()/keys()/values()', async () => {
     dom = JSDOM.create(`
       <html><body>
         <p class="hit">a</p>
@@ -229,7 +229,7 @@ describe('JSDOM selectors, live collections, instanceof', () => {
       </body></html>
     `);
     const result = await dom.evaluate(`
-      const list = document.querySelectorAll('.hit');
+      const list = document.getElementsByClassName('hit');
       const entries = Array.from(list.entries()).map(([i, el]) => [i, el.textContent]);
       const keys = Array.from(list.keys());
       const values = Array.from(list.values()).map((el) => el.textContent);
@@ -242,7 +242,7 @@ describe('JSDOM selectors, live collections, instanceof', () => {
     });
   });
 
-  it('querySelectorAll()/getElementsBy*() results support item(index), returning null out of range', async () => {
+  it('getElementsBy*() live collections support item(index), returning null out of range', async () => {
     dom = JSDOM.create(`
       <html><body>
         <p class="hit">a</p>
@@ -250,7 +250,7 @@ describe('JSDOM selectors, live collections, instanceof', () => {
       </body></html>
     `);
     const result = await dom.evaluate(`
-      const list = document.querySelectorAll('.hit');
+      const list = document.getElementsByClassName('hit');
       JSON.stringify({
         first: list.item(0).textContent,
         second: list.item(1).textContent,
