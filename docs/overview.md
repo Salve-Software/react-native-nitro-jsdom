@@ -456,6 +456,41 @@ dom.dispose() // ← always pair with create()
       stand-in purely so a "copy discount code" embedded widget calling it
       directly doesn't throw.
 
+### v0.15 — Namespaced Attributes & Collection/Document Ergonomics
+> Rounds out the v0.14 namespace work with the attribute side
+> (`getAttributeNS`/`setAttributeNS`/...) plus small jsdom-parity items that
+> came up auditing `NodeList`/`HTMLCollection` and `Document` against real
+> jsdom: `item()`/`namedItem()`, `Node.baseURI`, and a few document metadata
+> properties.
+- [x] `getAttributeNS()`/`setAttributeNS()`/`hasAttributeNS()`/
+      `removeAttributeNS()` — matched by local name only (qualified name with
+      any `prefix:` stripped), not a real per-attribute (namespace,
+      localName) identity the way `createElementNS()`/`namespaceURI()` track
+      it for elements; hand-constructing namespaced `lxb_dom_attr_t` nodes
+      would have been a much larger, riskier lift for a case (two attributes
+      sharing a local name across different namespaces) that essentially
+      never comes up in embedded-widget scripts. A `setAttributeNS()`-written
+      attribute is still visible through plain `getAttribute()`/`setAttribute()`
+      using its qualified name (e.g. `xlink:href`), since both paths write
+      into the same underlying Lexbor attribute list.
+- [x] `element.prefix` — the namespace prefix from `createElementNS('ns',
+      'prefix:local')`, or `null` for the overwhelmingly common no-prefix case.
+- [x] `node.baseURI` — forwards to `location.href`; this sandbox has no
+      `<base>` element support or per-node override, so it's always the
+      document's URL.
+- [x] `NodeList`/`HTMLCollection.prototype.item(index)` — alongside the v0.14
+      `entries()`/`keys()`/`values()`.
+- [x] `HTMLCollection.prototype.namedItem(name)` — matches by `id` then by
+      `name` attribute, per spec; also present on plain `NodeList` results
+      since both share this project's one `LiveCollection` class (same
+      trade-off already made for `forEach()` in v0.11), guarded against
+      non-Element nodes (text/comment) that have no `getAttribute()`.
+- [x] `document.compatMode` — `'BackCompat'` for a doctype-less document,
+      `'CSS1Compat'` otherwise; a real (if approximate) signal since there's
+      no layout engine for quirks-mode CSS behavior to actually diverge on.
+- [x] `document.characterSet`/`document.contentType` — static `'UTF-8'`/
+      `'text/html'`.
+
 ---
 
 ## Repository Structure

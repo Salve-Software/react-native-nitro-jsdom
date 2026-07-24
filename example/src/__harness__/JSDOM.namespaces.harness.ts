@@ -78,6 +78,55 @@ describe('JSDOM namespaces (createElementNS/namespaceURI)', () => {
     expect(JSON.parse(result)).toBe('TypeError');
   });
 
+  it('createElementNS() with a prefixed qualified name exposes it via element.prefix', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const withPrefix = document.createElementNS('https://example.com/custom-ns', 'custom:widget');
+      const withoutPrefix = document.createElement('div');
+      JSON.stringify({ withPrefix: withPrefix.prefix, withoutPrefix: withoutPrefix.prefix });
+    `);
+    expect(JSON.parse(result)).toEqual({ withPrefix: 'custom', withoutPrefix: null });
+  });
+
+  it('setAttributeNS()/getAttributeNS()/hasAttributeNS()/removeAttributeNS() round-trip a namespaced attribute', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      const XLINK = 'http://www.w3.org/1999/xlink';
+
+      const beforeHas = use.hasAttributeNS(XLINK, 'href');
+      const beforeGet = use.getAttributeNS(XLINK, 'href');
+
+      use.setAttributeNS(XLINK, 'xlink:href', '#icon-star');
+      const afterSet = { has: use.hasAttributeNS(XLINK, 'href'), value: use.getAttributeNS(XLINK, 'href') };
+
+      use.setAttributeNS(XLINK, 'xlink:href', '#icon-heart');
+      const afterUpdate = use.getAttributeNS(XLINK, 'href');
+
+      use.removeAttributeNS(XLINK, 'href');
+      const afterRemove = { has: use.hasAttributeNS(XLINK, 'href'), value: use.getAttributeNS(XLINK, 'href') };
+
+      JSON.stringify({ beforeHas, beforeGet, afterSet, afterUpdate, afterRemove });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      beforeHas: false,
+      beforeGet: null,
+      afterSet: { has: true, value: '#icon-star' },
+      afterUpdate: '#icon-heart',
+      afterRemove: { has: false, value: null },
+    });
+  });
+
+  it('setAttributeNS() is visible through plain getAttribute() using the qualified name', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#icon-star');
+      JSON.stringify({ plainGetAttribute: use.getAttribute('xlink:href') });
+    `);
+    expect(JSON.parse(result)).toEqual({ plainGetAttribute: '#icon-star' });
+  });
+
   it('createElementNS(undefined, ...) stringifies to the literal "undefined" namespace, unlike null', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`

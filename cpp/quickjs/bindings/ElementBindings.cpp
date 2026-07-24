@@ -11,7 +11,9 @@
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 #include <lexbor/dom/interfaces/character_data.h>
+#include <lexbor/dom/interfaces/attr.h>
 #include <lexbor/ns/const.h>
+#include <lexbor/ns/ns.h>
 #include <cctype>
 #include <cstring>
 #include <optional>
@@ -670,6 +672,93 @@ JSValue js_el_hasAttribute(JSContext* ctx, JSValue this_val, int argc, JSValue* 
   return JS_NewBool(ctx, has);
 }
 
+// ── Namespaced attribute methods (getAttributeNS/setAttributeNS/...) ─────────
+// Simplification: this sandbox doesn't track a real (namespace, localName)
+// identity per attribute the way createElementNS()/namespaceURI() do for
+// elements — building that would mean hand-constructing lxb_dom_attr_t nodes
+// with their own ns/prefix fields, a much larger and riskier lift than the
+// element side. Instead, attributes are matched by local name only (the
+// qualified name with any "prefix:" stripped), which is spec-accurate for
+// the common real-world case (a single xlink:href-style attribute) but not
+// for two attributes sharing a local name across different namespaces — a
+// case that essentially never comes up in embedded-widget scripts.
+lxb_dom_attr_t* find_attr_by_local_name(lxb_dom_element_t* el, const std::string& localName) {
+  for (lxb_dom_attr_t* attr = lxb_dom_element_first_attribute(el); attr; attr = lxb_dom_element_next_attribute(attr)) {
+    size_t len = 0;
+    const lxb_char_t* qname = lxb_dom_attr_qualified_name(attr, &len);
+    if (!qname) continue;
+    std::string q(reinterpret_cast<const char*>(qname), len);
+    auto colon = q.find(':');
+    std::string local = (colon == std::string::npos) ? q : q.substr(colon + 1);
+    if (local == localName) return attr;
+  }
+  return nullptr;
+}
+
+JSValue js_el_getAttributeNS(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 2) return JS_NULL;
+  const char* local = JS_ToCString(ctx, argv[1]);
+  if (!local) return JS_NULL;
+  auto* attr = find_attr_by_local_name(el, local);
+  JS_FreeCString(ctx, local);
+  if (!attr) return JS_NULL;
+  size_t len = 0;
+  const lxb_char_t* val = lxb_dom_attr_value(attr, &len);
+  return val ? JS_NewStringLen(ctx, reinterpret_cast<const char*>(val), len) : JS_NewString(ctx, "");
+}
+
+JSValue js_el_hasAttributeNS(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 2) return JS_FALSE;
+  const char* local = JS_ToCString(ctx, argv[1]);
+  if (!local) return JS_FALSE;
+  bool has = find_attr_by_local_name(el, local) != nullptr;
+  JS_FreeCString(ctx, local);
+  return JS_NewBool(ctx, has);
+}
+
+JSValue js_el_setAttributeNS(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 3) return JS_UNDEFINED;
+  const char* qualified_name = JS_ToCString(ctx, argv[1]);
+  const char* value = JS_ToCString(ctx, argv[2]);
+  if (qualified_name && value) {
+    std::string qn(qualified_name);
+    auto colon = qn.find(':');
+    std::string local = (colon == std::string::npos) ? qn : qn.substr(colon + 1);
+
+    auto* existing = find_attr_by_local_name(el, local);
+    if (existing) {
+      lxb_dom_attr_set_existing_value(existing,
+          reinterpret_cast<const lxb_char_t*>(value), strlen(value));
+    } else {
+      lxb_dom_element_set_attribute(el,
+          reinterpret_cast<const lxb_char_t*>(qualified_name), qn.size(),
+          reinterpret_cast<const lxb_char_t*>(value), strlen(value));
+    }
+  }
+  if (qualified_name) JS_FreeCString(ctx, qualified_name);
+  if (value) JS_FreeCString(ctx, value);
+  return JS_UNDEFINED;
+}
+
+JSValue js_el_removeAttributeNS(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 2) return JS_UNDEFINED;
+  const char* local = JS_ToCString(ctx, argv[1]);
+  if (local) {
+    auto* attr = find_attr_by_local_name(el, local);
+    if (attr) {
+      size_t qlen = 0;
+      const lxb_char_t* qname = lxb_dom_attr_qualified_name(attr, &qlen);
+      if (qname) lxb_dom_element_remove_attribute(el, qname, qlen);
+    }
+    JS_FreeCString(ctx, local);
+  }
+  return JS_UNDEFINED;
+}
+
 // Inserts `node` via `insert_one`, expanding DocumentFragments into their
 // children first (per the DOM's "insert a node" algorithm — a fragment is
 // never itself part of the resulting tree, only its children are moved in).
@@ -1307,6 +1396,31 @@ JSValue js_el_get_namespaceURI(JSContext* ctx, JSValue this_val) {
   return JS_NewStringLen(ctx, uri.data(), uri.size());
 }
 
+// Element.prefix — the namespace prefix set via createElementNS('ns', 'prefix:local'),
+// or null for an element with no prefix (the overwhelmingly common case).
+JSValue js_el_get_prefix(JSContext* ctx, JSValue this_val) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el) return JS_NULL;
+  auto* node = reinterpret_cast<lxb_dom_node_t*>(el);
+  if (node->prefix == 0) return JS_NULL;
+  const lxb_ns_prefix_data_t* data = lxb_ns_prefix_data_by_id(node->owner_document->prefix, node->prefix);
+  if (!data) return JS_NULL;
+  const lxb_char_t* str = lexbor_hash_entry_str(&data->entry);
+  if (!str) return JS_NULL;
+  return JS_NewStringLen(ctx, reinterpret_cast<const char*>(str), data->entry.length);
+}
+
+// Node.baseURI — always the document's URL in this sandbox (no <base> element
+// support/per-node override), so this just forwards to location.href.
+JSValue js_el_get_baseURI(JSContext* ctx, JSValue) {
+  JSValue global = JS_GetGlobalObject(ctx);
+  JSValue location = JS_GetPropertyStr(ctx, global, "location");
+  JS_FreeValue(ctx, global);
+  JSValue href = JS_GetPropertyStr(ctx, location, "href");
+  JS_FreeValue(ctx, location);
+  return href;
+}
+
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
@@ -1344,6 +1458,7 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, node_proto, "textContent",      js_el_get_textContent,     js_el_set_textContent);
   define_prop(ctx, node_proto, "ownerDocument",    js_el_get_ownerDocument,   nullptr);
   define_prop(ctx, node_proto, "namespaceURI",     js_el_get_namespaceURI,    nullptr);
+  define_prop(ctx, node_proto, "baseURI",          js_el_get_baseURI,         nullptr);
   define_prop(ctx, node_proto, "childNodes",       js_el_get_childNodes,      nullptr);
   define_prop(ctx, node_proto, "firstChild",       js_el_get_firstChild,      nullptr);
   define_prop(ctx, node_proto, "lastChild",        js_el_get_lastChild,       nullptr);
@@ -1364,6 +1479,10 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "setAttribute",           JS_NewCFunction(ctx, js_el_setAttribute,           "setAttribute",           2));
   JS_SetPropertyStr(ctx, proto, "removeAttribute",        JS_NewCFunction(ctx, js_el_removeAttribute,        "removeAttribute",        1));
   JS_SetPropertyStr(ctx, proto, "hasAttribute",           JS_NewCFunction(ctx, js_el_hasAttribute,           "hasAttribute",           1));
+  JS_SetPropertyStr(ctx, proto, "getAttributeNS",         JS_NewCFunction(ctx, js_el_getAttributeNS,         "getAttributeNS",         2));
+  JS_SetPropertyStr(ctx, proto, "setAttributeNS",         JS_NewCFunction(ctx, js_el_setAttributeNS,         "setAttributeNS",         3));
+  JS_SetPropertyStr(ctx, proto, "removeAttributeNS",      JS_NewCFunction(ctx, js_el_removeAttributeNS,      "removeAttributeNS",      2));
+  JS_SetPropertyStr(ctx, proto, "hasAttributeNS",         JS_NewCFunction(ctx, js_el_hasAttributeNS,         "hasAttributeNS",         2));
   JS_SetPropertyStr(ctx, proto, "toggleAttribute",        JS_NewCFunction(ctx, js_el_toggleAttribute,        "toggleAttribute",        2));
   JS_SetPropertyStr(ctx, proto, "getAttributeNames",      JS_NewCFunction(ctx, js_el_getAttributeNames,      "getAttributeNames",      0));
   JS_SetPropertyStr(ctx, proto, "remove",                 JS_NewCFunction(ctx, js_el_remove,                 "remove",                 0));
@@ -1379,6 +1498,7 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "getBoundingClientRect",  JS_NewCFunction(ctx, js_el_getBoundingClientRect,  "getBoundingClientRect",  0));
 
   define_prop(ctx, proto, "tagName",                js_el_get_tagName,             nullptr);
+  define_prop(ctx, proto, "prefix",                 js_el_get_prefix,              nullptr);
   define_prop(ctx, proto, "id",                     js_el_get_id,                  js_el_set_id);
   define_prop(ctx, proto, "className",              js_el_get_className,           js_el_set_className);
   define_prop(ctx, proto, "value",                  js_el_get_value,               js_el_set_value);
