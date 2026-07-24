@@ -8,6 +8,7 @@
 #include <lexbor/dom/interfaces/document_type.h>
 #include <lexbor/dom/interfaces/element.h>
 #include <lexbor/ns/ns.h>
+#include <lexbor/tag/tag.h>
 #include <stdexcept>
 #include <cctype>
 #include <cstring>
@@ -244,11 +245,40 @@ void* LexborDocument::createElementNS(const std::string& nsUri, const std::strin
     localName = qualifiedName.substr(colon + 1);
   }
 
-  return lxb_dom_element_create(dom_doc,
-      reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size(),
+  bool known_tag = lxb_tag_data_by_name(dom_doc->tags,
+      reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size()) != nullptr;
+
+  if (!known_tag) {
+    return lxb_dom_element_create(dom_doc,
+        reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size(),
+        nsUri.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(nsUri.data()), nsUri.size(),
+        prefix.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(prefix.data()), prefix.size(),
+        nullptr, 0, true);
+  }
+
+  // Known tag + arbitrary ns crashes Lexbor's HTML interface dispatch, so
+  // resolve the ns id via a throwaway unknown-tag element first (safe path).
+  static const char* kNsProbeTag = "x-nitrojsdom-ns-probe";
+  lxb_dom_element_t* probe = lxb_dom_element_create(dom_doc,
+      reinterpret_cast<const lxb_char_t*>(kNsProbeTag), strlen(kNsProbeTag),
       nsUri.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(nsUri.data()), nsUri.size(),
-      prefix.empty() ? nullptr : reinterpret_cast<const lxb_char_t*>(prefix.data()), prefix.size(),
-      nullptr, 0, true);
+      nullptr, 0, nullptr, 0, true);
+  if (!probe) return nullptr;
+  lxb_ns_id_t resolved_ns = probe->node.ns;
+  lxb_dom_element_destroy(probe);
+
+  lxb_dom_element_t* element = lxb_dom_document_create_element(dom_doc,
+      reinterpret_cast<const lxb_char_t*>(localName.data()), localName.size(), nullptr);
+  if (!element) return nullptr;
+  element->node.ns = resolved_ns;
+
+  if (!prefix.empty()) {
+    const lxb_ns_prefix_data_t* ns_prefix = lxb_ns_prefix_append(dom_doc->prefix,
+        reinterpret_cast<const lxb_char_t*>(prefix.data()), prefix.size());
+    if (ns_prefix) element->node.prefix = ns_prefix->prefix_id;
+  }
+
+  return element;
 }
 
 std::string LexborDocument::namespaceURI(void* node) const {
