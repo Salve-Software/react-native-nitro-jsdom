@@ -11,6 +11,7 @@
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 #include <lexbor/dom/interfaces/character_data.h>
+#include <lexbor/ns/const.h>
 #include <cctype>
 #include <cstring>
 #include <optional>
@@ -29,10 +30,18 @@ JSValue js_el_get_tagName(JSContext* ctx, JSValue this_val) {
   auto* el = unwrap_element(ctx, this_val);
   if (!el) return JS_NewString(ctx, "");
   size_t len = 0;
-  const lxb_char_t* name = lxb_dom_element_local_name(el, &len);
+  // qualified_name (prefix:localName) when the element has a namespace
+  // prefix (createElementNS('...', 'prefix:name')), falling back to the
+  // plain local name otherwise.
+  const lxb_char_t* name = lxb_dom_element_qualified_name(el, &len);
   if (!name || len == 0) return JS_NewString(ctx, "");
   std::string r(reinterpret_cast<const char*>(name), len);
-  for (auto& c : r) c = (char)std::toupper((unsigned char)c);
+  // Only HTML-namespace elements are uppercased (per spec); SVG/MathML/custom
+  // namespace elements keep their (lexbor-lowercased) local name as-is.
+  auto* node = reinterpret_cast<lxb_dom_node_t*>(el);
+  if (node->ns == LXB_NS_HTML) {
+    for (auto& c : r) c = (char)std::toupper((unsigned char)c);
+  }
   return JS_NewStringLen(ctx, r.c_str(), r.size());
 }
 
@@ -1289,6 +1298,15 @@ JSValue js_el_get_ownerDocument(JSContext* ctx, JSValue this_val) {
   return make_element(ctx, doc_node);
 }
 
+JSValue js_el_get_namespaceURI(JSContext* ctx, JSValue this_val) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node) return JS_NULL;
+  LexborDocument* owner = doc_for_node(ctx, node);
+  std::string uri = owner ? owner->namespaceURI(node) : "";
+  if (uri.empty()) return JS_NULL;
+  return JS_NewStringLen(ctx, uri.data(), uri.size());
+}
+
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
@@ -1325,6 +1343,7 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, node_proto, "length",           js_el_get_data_length,     nullptr);
   define_prop(ctx, node_proto, "textContent",      js_el_get_textContent,     js_el_set_textContent);
   define_prop(ctx, node_proto, "ownerDocument",    js_el_get_ownerDocument,   nullptr);
+  define_prop(ctx, node_proto, "namespaceURI",     js_el_get_namespaceURI,    nullptr);
   define_prop(ctx, node_proto, "childNodes",       js_el_get_childNodes,      nullptr);
   define_prop(ctx, node_proto, "firstChild",       js_el_get_firstChild,      nullptr);
   define_prop(ctx, node_proto, "lastChild",        js_el_get_lastChild,       nullptr);

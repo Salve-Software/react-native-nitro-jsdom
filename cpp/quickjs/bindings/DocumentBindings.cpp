@@ -106,6 +106,27 @@ JSValue js_doc_createTextNode(JSContext* ctx, JSValue, int argc, JSValue* argv) 
   return make_element(ctx, node);
 }
 
+JSValue js_doc_createElementNS(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 2) {
+    return JS_ThrowTypeError(ctx,
+        "Failed to execute 'createElementNS' on 'Document': 2 arguments required.");
+  }
+  std::string ns;
+  if (!JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0])) {
+    const char* ns_c = JS_ToCString(ctx, argv[0]);
+    if (!ns_c) return JS_EXCEPTION;
+    ns = ns_c;
+    JS_FreeCString(ctx, ns_c);
+  }
+  const char* qname = JS_ToCString(ctx, argv[1]);
+  if (!qname) return JS_EXCEPTION;
+  std::string qualifiedName = qname;
+  JS_FreeCString(ctx, qname);
+
+  void* el = get_doc(ctx)->createElementNS(ns, qualifiedName);
+  return make_element(ctx, el);
+}
+
 JSValue js_doc_createComment(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   if (argc < 1) return JS_NULL;
   const char* text = JS_ToCString(ctx, argv[0]);
@@ -227,6 +248,7 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "getElementsByTagName",   JS_NewCFunction(ctx, js_doc_getElementsByTagName,   "getElementsByTagName",   1));
   JS_SetPropertyStr(ctx, doc, "getElementsByName",      JS_NewCFunction(ctx, js_doc_getElementsByName,      "getElementsByName",      1));
   JS_SetPropertyStr(ctx, doc, "createElement",          JS_NewCFunction(ctx, js_doc_createElement,          "createElement",          1));
+  JS_SetPropertyStr(ctx, doc, "createElementNS",        JS_NewCFunction(ctx, js_doc_createElementNS,        "createElementNS",        2));
   JS_SetPropertyStr(ctx, doc, "createTextNode",         JS_NewCFunction(ctx, js_doc_createTextNode,         "createTextNode",         1));
   JS_SetPropertyStr(ctx, doc, "createComment",          JS_NewCFunction(ctx, js_doc_createComment,          "createComment",          1));
   JS_SetPropertyStr(ctx, doc, "createDocumentFragment", JS_NewCFunction(ctx, js_doc_createDocumentFragment, "createDocumentFragment", 0));
