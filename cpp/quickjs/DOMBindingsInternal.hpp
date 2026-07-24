@@ -74,6 +74,16 @@ LexborDocument* doc_for_node(JSContext* ctx, void* node);
 // document is constructed/parsed.
 void register_document(JSContext* ctx, LexborDocument* doc);
 
+// Registers `wrapper` (the JS Document object returned to script) as the
+// canonical JS object for `doc`, so get_document_wrapper() can hand back the
+// same reference later (e.g. from node.ownerDocument) instead of building a
+// new, unequal one. Call once, alongside register_document().
+void register_document_wrapper(JSContext* ctx, LexborDocument* doc, JSValue wrapper);
+
+// Returns the JSValue registered via register_document_wrapper() for `doc`,
+// or JS_UNDEFINED if none was registered.
+JSValue get_document_wrapper(JSContext* ctx, LexborDocument* doc);
+
 // ── Node wrapper cache ────────────────────────────────────────────────────────
 
 void invalidate_node_cache(JSContext* ctx, RuntimeContext* rctx, void* node);

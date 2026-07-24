@@ -87,4 +87,88 @@ describe('JSDOM timers and runtime globals', () => {
     expect(parsed.threw).toBe(true);
     expect(parsed.returnsSameRef).toBe(true);
   });
+
+  it('requestIdleCallback fires with an IdleDeadline and can be cancelled', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      (async () => {
+        let deadline = null;
+        requestIdleCallback((d) => { deadline = d; });
+
+        const cancelledId = requestIdleCallback(() => { throw new Error('should have been cancelled'); });
+        cancelIdleCallback(cancelledId);
+
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return JSON.stringify({
+          didTimeout: deadline && deadline.didTimeout,
+          timeRemainingIsNumber: deadline && typeof deadline.timeRemaining() === 'number',
+        });
+      })()
+    `);
+    expect(JSON.parse(result)).toEqual({ didTimeout: false, timeRemainingIsNumber: true });
+  });
+
+  it('performance.mark/measure record entries queryable by getEntriesByType/getEntriesByName', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      performance.mark('start');
+      performance.mark('end');
+      const measure = performance.measure('span', 'start', 'end');
+      JSON.stringify({
+        measureEntryType: measure.entryType,
+        marksByType: performance.getEntriesByType('mark').map((e) => e.name),
+        measuresByType: performance.getEntriesByType('measure').map((e) => e.name),
+        byName: performance.getEntriesByName('start').map((e) => e.entryType),
+        durationIsNumber: typeof measure.duration === 'number',
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      measureEntryType: 'measure',
+      marksByType: ['start', 'end'],
+      measuresByType: ['span'],
+      byName: ['mark'],
+      durationIsNumber: true,
+    });
+  });
+
+  it('performance.clearMarks/clearMeasures remove entries, scoped by name when given', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      performance.mark('a');
+      performance.mark('b');
+      performance.measure('m1', 'a');
+      performance.clearMarks('a');
+      const afterClearA = performance.getEntriesByType('mark').map((e) => e.name);
+      performance.clearMeasures();
+      const afterClearMeasures = performance.getEntriesByType('measure').length;
+      performance.clearMarks();
+      const afterClearAllMarks = performance.getEntriesByType('mark').length;
+      JSON.stringify({ afterClearA, afterClearMeasures, afterClearAllMarks });
+    `);
+    expect(JSON.parse(result)).toEqual({ afterClearA: ['b'], afterClearMeasures: 0, afterClearAllMarks: 0 });
+  });
+
+  it('performance.measure() throws SyntaxError DOMException when a referenced mark does not exist', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      performance.mark('real');
+      let caughtStart, caughtEnd, caughtOptionsStart;
+      try { performance.measure('m', 'missing'); } catch (e) { caughtStart = { name: e.name, isDOMException: e instanceof DOMException }; }
+      try { performance.measure('m', 'real', 'missing'); } catch (e) { caughtEnd = { name: e.name, isDOMException: e instanceof DOMException }; }
+      try { performance.measure('m', { start: 'missing' }); } catch (e) { caughtOptionsStart = { name: e.name, isDOMException: e instanceof DOMException }; }
+      JSON.stringify({ caughtStart, caughtEnd, caughtOptionsStart });
+    `);
+    const expectedError = { name: 'SyntaxError', isDOMException: true };
+    expect(JSON.parse(result)).toEqual({ caughtStart: expectedError, caughtEnd: expectedError, caughtOptionsStart: expectedError });
+  });
+
+  it('performance.measure() passes through PerformanceMeasureOptions.detail instead of hardcoding null', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const withDetail = performance.measure('m1', { start: 0, end: 10, detail: { source: 'test' } });
+      const withoutDetail = performance.measure('m2', { start: 0, end: 10 });
+      JSON.stringify({ withDetail: withDetail.detail, withoutDetail: withoutDetail.detail });
+    `);
+    expect(JSON.parse(result)).toEqual({ withDetail: { source: 'test' }, withoutDetail: null });
+  });
 });

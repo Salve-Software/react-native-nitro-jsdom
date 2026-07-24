@@ -352,4 +352,67 @@ describe('JSDOM form elements', () => {
     `);
     expect(JSON.parse(result)).toEqual(['a', 'b', 'c', 'd']);
   });
+
+  it('element.labels collects both a for="id" label and a wrapping label, deduplicated', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <label for="x">By for</label>
+        <label id="wrap"><input id="x"><span>By wrap</span></label>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify(document.getElementById('x').labels.map((l) => l.textContent));
+    `);
+    expect(JSON.parse(result)).toEqual(['By for', 'By wrap']);
+  });
+
+  it('element.labels returns [] when there is no associated label, and null for non-labelable elements and hidden inputs', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <input id="lonely">
+        <input id="hiddenInput" type="hidden">
+        <div id="notLabelable"></div>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        lonely: document.getElementById('lonely').labels,
+        hiddenInput: document.getElementById('hiddenInput').labels,
+        notLabelable: document.getElementById('notLabelable').labels,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ lonely: [], hiddenInput: null, notLabelable: null });
+  });
+
+  it("element.labels resolves against the element's own document instead of always the primary one", async () => {
+    dom = JSDOM.create('<html><body><label for="x">Primary doc label</label><input id="x"></body></html>');
+    const result = await dom.evaluate(`
+      const parsed = new DOMParser().parseFromString(
+        '<html><body><label for="y">Parsed doc label</label><input id="y"></body></html>',
+        'text/html'
+      );
+      const parsedInput = parsed.querySelector('input');
+      JSON.stringify({
+        parsedLabels: parsedInput.labels.map((l) => l.textContent),
+        primaryUnaffected: document.getElementById('x').labels.map((l) => l.textContent),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      parsedLabels: ['Parsed doc label'],
+      primaryUnaffected: ['Primary doc label'],
+    });
+  });
+
+  it('element.labels handles an id containing quote and backslash characters, which would break a naively-interpolated selector', async () => {
+    dom = JSDOM.create(
+      '<html><body><label for="a&quot;b\\c">Weird id label</label><input id="a&quot;b\\c"></body></html>'
+    );
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        id: document.querySelector('input').id,
+        labels: document.querySelector('input').labels.map((l) => l.textContent),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({ id: 'a"b\\c', labels: ['Weird id label'] });
+  });
 });

@@ -1,8 +1,11 @@
 #include "DocumentBindings.hpp"
 #include "LiveCollectionBindings.hpp"
+#include "DOMExceptionBindings.hpp"
 #include "../DOMBindingsInternal.hpp"
 #include "../QuickJSRuntime.hpp"
 #include "../../lexbor/LexborDocument.hpp"
+#include <lexbor/html/html.h>
+#include <lexbor/dom/dom.h>
 #include <cstring>
 #include <string>
 
@@ -116,6 +119,28 @@ JSValue js_doc_createDocumentFragment(JSContext* ctx, JSValue, int, JSValue*) {
   return make_element(ctx, get_doc(ctx)->createDocumentFragment());
 }
 
+JSValue js_doc_importNode(JSContext* ctx, JSValue, int argc, JSValue* argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx,
+        "Failed to execute 'importNode' on 'Document': 1 argument required, but only 0 present.");
+  }
+  auto* node = unwrap_node(ctx, argv[0]);
+  if (!node) {
+    return JS_ThrowTypeError(ctx,
+        "Failed to execute 'importNode' on 'Document': parameter 1 is not of type 'Node'.");
+  }
+  if (node->type == LXB_DOM_NODE_TYPE_DOCUMENT) {
+    return throw_dom_exception(ctx, "NotSupportedError",
+        "Failed to execute 'importNode' on 'Document': The node provided is a document, which may not be imported.");
+  }
+  bool deep = argc >= 2 && JS_ToBool(ctx, argv[1]) > 0;
+
+  lxb_dom_document_t* target_doc = lxb_dom_interface_document(
+      static_cast<lxb_html_document_t*>(get_doc(ctx)->documentHtmlPtr()));
+  lxb_dom_node_t* imported = lxb_dom_document_import_node(target_doc, node, deep);
+  return make_element(ctx, imported);
+}
+
 JSValue js_doc_get_body(JSContext* ctx, JSValue) {
   return make_element(ctx, get_doc(ctx)->body());
 }
@@ -205,6 +230,7 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "createTextNode",         JS_NewCFunction(ctx, js_doc_createTextNode,         "createTextNode",         1));
   JS_SetPropertyStr(ctx, doc, "createComment",          JS_NewCFunction(ctx, js_doc_createComment,          "createComment",          1));
   JS_SetPropertyStr(ctx, doc, "createDocumentFragment", JS_NewCFunction(ctx, js_doc_createDocumentFragment, "createDocumentFragment", 0));
+  JS_SetPropertyStr(ctx, doc, "importNode",             JS_NewCFunction(ctx, js_doc_importNode,             "importNode",             2));
 
   define_prop(ctx, doc, "body",            js_doc_get_body,            nullptr);
   define_prop(ctx, doc, "head",            js_doc_get_head,            nullptr);
@@ -222,6 +248,7 @@ void DocumentBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, doc, "hidden", JS_NewBool(ctx, hidden));
   JS_SetPropertyStr(ctx, doc, "nodeType", JS_NewInt32(ctx, 9 /* DOCUMENT_NODE */));
   JS_SetPropertyStr(ctx, doc, "nodeName", JS_NewString(ctx, "#document"));
+  JS_SetPropertyStr(ctx, doc, "ownerDocument", JS_NULL);
 
   JSValue document_proto = JS_NewObject(ctx);
   JS_SetPrototype(ctx, doc, document_proto);

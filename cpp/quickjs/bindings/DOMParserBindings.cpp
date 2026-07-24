@@ -20,6 +20,7 @@ JSValue make_parsed_document(JSContext* ctx, LexborDocument* doc) {
   register_document(ctx, doc);
   JSValue obj = JS_NewObjectClass(ctx, js_parsed_document_class_id);
   JS_SetOpaque(obj, doc);
+  register_document_wrapper(ctx, doc, obj);
   return obj;
 }
 
@@ -267,6 +268,7 @@ void DOMParserBindings::install(JSContext* ctx) {
 
   JS_SetPropertyStr(ctx, proto, "nodeType", JS_NewInt32(ctx, 9 /* DOCUMENT_NODE */));
   JS_SetPropertyStr(ctx, proto, "nodeName", JS_NewString(ctx, "#document"));
+  JS_SetPropertyStr(ctx, proto, "ownerDocument", JS_NULL);
   define_node_type_constants(ctx, proto);
 
   JSValue global = JS_GetGlobalObject(ctx);

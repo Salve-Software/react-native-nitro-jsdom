@@ -530,6 +530,16 @@ JSValue js_el_set_nodeValue(JSContext* ctx, JSValue this_val, JSValue val) {
   return JS_UNDEFINED;
 }
 
+JSValue js_el_get_data_length(JSContext* ctx, JSValue this_val) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node) return JS_UNDEFINED;
+  if (node->type != LXB_DOM_NODE_TYPE_TEXT && node->type != LXB_DOM_NODE_TYPE_COMMENT) return JS_UNDEFINED;
+  JSValue str_val = js_el_get_nodeValue(ctx, this_val);
+  JSValue len_val = JS_GetPropertyStr(ctx, str_val, "length");
+  JS_FreeValue(ctx, str_val);
+  return len_val;
+}
+
 JSValue js_el_get_childNodes(JSContext* ctx, JSValue this_val) {
   auto* node = unwrap_node(ctx, this_val);
   if (!node) return JS_NewArray(ctx);
@@ -1257,6 +1267,28 @@ JSValue js_canonicalize_root_node(JSContext* ctx, JSValue, int argc, JSValue* ar
   return JS_DupValue(ctx, argv[0]);
 }
 
+JSValue js_el_get_ownerDocument(JSContext* ctx, JSValue this_val) {
+  auto* node = unwrap_node(ctx, this_val);
+  if (!node) return JS_NULL;
+  if (node->type == LXB_DOM_NODE_TYPE_DOCUMENT) return JS_NULL;
+
+  LexborDocument* owner = doc_for_node(ctx, node);
+  if (owner == get_doc(ctx)) {
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue doc_val = JS_GetPropertyStr(ctx, global, "document");
+    JS_FreeValue(ctx, global);
+    return doc_val;
+  }
+
+  JSValue wrapper = get_document_wrapper(ctx, owner);
+  if (!JS_IsUndefined(wrapper)) return wrapper;
+
+  void* html_doc = owner->documentHtmlPtr();
+  void* doc_node = lxb_dom_interface_node(
+      lxb_dom_interface_document(static_cast<lxb_html_document_t*>(html_doc)));
+  return make_element(ctx, doc_node);
+}
+
 } // namespace
 
 void ElementBindings::install(JSContext* ctx) {
@@ -1289,7 +1321,10 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, node_proto, "nodeType",         js_el_get_nodeType,        nullptr);
   define_prop(ctx, node_proto, "nodeName",         js_el_get_nodeName,        nullptr);
   define_prop(ctx, node_proto, "nodeValue",        js_el_get_nodeValue,       js_el_set_nodeValue);
+  define_prop(ctx, node_proto, "data",             js_el_get_nodeValue,       js_el_set_nodeValue);
+  define_prop(ctx, node_proto, "length",           js_el_get_data_length,     nullptr);
   define_prop(ctx, node_proto, "textContent",      js_el_get_textContent,     js_el_set_textContent);
+  define_prop(ctx, node_proto, "ownerDocument",    js_el_get_ownerDocument,   nullptr);
   define_prop(ctx, node_proto, "childNodes",       js_el_get_childNodes,      nullptr);
   define_prop(ctx, node_proto, "firstChild",       js_el_get_firstChild,      nullptr);
   define_prop(ctx, node_proto, "lastChild",        js_el_get_lastChild,       nullptr);
@@ -1331,6 +1366,7 @@ void ElementBindings::install(JSContext* ctx) {
   define_prop(ctx, proto, "checked",                js_el_get_checked,             js_el_set_checked);
   define_prop(ctx, proto, "innerHTML",              js_el_get_innerHTML,           js_el_set_innerHTML);
   define_prop(ctx, proto, "outerHTML",              js_el_get_outerHTML,           nullptr);
+  define_prop(ctx, proto, "innerText",              js_el_get_textContent,         js_el_set_textContent);
   define_prop(ctx, proto, "children",               js_el_get_children,            nullptr);
   define_prop(ctx, proto, "firstElementChild",      js_el_get_firstElementChild,   nullptr);
   define_prop(ctx, proto, "lastElementChild",       js_el_get_lastElementChild,    nullptr);

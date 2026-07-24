@@ -113,6 +113,12 @@ struct RuntimeContext {
   // See doc_for_node() in DOMBindingsInternal.
   std::unordered_map<void*, LexborDocument*> document_registry;
 
+  // LexborDocument* -> its JS wrapper (JSValue*, heap-allocated, owned).
+  // Lets node.ownerDocument return the same JS object DOMParser.
+  // parseFromString()/createHTMLDocument() already handed the caller,
+  // instead of building a second, unequal wrapper for the same document.
+  std::unordered_map<LexborDocument*, void*> document_wrappers;
+
   ~RuntimeContext() = default;
 };
 
