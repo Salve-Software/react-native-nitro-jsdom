@@ -1664,7 +1664,7 @@ void ElementBindings::install(JSContext* ctx) {
       while (true) {
         var parent = node.parentNode;
         if (parent) { node = parent; continue; }
-        if (composed && node.host) { node = node.host; continue; }
+        if (composed && node instanceof ShadowRoot) { node = node.host; continue; }
         return __nativeCanonicalizeRootNode(node);
       }
     };
