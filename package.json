@@ -24,7 +24,22 @@
   },
   "keywords": [
     "react-native",
-    "@salve-software/react-native-nitro-jsdom"
+    "react-native-jsdom",
+    "react-native-nitro-jsdom",
+    "nitro-modules",
+    "nitro",
+    "expo",
+    "jsdom",
+    "dom",
+    "html",
+    "html-parser",
+    "quickjs",
+    "lexbor",
+    "sandbox",
+    "headless-browser",
+    "webview-alternative",
+    "ios",
+    "android"
   ],
   "files": [
     "src",

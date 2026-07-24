@@ -22,7 +22,7 @@ module.exports = {
       {
         preset: 'conventionalcommits',
         releaseRules: [
-          { breaking: true, release: 'minor' },
+          { breaking: true, release: 'major' },
           { revert: true, release: 'patch' },
         ].concat(rules.map(({ type, release }) => ({ type, release }))),
       },
