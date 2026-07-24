@@ -34,9 +34,17 @@ JSValue js_Event_constructor(JSContext* ctx, JSValue, int argc, JSValue* argv) {
     else { cancelable = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
   }
 
+  bool composed = false;
+  if (argc >= 2 && JS_IsObject(argv[1])) {
+    JSValue c = JS_GetPropertyStr(ctx, argv[1], "composed");
+    if (JS_IsException(c)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { composed = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
+  }
+
   JS_SetPropertyStr(ctx, obj, "defaultPrevented",  JS_NewBool(ctx, false));
   JS_SetPropertyStr(ctx, obj, "bubbles",           JS_NewBool(ctx, bubbles));
   JS_SetPropertyStr(ctx, obj, "cancelable",        JS_NewBool(ctx, cancelable));
+  JS_SetPropertyStr(ctx, obj, "composed",          JS_NewBool(ctx, composed));
   return obj;
 }
 
@@ -64,9 +72,17 @@ JSValue js_CustomEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue* a
     else { cancelable = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
   }
 
+  bool composed = false;
+  if (argc >= 2 && JS_IsObject(argv[1])) {
+    JSValue c = JS_GetPropertyStr(ctx, argv[1], "composed");
+    if (JS_IsException(c)) { JS_FreeValue(ctx, JS_GetException(ctx)); }
+    else { composed = JS_ToBool(ctx, c) > 0; JS_FreeValue(ctx, c); }
+  }
+
   JS_SetPropertyStr(ctx, obj, "detail",           detail);
   JS_SetPropertyStr(ctx, obj, "bubbles",          JS_NewBool(ctx, bubbles));
   JS_SetPropertyStr(ctx, obj, "cancelable",       JS_NewBool(ctx, cancelable));
+  JS_SetPropertyStr(ctx, obj, "composed",         JS_NewBool(ctx, composed));
   JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
   return obj;
 }
@@ -113,6 +129,7 @@ JSValue js_KeyboardEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue*
   JSValue init = (argc >= 2) ? argv[1] : JS_UNDEFINED;
   JS_SetPropertyStr(ctx, obj, "bubbles",    JS_NewBool(ctx, get_bool_init_field(ctx, init, "bubbles")));
   JS_SetPropertyStr(ctx, obj, "cancelable", JS_NewBool(ctx, get_bool_init_field(ctx, init, "cancelable")));
+  JS_SetPropertyStr(ctx, obj, "composed",   JS_NewBool(ctx, get_bool_init_field(ctx, init, "composed")));
   JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
 
   std::string key = get_str_init_field(ctx, init, "key", "");
@@ -137,6 +154,7 @@ JSValue js_MouseEvent_constructor(JSContext* ctx, JSValue, int argc, JSValue* ar
   JSValue init = (argc >= 2) ? argv[1] : JS_UNDEFINED;
   JS_SetPropertyStr(ctx, obj, "bubbles",    JS_NewBool(ctx, get_bool_init_field(ctx, init, "bubbles")));
   JS_SetPropertyStr(ctx, obj, "cancelable", JS_NewBool(ctx, get_bool_init_field(ctx, init, "cancelable")));
+  JS_SetPropertyStr(ctx, obj, "composed",   JS_NewBool(ctx, get_bool_init_field(ctx, init, "composed")));
   JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_NewBool(ctx, false));
 
   JS_SetPropertyStr(ctx, obj, "clientX", JS_NewFloat64(ctx, get_num_init_field(ctx, init, "clientX", 0)));
@@ -171,6 +189,18 @@ JSValue js_event_stopImmediatePropagation(JSContext* ctx, JSValue this_val, int,
   JS_SetPropertyStr(ctx, this_val, "__propagationStopped", JS_NewBool(ctx, true));
   JS_SetPropertyStr(ctx, this_val, "__immediatePropagationStopped", JS_NewBool(ctx, true));
   return JS_UNDEFINED;
+}
+
+// __composedPath is populated by dispatch_event_on_target() right before
+// listener invocation begins; an event that was never dispatched (just
+// constructed) has none, matching the spec's "not currently dispatched" case.
+JSValue js_event_composedPath(JSContext* ctx, JSValue this_val, int, JSValue*) {
+  JSValue path = JS_GetPropertyStr(ctx, this_val, "__composedPath");
+  if (JS_IsUndefined(path) || JS_IsException(path)) {
+    if (JS_IsException(path)) JS_FreeValue(ctx, JS_GetException(ctx));
+    return JS_NewArray(ctx);
+  }
+  return path;
 }
 
 // ── addEventListener / removeEventListener (element) ──────────────────────────
@@ -254,6 +284,7 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
   JS_FreeCString(ctx, type_str);
 
   bool bubbles = get_bool_prop(ctx, event_obj, "bubbles");
+  bool composed = get_bool_prop(ctx, event_obj, "composed");
 
   lxb_dom_node_t* doc_node = nullptr;
   if (rctx->document) {
@@ -267,7 +298,46 @@ JSValue dispatch_event_on_target(JSContext* ctx, RuntimeContext* rctx, JSValue e
   std::vector<lxb_dom_node_t*> chain;
   chain.push_back(target_node);
   if (bubbles) {
-    for (lxb_dom_node_t* p = target_node->parent; p; p = p->parent) chain.push_back(p);
+    // Climb ancestors; when we run off the top of a shadow tree (parent ==
+    // nullptr) and the event is composed, retarget through the shadow host
+    // (found by reverse-lookup in element_shadow_roots) and keep climbing
+    // into the light tree above it — this is how a composed event (e.g.
+    // 'click') escapes a shadow boundary while a non-composed one stays
+    // contained. Simplification: this sandbox has no separate capture phase,
+    // so composedPath()/retargeting are only computed along the bubble chain
+    // — a non-bubbling event's composedPath() is just [target].
+    lxb_dom_node_t* boundary = target_node;
+    lxb_dom_node_t* p = target_node->parent;
+    while (true) {
+      if (p) {
+        chain.push_back(p);
+        boundary = p;
+        p = p->parent;
+        continue;
+      }
+      if (!composed) break;
+      void* host = nullptr;
+      for (auto& kv : rctx->element_shadow_roots) {
+        if (kv.second == static_cast<void*>(boundary)) { host = kv.first; break; }
+      }
+      if (!host) break;
+      lxb_dom_node_t* host_node = static_cast<lxb_dom_node_t*>(host);
+      chain.push_back(host_node);
+      boundary = host_node;
+      p = host_node->parent;
+    }
+  }
+
+  {
+    JSValue path_arr = JS_NewArray(ctx);
+    for (size_t i = 0; i < chain.size(); i++) {
+      lxb_dom_node_t* level = chain[i];
+      JSValue entry = (level == doc_node)
+          ? ([&]() { JSValue g = JS_GetGlobalObject(ctx); JSValue d = JS_GetPropertyStr(ctx, g, "document"); JS_FreeValue(ctx, g); return d; })()
+          : make_element(ctx, level);
+      JS_SetPropertyUint32(ctx, path_arr, (uint32_t)i, entry);
+    }
+    JS_SetPropertyStr(ctx, event_obj, "__composedPath", path_arr);
   }
 
   for (lxb_dom_node_t* level : chain) {
@@ -588,6 +658,7 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, event_proto, "preventDefault",           JS_NewCFunction(ctx, js_event_preventDefault,           "preventDefault",           0));
   JS_SetPropertyStr(ctx, event_proto, "stopPropagation",          JS_NewCFunction(ctx, js_event_stopPropagation,          "stopPropagation",          0));
   JS_SetPropertyStr(ctx, event_proto, "stopImmediatePropagation", JS_NewCFunction(ctx, js_event_stopImmediatePropagation, "stopImmediatePropagation", 0));
+  JS_SetPropertyStr(ctx, event_proto, "composedPath",             JS_NewCFunction(ctx, js_event_composedPath,             "composedPath",             0));
   JS_SetClassProto(ctx, js_event_class_id, event_proto);
 
   // ── Event / CustomEvent constructors ───────────────────────────────────────

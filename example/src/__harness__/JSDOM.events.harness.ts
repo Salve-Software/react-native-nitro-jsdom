@@ -45,6 +45,34 @@ describe('JSDOM events', () => {
     expect(JSON.parse(result)).toEqual(['child']);
   });
 
+  it('composedPath() returns the bubble chain from target to document during dispatch', async () => {
+    dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const child = document.getElementById('child');
+      const parent = document.getElementById('parent');
+      let pathAtChild, pathAtDocument;
+      child.addEventListener('click', (e) => { pathAtChild = e.composedPath().map((n) => n.id || n.nodeName); });
+      document.addEventListener('click', (e) => { pathAtDocument = e.composedPath().map((n) => n.id || n.nodeName); });
+
+      const event = new Event('click', { bubbles: true });
+      child.dispatchEvent(event);
+      JSON.stringify({ pathAtChild, pathAtDocument });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      pathAtChild: ['child', 'parent', 'BODY', 'HTML', '#document'],
+      pathAtDocument: ['child', 'parent', 'BODY', 'HTML', '#document'],
+    });
+  });
+
+  it('composedPath() is empty for an event that was never dispatched', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const event = new Event('click');
+      JSON.stringify(event.composedPath());
+    `);
+    expect(JSON.parse(result)).toEqual([]);
+  });
+
   it('stopPropagation() halts bubbling to ancestors', async () => {
     dom = JSDOM.create('<html><body><div id="parent"><span id="child">hi</span></div></body></html>');
     const result = await dom.evaluate(`
