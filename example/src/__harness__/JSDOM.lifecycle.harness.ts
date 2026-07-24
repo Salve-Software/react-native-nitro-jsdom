@@ -52,6 +52,50 @@ describe('JSDOM lifecycle', () => {
     expect(captured).toEqual(['log:hello,world']);
   });
 
+  it('console.group/groupEnd/trace/table forward through onConsole as log level', async () => {
+    const captured: string[] = [];
+    dom = JSDOM.create('<html><body></body></html>', {
+      onConsole: (level, args) => captured.push(`${level}:${args.join(',')}`),
+    });
+    await dom.evaluate(`
+      console.group('widget init');
+      console.trace('entering render');
+      console.table({ a: 1 });
+      console.groupEnd();
+    `);
+    expect(captured).toEqual([
+      'log:widget init',
+      'log:Trace:,entering render',
+      'log:{"a":1}',
+    ]);
+  });
+
+  it('console.assert only logs (via error) when the condition is falsy', async () => {
+    const captured: string[] = [];
+    dom = JSDOM.create('<html><body></body></html>', {
+      onConsole: (level, args) => captured.push(`${level}:${args.join(',')}`),
+    });
+    await dom.evaluate(`
+      console.assert(true, 'should not appear');
+      console.assert(false, 'discount code missing');
+    `);
+    expect(captured).toEqual(['error:Assertion failed:,discount code missing']);
+  });
+
+  it('console.count/countReset track per-label counters', async () => {
+    const captured: string[] = [];
+    dom = JSDOM.create('<html><body></body></html>', {
+      onConsole: (level, args) => captured.push(`${level}:${args.join(',')}`),
+    });
+    await dom.evaluate(`
+      console.count('widget');
+      console.count('widget');
+      console.countReset('widget');
+      console.count('widget');
+    `);
+    expect(captured).toEqual(['log:widget: 1', 'log:widget: 2', 'log:widget: 1']);
+  });
+
   it('bridges window.confirm() to a synchronous onConfirm callback', async () => {
     dom = JSDOM.create('<html><body></body></html>', { onConfirm: () => true });
     const result = await dom.evaluate(`window.confirm('ok?')`);

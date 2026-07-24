@@ -388,6 +388,55 @@ const char* kCryptoBootstrapScript = R"JS(
 })();
 )JS";
 
+// ── console ergonomics (group/table/assert/trace/count) ──────────────────────
+// Layered in pure JS on top of the native log/warn/error/info/debug methods
+// above rather than adding new native levels — none of these need anything
+// the onConsole callback can't already receive as stringified args.
+
+const char* kConsoleExtrasBootstrapScript = R"JS(
+(function() {
+  var counts = Object.create(null);
+
+  console.group = function() {
+    console.log.apply(console, arguments);
+  };
+  console.groupCollapsed = console.group;
+  console.groupEnd = function() {};
+
+  console.trace = function() {
+    var args = Array.prototype.slice.call(arguments);
+    args.unshift('Trace:');
+    console.log.apply(console, args);
+  };
+
+  console.assert = function(condition) {
+    if (condition) return;
+    var args = Array.prototype.slice.call(arguments, 1);
+    args.unshift('Assertion failed:');
+    console.error.apply(console, args);
+  };
+
+  console.table = function(data) {
+    try {
+      console.log(JSON.stringify(data));
+    } catch (e) {
+      console.log(String(data));
+    }
+  };
+
+  console.count = function(label) {
+    label = label === undefined ? 'default' : String(label);
+    counts[label] = (counts[label] || 0) + 1;
+    console.log(label + ': ' + counts[label]);
+  };
+
+  console.countReset = function(label) {
+    label = label === undefined ? 'default' : String(label);
+    counts[label] = 0;
+  };
+})();
+)JS";
+
 // ── navigator ──────────────────────────────────────────────────────────────
 
 const char* kNavigatorBootstrapScript = R"JS(
@@ -409,6 +458,23 @@ const char* kNavigatorBootstrapScript = R"JS(
     }
     return true;
   };
+
+  // jsdom itself doesn't implement the Clipboard API at all (no OS clipboard
+  // to back it, same reasoning as window.history/getSelection). This is an
+  // in-memory stand-in purely so 'copy discount code'-style embedded widgets
+  // that call navigator.clipboard.writeText() directly don't throw — reads
+  // back whatever was last written, nothing more.
+  var clipboardText = '';
+  navigator.clipboard = {
+    writeText: function(text) {
+      clipboardText = String(text);
+      return Promise.resolve();
+    },
+    readText: function() {
+      return Promise.resolve(clipboardText);
+    },
+  };
+
   globalThis.navigator = navigator;
 })();
 )JS";
@@ -638,6 +704,13 @@ void WindowBindings::install(JSContext* ctx) {
     JS_FreeValue(ctx, JS_GetException(ctx));
   }
   JS_FreeValue(ctx, selection_result);
+
+  JSValue console_extras_result = JS_Eval(ctx, kConsoleExtrasBootstrapScript, strlen(kConsoleExtrasBootstrapScript),
+                                           "<console-extras-bootstrap>", JS_EVAL_TYPE_GLOBAL);
+  if (JS_IsException(console_extras_result)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+  }
+  JS_FreeValue(ctx, console_extras_result);
 
   JSValue crypto_result = JS_Eval(ctx, kCryptoBootstrapScript, strlen(kCryptoBootstrapScript),
                                    "<crypto-bootstrap>", JS_EVAL_TYPE_GLOBAL);

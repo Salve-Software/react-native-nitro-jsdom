@@ -159,4 +159,17 @@ describe('JSDOM navigator/matchMedia', () => {
       caught: { name: 'IndexSizeError', isDOMException: true },
     });
   });
+
+  it('navigator.clipboard.writeText()/readText() round-trip through an in-memory stand-in', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      (async () => {
+        const before = await navigator.clipboard.readText();
+        await navigator.clipboard.writeText('discount-code-123');
+        const after = await navigator.clipboard.readText();
+        return JSON.stringify({ before, after });
+      })()
+    `);
+    expect(JSON.parse(result)).toEqual({ before: '', after: 'discount-code-123' });
+  });
 });
