@@ -55,9 +55,10 @@ export class JSDOM {
     }
 
     if (options?.onAlert || options?.onConfirm || options?.onPrompt) {
+      const onConfirm = options.onConfirm;
       sandbox.setDialogCallbacks(
         options.onAlert ?? null,
-        options.onConfirm ?? null,
+        onConfirm ? async (message) => await onConfirm(message) : null,
         options.onPrompt ?? null,
       );
     }
