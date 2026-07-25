@@ -1,3 +1,34 @@
+## [2.1.0](https://github.com/Salve-Software/react-native-nitro-jsdom/compare/v2.0.0...v2.1.0) (2026-07-25)
+
+### ✨ Features
+
+* **dom:** add document.currentScript ([5cfc356](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/5cfc356829e33580ddd005a5ade35e0dfa6e6c7f))
+* **dom:** add insertAdjacentElement/insertAdjacentText ([c68ef93](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/c68ef93271e67c3a8d5bbed70f6c1f9062452501))
+* **dom:** add Intl.NumberFormat/DateTimeFormat polyfill ([e585025](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/e5850252affe123f8659b14228a3656bc4e4aa8b))
+* **dom:** add named access on the window object ([11c2848](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/11c2848d9fa61f6e7ca0ec38360ea8e4185150ca))
+* **dom:** add v0.17 ergonomics gaps ([7b0cd52](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/7b0cd521b1369e226a1bd69658fdf9ac05aeb23b))
+* **dom:** decompose <a>/<area> href into URL parts ([4992fdf](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/4992fdfd172980644141564db95cec71070de098))
+* **dom:** reflect hidden/title/lang/dir on Element ([272d88f](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/272d88f08611e500508f7265cea3100109a42b7d))
+* **intl:** add Intl.RelativeTimeFormat and Intl.PluralRules ([27f664c](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/27f664cb3a3bd73ebf4c299db966509f3fe3886c))
+* **sandbox:** make onConfirm awaitable ([bd9e8d3](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/bd9e8d328c7cca76ea2d5f6eae50c52a4da18a62))
+
+### 🐛 Bug Fixes
+
+* **android:** register IntlBindings.cpp in CMake sources ([d344c02](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/d344c023ccb62954ed115c314697b6bd7c24b255))
+* **dom:** harden named-access registry mutations ([90b2e8c](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/90b2e8c53ee57869ec9ecff67b4772c5a3bac325))
+* **dom:** mirror window.location as document.location ([f912087](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/f9120876866af33abf23d0de588788ceb354d769))
+* **dom:** selectedIndex/selectedOptions default consistently ([e32be89](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/e32be899f8ba18ffb092c83c0a43350e9203ce8f))
+* **dom:** stop Element.prototype.host from breaking Shadow DOM traversal ([62dda99](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/62dda999ad8c1a35a166b3f8ce5a1984f3e6fb40))
+* **dom:** tighten Intl currency/dateStyle/timeStyle handling ([1673826](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/1673826d34cc2f07186863e0fe4c8cc41bfaedb4))
+* **events:** wire onchange/oninput/onsubmit/onreset handlers ([2d2c62c](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/2d2c62c5c536f0e842fa92ea432181b645bab12a))
+* **intl:** don't round values for RelativeTimeFormat numeric:auto ([20f58d0](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/20f58d07752f7b414a0c216598373115f542df9a))
+* **test:** test frame's name attribute via createElement ([bbb8423](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/bbb842302743570b25fcd19ea86e322e7dae1ee5))
+
+### 📚 Documentation
+
+* add v0.18 roadmap entry ([b09eb4c](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/b09eb4cf4429d4754f9c638e26805a8cc40ad149))
+* **changelog:** remove erroneous breaking-change note from v2.0.0 ([4159964](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/41599647b9d071ed50760bb3a3b1cb3882da24b7))
+
 ## [2.0.0](https://github.com/Salve-Software/react-native-nitro-jsdom/compare/v1.1.0...v2.0.0) (2026-07-24)
 
 ### ✨ Features
