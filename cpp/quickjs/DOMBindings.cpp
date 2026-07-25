@@ -69,7 +69,6 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   LayoutStubBindings::install(ctx); // needs Element's proto + globalThis.document to exist
   TreeWalkerBindings::install(ctx); // needs Element's proto (Node traversal props) + globalThis.document to exist
   EventTargetBindings::install(ctx); // no dependencies
-  WindowNamedPropertiesBindings::install(ctx); // wraps appendChild/removeChild/innerHTML/insertAdjacentHTML/setAttribute, so runs after ElementBindings/CustomElementsBindings
 
   // ── localStorage / sessionStorage ──────────────────────────────────────────
   {
@@ -92,6 +91,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
       rctx->mutation_observers->install(ctx, doc_node);
     }
   }
+
+  WindowNamedPropertiesBindings::install(ctx); // must run last, after localStorage/sessionStorage exist
 }
 
 } // namespace margelo::nitro::nitrojsdom

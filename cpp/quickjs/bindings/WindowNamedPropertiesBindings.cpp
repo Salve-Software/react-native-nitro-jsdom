@@ -90,6 +90,25 @@ const char* kWindowNamedPropertiesBootstrapScript = R"JS(
     for (var i = 0; i < found.length; i++) unregister(found[i]);
   }
 
+  function collectSubtreeKeys(root) {
+    var pending = [];
+    function collect(el) {
+      if (!el || el.nodeType !== 1) return;
+      keysFor(el).forEach(function(k) { pending.push({ key: k, el: el }); });
+    }
+    if (!root) return pending;
+    collect(root);
+    if (typeof root.querySelectorAll === 'function') {
+      var found = root.querySelectorAll('*');
+      for (var i = 0; i < found.length; i++) collect(found[i]);
+    }
+    return pending;
+  }
+
+  function commitUnregister(pending) {
+    pending.forEach(function(entry) { removeFromRegistry(entry.key, entry.el); });
+  }
+
   // ── Initial population: elements already present in the parsed document ──
   if (document.documentElement) registerSubtree(document.documentElement);
 
@@ -108,14 +127,20 @@ const char* kWindowNamedPropertiesBootstrapScript = R"JS(
 
   var origRemoveChild = Node.prototype.removeChild;
   Node.prototype.removeChild = function(child) {
-    unregisterSubtree(child);
-    return origRemoveChild.call(this, child);
+    var pending = collectSubtreeKeys(child);
+    var willRemove = child && child.parentNode === this;
+    var result = origRemoveChild.call(this, child);
+    if (willRemove) commitUnregister(pending);
+    return result;
   };
 
   var origRemove = Element.prototype.remove;
   Element.prototype.remove = function() {
-    unregisterSubtree(this);
-    return origRemove.call(this);
+    var pending = collectSubtreeKeys(this);
+    var hadParent = this.parentNode !== null;
+    var result = origRemove.call(this);
+    if (hadParent) commitUnregister(pending);
+    return result;
   };
 
   // ── innerHTML ────────────────────────────────────────────────────────
@@ -130,6 +155,20 @@ const char* kWindowNamedPropertiesBootstrapScript = R"JS(
         registerSubtree(this); // register the NEW content
       },
       enumerable: innerHTMLDesc.enumerable,
+      configurable: true,
+    });
+  }
+
+  var textContentDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+  if (textContentDesc && textContentDesc.set) {
+    var origTextContentSet = textContentDesc.set;
+    Object.defineProperty(Node.prototype, 'textContent', {
+      get: textContentDesc.get,
+      set: function(value) {
+        unregisterSubtree(this);
+        origTextContentSet.call(this, value);
+      },
+      enumerable: textContentDesc.enumerable,
       configurable: true,
     });
   }

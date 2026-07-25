@@ -33,6 +33,10 @@ describe('JSDOM named access on window', () => {
       <html><body>
         <form name="myForm"></form>
         <img name="myImg">
+        <embed name="myEmbed">
+        <object name="myObject"></object>
+        <iframe name="myIframe"></iframe>
+        <frame name="myFrame"></frame>
         <span name="myShouldNotAppear"></span>
       </body></html>
     `);
@@ -40,12 +44,20 @@ describe('JSDOM named access on window', () => {
       JSON.stringify({
         form: typeof myForm !== 'undefined' && myForm.tagName,
         img: typeof myImg !== 'undefined' && myImg.tagName,
+        embed: typeof myEmbed !== 'undefined' && myEmbed.tagName,
+        object: typeof myObject !== 'undefined' && myObject.tagName,
+        iframe: typeof myIframe !== 'undefined' && myIframe.tagName,
+        frame: typeof myFrame !== 'undefined' && myFrame.tagName,
         span: typeof myShouldNotAppear,
       });
     `);
     expect(JSON.parse(result)).toEqual({
       form: 'FORM',
       img: 'IMG',
+      embed: 'EMBED',
+      object: 'OBJECT',
+      iframe: 'IFRAME',
+      frame: 'FRAME',
       span: 'undefined',
     });
   });
@@ -104,6 +116,25 @@ describe('JSDOM named access on window', () => {
       JSON.stringify({ before, afterOld: typeof old, fresh: typeof fresh !== 'undefined' && fresh.textContent });
     `);
     expect(JSON.parse(result)).toEqual({ before: 'object', afterOld: 'undefined', fresh: 'fresh' });
+  });
+
+  it('textContent assignment disconnects the old subtree', async () => {
+    dom = JSDOM.create('<html><body><div id="container"><span id="old2">old</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const before = typeof old2;
+      container.textContent = 'plain text';
+      JSON.stringify({ before, after: typeof old2 });
+    `);
+    expect(JSON.parse(result)).toEqual({ before: 'object', after: 'undefined' });
+  });
+
+  it('removeChild() with the wrong parent is a no-op and leaves the registry untouched', async () => {
+    dom = JSDOM.create('<html><body><div id="a"><span id="child1">x</span></div><div id="b"></div></body></html>');
+    const result = await dom.evaluate(`
+      b.removeChild(child1);
+      JSON.stringify({ stillReachable: typeof child1, stillUnderA: child1.parentNode === a });
+    `);
+    expect(JSON.parse(result)).toEqual({ stillReachable: 'object', stillUnderA: true });
   });
 
   it('insertAdjacentHTML connects newly inserted elements', async () => {
