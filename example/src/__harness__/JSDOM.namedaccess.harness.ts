@@ -28,7 +28,7 @@ describe('JSDOM named access on window', () => {
     });
   });
 
-  it('a "name" attribute is exposed only for embed/form/img/object/iframe/frame, not arbitrary elements', async () => {
+  it('a "name" attribute is exposed only for embed/form/img/object/iframe, not arbitrary elements', async () => {
     dom = JSDOM.create(`
       <html><body>
         <form name="myForm"></form>
@@ -36,7 +36,6 @@ describe('JSDOM named access on window', () => {
         <embed name="myEmbed">
         <object name="myObject"></object>
         <iframe name="myIframe"></iframe>
-        <frame name="myFrame"></frame>
         <span name="myShouldNotAppear"></span>
       </body></html>
     `);
@@ -47,7 +46,6 @@ describe('JSDOM named access on window', () => {
         embed: typeof myEmbed !== 'undefined' && myEmbed.tagName,
         object: typeof myObject !== 'undefined' && myObject.tagName,
         iframe: typeof myIframe !== 'undefined' && myIframe.tagName,
-        frame: typeof myFrame !== 'undefined' && myFrame.tagName,
         span: typeof myShouldNotAppear,
       });
     `);
@@ -57,9 +55,19 @@ describe('JSDOM named access on window', () => {
       embed: 'EMBED',
       object: 'OBJECT',
       iframe: 'IFRAME',
-      frame: 'FRAME',
       span: 'undefined',
     });
+  });
+
+  it('a "name" attribute is exposed for a dynamically created frame element', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const el = document.createElement('frame');
+      el.setAttribute('name', 'myFrame');
+      document.body.appendChild(el);
+      JSON.stringify(typeof myFrame !== 'undefined' && myFrame.tagName);
+    `);
+    expect(JSON.parse(result)).toBe('FRAME');
   });
 
   it('a dynamically created element is not reachable before being connected', async () => {
