@@ -29,6 +29,7 @@
 #include "bindings/LayoutStubBindings.hpp"
 #include "bindings/TreeWalkerBindings.hpp"
 #include "bindings/EventTargetBindings.hpp"
+#include "bindings/WindowNamedPropertiesBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -68,6 +69,7 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
   LayoutStubBindings::install(ctx); // needs Element's proto + globalThis.document to exist
   TreeWalkerBindings::install(ctx); // needs Element's proto (Node traversal props) + globalThis.document to exist
   EventTargetBindings::install(ctx); // no dependencies
+  WindowNamedPropertiesBindings::install(ctx); // wraps appendChild/removeChild/innerHTML/insertAdjacentHTML/setAttribute, so runs after ElementBindings/CustomElementsBindings
 
   // ── localStorage / sessionStorage ──────────────────────────────────────────
   {
