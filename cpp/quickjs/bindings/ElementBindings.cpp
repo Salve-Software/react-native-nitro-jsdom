@@ -1236,6 +1236,113 @@ JSValue js_el_insertAdjacentHTML(JSContext* ctx, JSValue this_val, int argc, JSV
   return JS_UNDEFINED;
 }
 
+JSValue js_el_insertAdjacentElement(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 2) return JS_NULL;
+  const char* position = JS_ToCString(ctx, argv[0]);
+  if (!position) return JS_NULL;
+  std::string pos(position);
+  JS_FreeCString(ctx, position);
+
+  auto* inserted_el = unwrap_element(ctx, argv[1]);
+  if (!inserted_el) return JS_NULL;
+  lxb_dom_node_t* inserted = lxb_dom_interface_node(inserted_el);
+
+  lxb_dom_node_t* node = lxb_dom_interface_node(el);
+  lxb_dom_node_t* parent = nullptr;
+  lxb_dom_node_t* prev_sib = nullptr;
+  lxb_dom_node_t* next_sib = nullptr;
+
+  if (pos == "beforebegin") {
+    parent = node->parent;
+    if (!parent) return JS_NULL;
+    prev_sib = node->prev;
+    lxb_dom_node_insert_before(node, inserted);
+    next_sib = node;
+  } else if (pos == "afterbegin") {
+    parent = node;
+    lxb_dom_node_t* ref = node->first_child;
+    if (ref) lxb_dom_node_insert_before(ref, inserted); else lxb_dom_node_insert_child(node, inserted);
+    next_sib = ref;
+  } else if (pos == "beforeend") {
+    parent = node;
+    prev_sib = node->last_child;
+    lxb_dom_node_insert_child(node, inserted);
+  } else if (pos == "afterend") {
+    parent = node->parent;
+    if (!parent) return JS_NULL;
+    prev_sib = node;
+    lxb_dom_node_t* ref = node->next;
+    if (ref) lxb_dom_node_insert_before(ref, inserted); else lxb_dom_node_insert_child(parent, inserted);
+    next_sib = ref;
+  } else {
+    return throw_dom_exception(ctx, "SyntaxError", ("invalid insertAdjacentElement position '" + pos + "'").c_str());
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent, {inserted}, {}, prev_sib, next_sib);
+  }
+  return JS_DupValue(ctx, argv[1]);
+}
+
+JSValue js_el_insertAdjacentText(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
+  auto* el = unwrap_element(ctx, this_val);
+  if (!el || argc < 2) return JS_UNDEFINED;
+  const char* position = JS_ToCString(ctx, argv[0]);
+  const char* text = JS_ToCString(ctx, argv[1]);
+  if (!position || !text) {
+    if (position) JS_FreeCString(ctx, position);
+    if (text) JS_FreeCString(ctx, text);
+    return JS_UNDEFINED;
+  }
+  std::string pos(position);
+  JS_FreeCString(ctx, position);
+
+  lxb_dom_node_t* node = lxb_dom_interface_node(el);
+  void* text_node_v = doc_for_node(ctx, node)->createTextNode(text);
+  JS_FreeCString(ctx, text);
+  if (!text_node_v) return JS_UNDEFINED;
+  auto* text_node = static_cast<lxb_dom_node_t*>(text_node_v);
+
+  lxb_dom_node_t* parent = nullptr;
+  lxb_dom_node_t* prev_sib = nullptr;
+  lxb_dom_node_t* next_sib = nullptr;
+
+  if (pos == "beforebegin") {
+    parent = node->parent;
+    if (!parent) { lxb_dom_node_destroy_deep(text_node); return JS_UNDEFINED; }
+    prev_sib = node->prev;
+    lxb_dom_node_insert_before(node, text_node);
+    next_sib = node;
+  } else if (pos == "afterbegin") {
+    parent = node;
+    lxb_dom_node_t* ref = node->first_child;
+    if (ref) lxb_dom_node_insert_before(ref, text_node); else lxb_dom_node_insert_child(node, text_node);
+    next_sib = ref;
+  } else if (pos == "beforeend") {
+    parent = node;
+    prev_sib = node->last_child;
+    lxb_dom_node_insert_child(node, text_node);
+  } else if (pos == "afterend") {
+    parent = node->parent;
+    if (!parent) { lxb_dom_node_destroy_deep(text_node); return JS_UNDEFINED; }
+    prev_sib = node;
+    lxb_dom_node_t* ref = node->next;
+    if (ref) lxb_dom_node_insert_before(ref, text_node); else lxb_dom_node_insert_child(parent, text_node);
+    next_sib = ref;
+  } else {
+    lxb_dom_node_destroy_deep(text_node);
+    return throw_dom_exception(ctx, "SyntaxError", ("invalid insertAdjacentText position '" + pos + "'").c_str());
+  }
+
+  auto* rctx = get_ctx(ctx);
+  if (rctx && rctx->mutation_observers && !rctx->mutation_observers->empty()) {
+    rctx->mutation_observers->notifyChildList(ctx, parent, {text_node}, {}, prev_sib, next_sib);
+  }
+  return JS_UNDEFINED;
+}
+
 JSValue js_el_matches(JSContext* ctx, JSValue this_val, int argc, JSValue* argv) {
   auto* el = unwrap_element(ctx, this_val);
   if (!el || argc < 1) return JS_FALSE;
@@ -1603,6 +1710,8 @@ void ElementBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, proto, "getElementsByTagName",   JS_NewCFunction(ctx, js_el_getElementsByTagName,   "getElementsByTagName",   1));
   JS_SetPropertyStr(ctx, proto, "closest",                JS_NewCFunction(ctx, js_el_closest,                "closest",                1));
   JS_SetPropertyStr(ctx, proto, "insertAdjacentHTML",     JS_NewCFunction(ctx, js_el_insertAdjacentHTML,     "insertAdjacentHTML",     2));
+  JS_SetPropertyStr(ctx, proto, "insertAdjacentElement",  JS_NewCFunction(ctx, js_el_insertAdjacentElement,  "insertAdjacentElement",  2));
+  JS_SetPropertyStr(ctx, proto, "insertAdjacentText",     JS_NewCFunction(ctx, js_el_insertAdjacentText,     "insertAdjacentText",     2));
   JS_SetPropertyStr(ctx, proto, "append",                 JS_NewCFunction(ctx, js_el_append,                 "append",                 0));
   JS_SetPropertyStr(ctx, proto, "prepend",                JS_NewCFunction(ctx, js_el_prepend,                "prepend",                0));
   JS_SetPropertyStr(ctx, proto, "getBoundingClientRect",  JS_NewCFunction(ctx, js_el_getBoundingClientRect,  "getBoundingClientRect",  0));
