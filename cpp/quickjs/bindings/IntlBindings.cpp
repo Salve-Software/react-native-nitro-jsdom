@@ -224,9 +224,102 @@ const char* kIntlBootstrapScript = R"JS(
     return Object.assign({}, this._options);
   };
 
+  function pluralCategoryFor(n, lang) {
+    n = Math.abs(Number(n));
+    if (lang === 'pt') return (n === 0 || n === 1) ? 'one' : 'other';
+    return n === 1 ? 'one' : 'other';
+  }
+
+  function PluralRules(locales, options) {
+    this._lang = localeLanguage(locales);
+    options = options || {};
+    this._type = options.type || 'cardinal';
+  }
+
+  PluralRules.prototype.select = function(n) {
+    return pluralCategoryFor(n, this._lang);
+  };
+
+  PluralRules.prototype.resolvedOptions = function() {
+    return { locale: this._lang, type: this._type, pluralCategories: ['one', 'other'] };
+  };
+
+  var RTF_UNITS = {
+    en: {
+      year: ['year', 'years'], quarter: ['quarter', 'quarters'], month: ['month', 'months'],
+      week: ['week', 'weeks'], day: ['day', 'days'], hour: ['hour', 'hours'],
+      minute: ['minute', 'minutes'], second: ['second', 'seconds'],
+    },
+    pt: {
+      year: ['ano', 'anos'], quarter: ['trimestre', 'trimestres'], month: ['mês', 'meses'],
+      week: ['semana', 'semanas'], day: ['dia', 'dias'], hour: ['hora', 'horas'],
+      minute: ['minuto', 'minutos'], second: ['segundo', 'segundos'],
+    },
+  };
+
+  var RTF_PATTERNS = {
+    en: { past: '{0} {1} ago', future: 'in {0} {1}' },
+    pt: { past: 'há {0} {1}', future: 'em {0} {1}' },
+  };
+
+  var RTF_AUTO = {
+    en: {
+      day: { '-1': 'yesterday', '0': 'today', '1': 'tomorrow' },
+      week: { '-1': 'last week', '0': 'this week', '1': 'next week' },
+      month: { '-1': 'last month', '0': 'this month', '1': 'next month' },
+      year: { '-1': 'last year', '0': 'this year', '1': 'next year' },
+      second: { '0': 'now' },
+    },
+    pt: {
+      day: { '-1': 'ontem', '0': 'hoje', '1': 'amanhã' },
+      week: { '-1': 'semana passada', '0': 'esta semana', '1': 'semana que vem' },
+      month: { '-1': 'mês passado', '0': 'este mês', '1': 'próximo mês' },
+      year: { '-1': 'ano passado', '0': 'este ano', '1': 'próximo ano' },
+      second: { '0': 'agora' },
+    },
+  };
+
+  var RTF_UNIT_ALIASES = {
+    years: 'year', quarters: 'quarter', months: 'month', weeks: 'week',
+    days: 'day', hours: 'hour', minutes: 'minute', seconds: 'second',
+  };
+
+  function RelativeTimeFormat(locales, options) {
+    this._lang = RTF_UNITS[localeLanguage(locales)] ? localeLanguage(locales) : 'en';
+    options = options || {};
+    this._numeric = options.numeric || 'always';
+    this._style = options.style || 'long';
+  }
+
+  RelativeTimeFormat.prototype.format = function(value, unit) {
+    value = Number(value);
+    unit = RTF_UNIT_ALIASES[unit] || unit;
+    var units = RTF_UNITS[this._lang][unit];
+    if (!units) throw new RangeError('Invalid unit argument for RelativeTimeFormat.format()');
+
+    if (this._numeric === 'auto') {
+      var autoData = RTF_AUTO[this._lang][unit];
+      var rounded = Math.round(value);
+      if (autoData && autoData[String(rounded)] !== undefined) {
+        return autoData[String(rounded)];
+      }
+    }
+
+    var n = Math.abs(value);
+    var unitName = units[pluralCategoryFor(n, this._lang) === 'one' ? 0 : 1];
+    var pattern = value < 0 ? RTF_PATTERNS[this._lang].past : RTF_PATTERNS[this._lang].future;
+    return pattern.replace('{0}', String(n)).replace('{1}', unitName);
+  };
+
+  RelativeTimeFormat.prototype.resolvedOptions = function() {
+    return { locale: this._lang, style: this._style, numeric: this._numeric };
+  };
+
   globalThis.Intl = globalThis.Intl || {};
   globalThis.Intl.NumberFormat = NumberFormat;
   globalThis.Intl.DateTimeFormat = DateTimeFormat;
+  globalThis.Intl.PluralRules = PluralRules;
+  globalThis.Intl.RelativeTimeFormat = RelativeTimeFormat;
 
   function hasOwnKeys(o) { return !!o && Object.keys(o).length > 0; }
 

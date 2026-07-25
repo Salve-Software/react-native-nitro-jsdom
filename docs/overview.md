@@ -583,6 +583,31 @@ dom.dispose() // ← always pair with create()
       Gregorian, `Intl.PluralRules`/`Intl.RelativeTimeFormat`/
       `Intl.ListFormat`, and `Intl.Locale`.
 
+### v0.19 — Relative Time & Pluralization
+> Closes the two `Intl` gaps v0.18 explicitly flagged as unmodeled, since
+> both are directly relevant to this project's own headline examples: a
+> countdown timer needs `RelativeTimeFormat` ("in 3 days"), a discount badge
+> or personalized greeting needs `PluralRules` to pick "item" vs "items"
+> correctly across `en`/`pt`.
+- [x] `Intl.PluralRules` — `select(n)` returns `'one'`/`'other'` per the same
+      `en`/`pt` cardinal rule `pt`'s CLDR data defines (`pt` treats both `0`
+      and `1` as singular, e.g. "0 item"/"1 item"/"2 itens"; `en` only `1`).
+      `type: 'ordinal'` and categories beyond `one`/`other` (`few`, `many`,
+      `two`, `zero`) are not modeled — neither `en` nor `pt` cardinal rules
+      need them.
+- [x] `Intl.RelativeTimeFormat` — `format(value, unit)` for `year`/`quarter`/
+      `month`/`week`/`day`/`hour`/`minute`/`second` (plural unit spellings
+      like `'days'` accepted too, per spec). `numeric: 'auto'` produces
+      special phrasing ("yesterday", "next week", "agora") for day/week/
+      month/year/second=0; `numeric: 'always'` (the default) always renders
+      numerically ("in 3 days" / "há 3 dias"). `style: 'short'`/`'narrow'`
+      are accepted but render identically to `'long'` — no abbreviated
+      unit-name table, the same trade-off `DateTimeFormat` already made
+      collapsing `timeStyle` `'long'`/`'full'`. `formatToParts()` is not
+      implemented (`DateTimeFormat`/`NumberFormat` don't have it either, for
+      the same reason: no consumer in this project's scope needs part-level
+      output over the plain formatted string).
+
 ---
 
 ## Repository Structure
