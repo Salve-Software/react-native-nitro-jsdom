@@ -16,9 +16,12 @@ namespace margelo::nitro::nitrojsdom {
 // but 'short'/'narrow' render identically to 'long' — there's no abbreviated
 // unit-name table, same trade-off DateTimeFormat already made collapsing
 // timeStyle 'long'/'full'. `numeric: 'auto'` only has special phrasing
-// ("yesterday", "next week", ...) for day/week/month/year — hour/minute/
-// quarter always render numerically, matching real Intl's own behavior for
-// units without a natural auto phrase.
+// ("yesterday", "next week", ..., plus "now"/"agora" for second: 0) for
+// day/week/month/year/second — hour/minute/quarter always render
+// numerically, matching real Intl's own behavior for units without a
+// natural auto phrase. Auto phrasing only ever applies to exact supported
+// integer values (e.g. -1/0/1) — a fractional value like 1.2 always falls
+// through to numeric formatting rather than rounding into a phrase.
 struct IntlBindings {
   static void install(JSContext* ctx);
 };

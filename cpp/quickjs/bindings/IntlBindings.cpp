@@ -299,9 +299,8 @@ const char* kIntlBootstrapScript = R"JS(
 
     if (this._numeric === 'auto') {
       var autoData = RTF_AUTO[this._lang][unit];
-      var rounded = Math.round(value);
-      if (autoData && autoData[String(rounded)] !== undefined) {
-        return autoData[String(rounded)];
+      if (autoData && autoData[String(value)] !== undefined) {
+        return autoData[String(value)];
       }
     }
 
