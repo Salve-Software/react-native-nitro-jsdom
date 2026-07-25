@@ -528,7 +528,7 @@ JSValue js_doc_dispatchEvent(JSContext* ctx, JSValue, int argc, JSValue* argv) {
   return dispatch_event_on_target(ctx, rctx, argv[0], node);
 }
 
-const char* kHandlerEventTypes[] = { "click", "load", "error", "unhandledrejection" };
+const char* kHandlerEventTypes[] = { "click", "load", "error", "unhandledrejection", "change", "input", "submit", "reset" };
 
 JSValue get_handler_prop_for_node(JSContext* ctx, RuntimeContext* rctx, void* node, const std::string& event_type) {
   if (!rctx || !node) return JS_NULL;
@@ -684,9 +684,13 @@ void EventBindings::install(JSContext* ctx) {
   JS_SetPropertyStr(ctx, node_proto, "removeEventListener", JS_NewCFunction(ctx, js_el_removeEventListener, "removeEventListener", 2));
   JS_SetPropertyStr(ctx, node_proto, "dispatchEvent",       JS_NewCFunction(ctx, js_el_dispatchEvent,       "dispatchEvent",       1));
 
-  define_element_handler(ctx, node_proto, "onclick", 0);
-  define_element_handler(ctx, node_proto, "onload",  1);
-  define_element_handler(ctx, node_proto, "onerror", 2);
+  define_element_handler(ctx, node_proto, "onclick",  0);
+  define_element_handler(ctx, node_proto, "onload",   1);
+  define_element_handler(ctx, node_proto, "onerror",  2);
+  define_element_handler(ctx, node_proto, "onchange", 4);
+  define_element_handler(ctx, node_proto, "oninput",  5);
+  define_element_handler(ctx, node_proto, "onsubmit", 6);
+  define_element_handler(ctx, node_proto, "onreset",  7);
   JS_FreeValue(ctx, node_proto);
 
   JSValue element_proto = JS_GetClassProto(ctx, js_element_class_id);

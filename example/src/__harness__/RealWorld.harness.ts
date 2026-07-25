@@ -228,4 +228,229 @@ describe('Real-world scenarios', () => {
     `);
     expect(total).toBe('56.50');
   });
+
+  // Adapted from mdn/dom-examples/url-params: builds a table of the current
+  // URL's query params on window 'load', mirroring how a CMS widget reads
+  // personalization data (coupon code, referral id) out of its own URL.
+  it('builds a param table from the URL on window load (adapted from mdn/dom-examples/url-params)', async () => {
+    dom = JSDOM.create(
+      `
+      <html><body>
+        <pre id="url-output"></pre>
+        <table class="param-table"></table>
+        <script>
+          function fillTableWithParameters() {
+            const table = document.querySelector('.param-table');
+            const outputBox = document.getElementById('url-output');
+            const url = new URL(document.location.href);
+            url.searchParams.sort();
+            for (const key of url.searchParams.keys()) {
+              const row = document.createElement('tr');
+              const keyCell = document.createElement('td');
+              keyCell.textContent = key;
+              const valCell = document.createElement('td');
+              valCell.textContent = url.searchParams.get(key);
+              row.appendChild(keyCell);
+              row.appendChild(valCell);
+              table.appendChild(row);
+            }
+            outputBox.textContent = 'Current URL: ' + url;
+          }
+          window.addEventListener('load', fillTableWithParameters);
+        </script>
+      </body></html>
+    `,
+      { url: 'https://example.com/widget?excitement=high&from=MDN' }
+    );
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        rows: Array.from(document.querySelectorAll('.param-table tr')).map((tr) =>
+          Array.from(tr.querySelectorAll('td')).map((td) => td.textContent)
+        ),
+        output: document.getElementById('url-output').textContent,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      rows: [
+        ['excitement', 'high'],
+        ['from', 'MDN'],
+      ],
+      output: 'Current URL: https://example.com/widget?excitement=high&from=MDN',
+    });
+  });
+
+  // Adapted from mdn/dom-examples/web-storage: persists a widget's chosen
+  // color/font into localStorage and reflects it back into inline styles,
+  // then confirms a rebound onchange handler round-trips a new value.
+  it('persists widget preferences to localStorage and reflects them into styles (adapted from mdn/dom-examples/web-storage)', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <p>Sample text</p>
+        <input id="bgcolor" value="FF0000" />
+        <select id="font">
+          <option value="sans-serif" selected>Sans-serif</option>
+          <option value="serif">Serif</option>
+        </select>
+      </body></html>
+    `);
+    const first = await dom.evaluate(`
+      const htmlElem = document.querySelector('html');
+      const pElem = document.querySelector('p');
+      const bgcolorInput = document.getElementById('bgcolor');
+      const fontSelect = document.getElementById('font');
+
+      function setStyles() {
+        htmlElem.style.backgroundColor = '#' + localStorage.getItem('bgcolor');
+        pElem.style.fontFamily = localStorage.getItem('font');
+      }
+      function populateStorage() {
+        localStorage.setItem('bgcolor', bgcolorInput.value);
+        localStorage.setItem('font', fontSelect.value);
+        setStyles();
+      }
+      if (!localStorage.getItem('bgcolor')) {
+        populateStorage();
+      } else {
+        setStyles();
+      }
+      bgcolorInput.onchange = populateStorage;
+
+      JSON.stringify({
+        storedColor: localStorage.getItem('bgcolor'),
+        storedFont: localStorage.getItem('font'),
+        htmlBg: htmlElem.style.backgroundColor,
+        pFont: pElem.style.fontFamily,
+      });
+    `);
+    expect(JSON.parse(first)).toEqual({
+      storedColor: 'FF0000',
+      storedFont: 'sans-serif',
+      htmlBg: '#FF0000',
+      pFont: 'sans-serif',
+    });
+
+    const second = await dom.evaluate(`
+      bgcolorInput.value = '00FF00';
+      bgcolorInput.dispatchEvent(new Event('change'));
+      JSON.stringify({
+        storedColor: localStorage.getItem('bgcolor'),
+        htmlBg: document.querySelector('html').style.backgroundColor,
+      });
+    `);
+    expect(JSON.parse(second)).toEqual({ storedColor: '00FF00', htmlBg: '#00FF00' });
+  });
+
+  // Adapted from mdn/dom-examples/insert-adjacent/insertAdjacentElement.html:
+  // clicking a box selects it, then "insert before"/"insert after" add a new
+  // box next to the selection — the same "insert a sibling next to the
+  // clicked item" pattern a CMS widget uses to grow a list around a click.
+  it('click-to-select then insert-before/after grows a box list around the selection (adapted from mdn/dom-examples/insert-adjacent)', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <section>
+          <div class="box" data-id="0"></div>
+          <div class="box" data-id="1"></div>
+          <div class="box" data-id="2"></div>
+        </section>
+        <button class="before">Insert before</button>
+        <button class="after">Insert after</button>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const container = document.querySelector('section');
+      let activeElem;
+      let nextId = 3;
+
+      function setListener(elem) {
+        elem.addEventListener('click', () => { activeElem = elem; });
+      }
+      Array.from(container.querySelectorAll('.box')).forEach(setListener);
+
+      document.querySelector('.before').addEventListener('click', () => {
+        const box = document.createElement('div');
+        box.className = 'box';
+        box.dataset.id = String(nextId++);
+        if (activeElem) activeElem.insertAdjacentElement('beforebegin', box);
+        setListener(box);
+      });
+      document.querySelector('.after').addEventListener('click', () => {
+        const box = document.createElement('div');
+        box.className = 'box';
+        box.dataset.id = String(nextId++);
+        if (activeElem) activeElem.insertAdjacentElement('afterend', box);
+        setListener(box);
+      });
+
+      container.querySelectorAll('.box')[1].dispatchEvent(new Event('click'));
+      document.querySelector('.before').dispatchEvent(new Event('click'));
+      document.querySelector('.after').dispatchEvent(new Event('click'));
+
+      JSON.stringify(Array.from(container.querySelectorAll('.box')).map((b) => b.dataset.id));
+    `);
+    expect(JSON.parse(result)).toEqual(['0', '3', '1', '4', '2']);
+  });
+
+  // Adapted from mdn/dom-examples/mediaquerylist: a responsive widget that
+  // reacts to matchMedia() and wires both addEventListener('change') and the
+  // legacy .onchange property, common in CMS widgets that adapt their layout.
+  it('reacts to matchMedia() results and wires both addEventListener and onchange (adapted from mdn/dom-examples/mediaquerylist)', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <p></p>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const para = document.querySelector('p');
+      const mql = window.matchMedia('(max-width: 600px)');
+
+      function screenTest(e) {
+        if (e.matches) {
+          para.textContent = 'narrow screen';
+          document.body.style.backgroundColor = 'red';
+        } else {
+          para.textContent = 'wide screen';
+          document.body.style.backgroundColor = 'blue';
+        }
+      }
+
+      screenTest(mql);
+      mql.addEventListener('change', screenTest);
+      let onchangeAssigned = false;
+      mql.onchange = function () { onchangeAssigned = true; };
+
+      JSON.stringify({
+        text: para.textContent,
+        bg: document.body.style.backgroundColor,
+        media: mql.media,
+        onchangeIsFunction: typeof mql.onchange === 'function',
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      text: 'wide screen',
+      bg: 'blue',
+      media: '(max-width: 600px)',
+      onchangeIsFunction: true,
+    });
+  });
+
+  // Adapted from mdn/dom-examples/css-progress: reads layout geometry and
+  // writes it back as a CSS custom property, the "measure then react" pattern
+  // a widget uses even though there's no real layout engine behind the stub.
+  it('reads getBoundingClientRect() and writes it back as a CSS custom property (adapted from mdn/dom-examples/css-progress)', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <article></article>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const articleElem = document.querySelector('article');
+      function setContainerWidth() {
+        const clientWidth = articleElem.getBoundingClientRect().width;
+        articleElem.style.setProperty('--container-width', Math.floor(clientWidth) + 'px');
+      }
+      setContainerWidth();
+      articleElem.style.getPropertyValue('--container-width');
+    `);
+    expect(result).toBe('0px');
+  });
 });

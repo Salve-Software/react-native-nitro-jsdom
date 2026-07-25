@@ -91,6 +91,56 @@ describe('JSDOM DOM mutation', () => {
     );
   });
 
+  it('insertAdjacentElement() inserts an existing element at the four standard positions and returns it', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span>mid</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      function make(id) { const e = document.createElement('i'); e.id = id; return e; }
+      const ab = div.insertAdjacentElement('afterbegin', make('ab'));
+      const be = div.insertAdjacentElement('beforeend', make('be'));
+      const bb = div.insertAdjacentElement('beforebegin', make('bb'));
+      const ae = div.insertAdjacentElement('afterend', make('ae'));
+      JSON.stringify({
+        html: document.body.innerHTML,
+        returnedSameElement: ab.id === 'ab' && be.id === 'be' && bb.id === 'bb' && ae.id === 'ae',
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      html: '<i id="bb"></i><div id="d"><i id="ab"></i><span>mid</span><i id="be"></i></div><i id="ae"></i>',
+      returnedSameElement: true,
+    });
+  });
+
+  it('insertAdjacentElement() with an invalid position throws a SyntaxError DOMException and returns null on detached nodes', async () => {
+    dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      const detached = document.createElement('span');
+      let caught;
+      try { div.insertAdjacentElement('nowhere', document.createElement('i')); }
+      catch (e) { caught = { name: e.name, isDOMException: e instanceof DOMException }; }
+      const returnedForDetachedBeforebegin = detached.insertAdjacentElement('beforebegin', document.createElement('i'));
+      JSON.stringify({ caught, returnedForDetachedBeforebegin });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      caught: { name: 'SyntaxError', isDOMException: true },
+      returnedForDetachedBeforebegin: null,
+    });
+  });
+
+  it('insertAdjacentText() inserts a text node at the four standard positions', async () => {
+    dom = JSDOM.create('<html><body><div id="d"><span>mid</span></div></body></html>');
+    const result = await dom.evaluate(`
+      const div = document.getElementById('d');
+      div.insertAdjacentText('afterbegin', 'ab');
+      div.insertAdjacentText('beforeend', 'be');
+      div.insertAdjacentText('beforebegin', 'bb');
+      div.insertAdjacentText('afterend', 'ae');
+      document.body.innerHTML;
+    `);
+    expect(result).toBe('bb<div id="d">ab<span>mid</span>be</div>ae');
+  });
+
   it('document.createComment()/createDocumentFragment() create nodes usable with appendChild', async () => {
     dom = JSDOM.create('<html><body><div id="d"></div></body></html>');
     const result = await dom.evaluate(`

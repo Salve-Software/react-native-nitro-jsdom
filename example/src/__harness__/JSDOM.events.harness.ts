@@ -199,6 +199,30 @@ describe('JSDOM events', () => {
     expect(JSON.parse(result)).toEqual({ log: [], onclick: null });
   });
 
+  it('el.onchange/oninput/onsubmit/onreset fire like el.onclick', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <input id="i" />
+        <form id="f"><input id="submit-btn" type="submit" /></form>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const input = document.getElementById('i');
+      const form = document.getElementById('f');
+      const log = [];
+      input.onchange = () => log.push('change');
+      input.oninput = () => log.push('input');
+      form.onsubmit = (e) => { e.preventDefault(); log.push('submit'); };
+      form.onreset = () => log.push('reset');
+      input.dispatchEvent(new Event('change'));
+      input.dispatchEvent(new Event('input'));
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+      form.dispatchEvent(new Event('reset'));
+      JSON.stringify(log);
+    `);
+    expect(JSON.parse(result)).toEqual(['change', 'input', 'submit', 'reset']);
+  });
+
   it('window.onload and document.onload share one handler slot', async () => {
     dom = JSDOM.create('<html><body></body></html>');
     const result = await dom.evaluate(`

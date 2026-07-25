@@ -60,6 +60,36 @@ describe('JSDOM navigator/matchMedia', () => {
     expect(JSON.parse(result)).toEqual({ media: '(min-width: 600px)', matches: false, changeFired: false });
   });
 
+  it('document.location mirrors window.location as the same instance', async () => {
+    dom = JSDOM.create('<html><body></body></html>', { url: 'https://example.com/widget?a=1' });
+    const result = await dom.evaluate(`
+      JSON.stringify({
+        sameInstance: document.location === location,
+        href: document.location.href,
+        search: document.location.search,
+        pathname: document.location.pathname,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      sameInstance: true,
+      href: 'https://example.com/widget?a=1',
+      search: '?a=1',
+      pathname: '/widget',
+    });
+  });
+
+  it('setting document.location navigates like window.location.href', async () => {
+    dom = JSDOM.create('<html><body></body></html>', { url: 'https://example.com/' });
+    const result = await dom.evaluate(`
+      document.location = '/next-page?x=1';
+      JSON.stringify({ href: location.href, docHref: document.location.href });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      href: 'https://example.com/next-page?x=1',
+      docHref: 'https://example.com/next-page?x=1',
+    });
+  });
+
   it('history.pushState/replaceState track state and length without firing popstate', async () => {
     dom = JSDOM.create('<html><body></body></html>', { url: 'https://example.com/' });
     const result = await dom.evaluate(`
