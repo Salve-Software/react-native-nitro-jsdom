@@ -1,14 +1,5 @@
 ## [2.0.0](https://github.com/Salve-Software/react-native-nitro-jsdom/compare/v1.1.0...v2.0.0) (2026-07-24)
 
-### ⚠ BREAKING CHANGES
-
-* **release:** commits were mapped to a minor release, same as a
-plain feat, so no commit could ever trigger a major bump. Regular
-feat/fix commits are unaffected — only commits marked with ! or a
-* **release:** footer are impacted.
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-
 ### ✨ Features
 
 * **blob:** add File constructor ([6a52021](https://github.com/Salve-Software/react-native-nitro-jsdom/commit/6a5202123fd60262bc7120ff4eca2d754a09c941))

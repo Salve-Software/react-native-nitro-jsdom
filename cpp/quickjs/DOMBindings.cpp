@@ -29,6 +29,7 @@
 #include "bindings/LayoutStubBindings.hpp"
 #include "bindings/TreeWalkerBindings.hpp"
 #include "bindings/EventTargetBindings.hpp"
+#include "bindings/WindowNamedPropertiesBindings.hpp"
 #include <lexbor/html/html.h>
 #include <lexbor/dom/dom.h>
 
@@ -90,6 +91,8 @@ void DOMBindings::install(QuickJSRuntime* runtime, LexborDocument* document) {
       rctx->mutation_observers->install(ctx, doc_node);
     }
   }
+
+  WindowNamedPropertiesBindings::install(ctx); // must run last, after localStorage/sessionStorage exist
 }
 
 } // namespace margelo::nitro::nitrojsdom

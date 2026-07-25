@@ -4,7 +4,7 @@ import { JSDOM } from '@salve-software/react-native-nitro-jsdom';
 // Runs on a real device/simulator via react-native-harness, exercising the actual
 // Nitro/QuickJS/Lexbor native module — not a JS mock.
 
-describe('JSDOM Intl.NumberFormat/DateTimeFormat', () => {
+describe('JSDOM Intl.NumberFormat/DateTimeFormat/PluralRules/RelativeTimeFormat', () => {
   let dom: JSDOM | undefined;
 
   afterEach(() => {
@@ -164,6 +164,122 @@ describe('JSDOM Intl.NumberFormat/DateTimeFormat', () => {
     expect(JSON.parse(result)).toEqual({
       number: '1,234.5',
       date: 'July 24, 2026',
+    });
+  });
+
+  it('Intl.PluralRules selects "one"/"other" per locale cardinal rule (pt treats 0 and 1 as singular)', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const en = new Intl.PluralRules('en-US');
+      const pt = new Intl.PluralRules('pt-BR');
+      JSON.stringify({
+        en: [0, 1, 2, 5].map((n) => en.select(n)),
+        pt: [0, 1, 2, 5].map((n) => pt.select(n)),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      en: ['other', 'one', 'other', 'other'],
+      pt: ['one', 'one', 'other', 'other'],
+    });
+  });
+
+  it('Intl.PluralRules.resolvedOptions() reports locale, type and categories', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify(new Intl.PluralRules('en-US').resolvedOptions());
+    `);
+    expect(JSON.parse(result)).toEqual({
+      locale: 'en',
+      type: 'cardinal',
+      pluralCategories: ['one', 'other'],
+    });
+  });
+
+  it('Intl.RelativeTimeFormat formats past/future with numeric:"always" (the default) in en and pt', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const en = new Intl.RelativeTimeFormat('en-US');
+      const pt = new Intl.RelativeTimeFormat('pt-BR');
+      JSON.stringify({
+        enPast: en.format(-3, 'day'),
+        enFuture: en.format(3, 'day'),
+        enSingular: en.format(1, 'day'),
+        ptPast: pt.format(-3, 'day'),
+        ptFuture: pt.format(3, 'day'),
+        ptSingular: pt.format(1, 'day'),
+        ptZeroSingular: pt.format(0, 'hour'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      enPast: '3 days ago',
+      enFuture: 'in 3 days',
+      enSingular: 'in 1 day',
+      ptPast: 'há 3 dias',
+      ptFuture: 'em 3 dias',
+      ptSingular: 'em 1 dia',
+      ptZeroSingular: 'em 0 hora',
+    });
+  });
+
+  it('Intl.RelativeTimeFormat with numeric:"auto" uses special phrasing for day/week/month/year, and plain numeric otherwise', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const en = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+      const pt = new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' });
+      JSON.stringify({
+        enYesterday: en.format(-1, 'day'),
+        enToday: en.format(0, 'day'),
+        enTomorrow: en.format(1, 'day'),
+        enNextWeek: en.format(1, 'week'),
+        enFallsBackToNumeric: en.format(3, 'day'),
+        enFractionalFallsBackToNumeric: en.format(1.2, 'day'),
+        enHourHasNoAutoPhrase: en.format(-1, 'hour'),
+        ptOntem: pt.format(-1, 'day'),
+        ptHoje: pt.format(0, 'day'),
+        ptAmanha: pt.format(1, 'day'),
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      enYesterday: 'yesterday',
+      enToday: 'today',
+      enTomorrow: 'tomorrow',
+      enNextWeek: 'next week',
+      enFallsBackToNumeric: 'in 3 days',
+      enFractionalFallsBackToNumeric: 'in 1.2 days',
+      enHourHasNoAutoPhrase: '1 hour ago',
+      ptOntem: 'ontem',
+      ptHoje: 'hoje',
+      ptAmanha: 'amanhã',
+    });
+  });
+
+  it('Intl.RelativeTimeFormat accepts plural unit spellings and throws RangeError for an invalid unit', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      const rtf = new Intl.RelativeTimeFormat('en-US');
+      let threw;
+      try { rtf.format(1, 'fortnight'); threw = null; }
+      catch (e) { threw = { name: e.name, isRangeError: e instanceof RangeError }; }
+      JSON.stringify({
+        pluralUnit: rtf.format(2, 'days'),
+        threw,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      pluralUnit: 'in 2 days',
+      threw: { name: 'RangeError', isRangeError: true },
+    });
+  });
+
+  it('Intl.RelativeTimeFormat.resolvedOptions() reports locale, style and numeric', async () => {
+    dom = JSDOM.create('<html><body></body></html>');
+    const result = await dom.evaluate(`
+      JSON.stringify(new Intl.RelativeTimeFormat('en-US', { numeric: 'auto', style: 'short' }).resolvedOptions());
+    `);
+    expect(JSON.parse(result)).toEqual({
+      locale: 'en',
+      style: 'short',
+      numeric: 'auto',
     });
   });
 });

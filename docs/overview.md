@@ -583,6 +583,71 @@ dom.dispose() // ← always pair with create()
       Gregorian, `Intl.PluralRules`/`Intl.RelativeTimeFormat`/
       `Intl.ListFormat`, and `Intl.Locale`.
 
+### v0.19 — Relative Time & Pluralization
+> Closes the two `Intl` gaps v0.18 explicitly flagged as unmodeled, since
+> both are directly relevant to this project's own headline examples: a
+> countdown timer needs `RelativeTimeFormat` ("in 3 days"), a discount badge
+> or personalized greeting needs `PluralRules` to pick "item" vs "items"
+> correctly across `en`/`pt`.
+- [x] `Intl.PluralRules` — `select(n)` returns `'one'`/`'other'` per the same
+      `en`/`pt` cardinal rule `pt`'s CLDR data defines (`pt` treats both `0`
+      and `1` as singular, e.g. "0 item"/"1 item"/"2 itens"; `en` only `1`).
+      `type: 'ordinal'` and categories beyond `one`/`other` (`few`, `many`,
+      `two`, `zero`) are not modeled — neither `en` nor `pt` cardinal rules
+      need them.
+- [x] `Intl.RelativeTimeFormat` — `format(value, unit)` for `year`/`quarter`/
+      `month`/`week`/`day`/`hour`/`minute`/`second` (plural unit spellings
+      like `'days'` accepted too, per spec). `numeric: 'auto'` produces
+      special phrasing ("yesterday", "next week", "agora") for day/week/
+      month/year/second=0; `numeric: 'always'` (the default) always renders
+      numerically ("in 3 days" / "há 3 dias"). `style: 'short'`/`'narrow'`
+      are accepted but render identically to `'long'` — no abbreviated
+      unit-name table, the same trade-off `DateTimeFormat` already made
+      collapsing `timeStyle` `'long'`/`'full'`. `formatToParts()` is not
+      implemented (`DateTimeFormat`/`NumberFormat` don't have it either, for
+      the same reason: no consumer in this project's scope needs part-level
+      output over the plain formatted string).
+
+### v0.20 — Named Access on the Window Object
+> Found by diffing this project's globals against jsdom's own
+> `lib/jsdom/living/window-properties.js`, which implements the HTML spec's
+> ["named access on the Window
+> object"](https://html.spec.whatwg.org/#named-access-on-the-window-object).
+> Directly relevant to this project's core use case: real-world CMS-embedded
+> widget scripts (this project's stated target) very commonly reference an
+> element's `id` as a bare global (`countdown.textContent = ...`) instead of
+> `getElementById`/`querySelector`, especially in older or copy-pasted
+> snippets.
+- [x] An element with an `id`, or a `name` attribute on `embed`/`form`/`img`/
+      `object`/`iframe`/`frame`, becomes reachable as a `globalThis` property
+      while connected to the primary document. Implemented as a push-based
+      registry (QuickJS's actual global object — the one unqualified
+      identifiers resolve against — can't be swapped for a `Proxy`, so there's
+      no lazy/on-demand fallback available; every connect/disconnect/rename
+      eagerly sets or deletes a real data property instead), populated at
+      install time from the initially-parsed document and kept in sync via
+      `appendChild`/`removeChild`/`remove()`/`innerHTML`/`insertAdjacentHTML`/
+      `setAttribute`/`removeAttribute`/`element.id` (the last one hooked
+      separately — it's a native accessor that bypasses `setAttribute`
+      entirely) monkey-patches — the same JS-level
+      wrapping approach and the same insertion-path scope
+      `CustomElementsBindings`' connectivity tracking already settled on
+      (`insertBefore`/`before`/`after`/`replaceWith`/`append`/`prepend`/
+      `insertAdjacentElement` are not hooked). Never overwrites a key that
+      already exists on `globalThis` before this module claims it. Duplicate
+      ids/names resolve to a plain (non-live) array, the same static-array
+      trade-off already made for `form.elements`/`element.labels`. Shadow DOM
+      content is correctly excluded (connectivity is derived by walking
+      `parentNode` to `document.documentElement`, which a shadow tree never
+      reaches). `removeChild()`/`remove()` unregister *before* calling through
+      to the native implementation rather than after: `js_el_removeChild`
+      nulls the removed node's wrapper-cache opaque pointer (the detached
+      node's memory can be reused), so `getAttribute('id')` on it afterward
+      silently returns nothing — this cost a real debugging pass (a `removeChild()`
+      test kept seeing the global stay defined) before landing on the
+      before/after ordering `innerHTML`'s old-content walk already used for
+      the same reason.
+
 ---
 
 ## Repository Structure
