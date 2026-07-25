@@ -354,6 +354,15 @@ const char* kLocationBootstrapScript = R"JS(
   globalThis.Location = Location;
   globalThis.location = new Location(globalThis.__initialHref);
   delete globalThis.__initialHref;
+
+  if (typeof document !== 'undefined') {
+    Object.defineProperty(document, 'location', {
+      get: function() { return location; },
+      set: function(v) { location.href = v; },
+      enumerable: true,
+      configurable: true,
+    });
+  }
 })();
 )JS";
 
