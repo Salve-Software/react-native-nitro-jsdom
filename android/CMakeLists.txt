@@ -61,6 +61,7 @@ add_library(${PACKAGE_NAME} SHARED
   ../cpp/quickjs/bindings/UrlBindings.cpp
   ../cpp/quickjs/bindings/AbortBindings.cpp
   ../cpp/quickjs/bindings/TextEncodingBindings.cpp
+  ../cpp/quickjs/bindings/IntlBindings.cpp
   ../cpp/quickjs/bindings/FormBindings.cpp
   ../cpp/quickjs/bindings/BlobBindings.cpp
   ../cpp/quickjs/bindings/CSSOMBindings.cpp

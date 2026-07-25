@@ -27,7 +27,7 @@ const char* kCustomElementsBootstrapScript = R"JS(
     var n = node;
     while (n) {
       if (n === docEl) return true;
-      n = ('host' in n) ? n.host : n.parentNode;
+      n = (n instanceof ShadowRoot) ? n.host : n.parentNode;
     }
     return false;
   }

@@ -17,7 +17,7 @@ export interface HtmlSandbox extends HybridObject<{ ios: 'c++'; android: 'c++' }
   // Pass null for any callback to use the browser default (no-op / false / null).
   setDialogCallbacks(
     onAlert: ((message: string) => void) | null,
-    onConfirm: ((message: string) => boolean) | null,
+    onConfirm: ((message: string) => Promise<boolean>) | null,
     onPrompt: ((message: string, defaultValue?: string) => string | null) | null,
   ): void;
 

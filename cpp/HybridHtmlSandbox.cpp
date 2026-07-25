@@ -43,10 +43,13 @@ void HybridHtmlSandbox::initialize(const std::string& html, bool runScripts, con
   _runtime->bindDocument(_document.get());
 
   if (runScripts) {
-    for (const auto& script : _document->getScriptContents()) {
+    auto* rctx = _runtime->contextState();
+    for (const auto& [scriptEl, script] : _document->getScriptContents()) {
+      rctx->current_script = scriptEl;
       try {
         _runtime->evaluate(script);
       } catch (...) { }
+      rctx->current_script = nullptr;
     }
   }
 
@@ -111,7 +114,7 @@ void HybridHtmlSandbox::setConsoleCallback(
 
 void HybridHtmlSandbox::setDialogCallbacks(
     const std::optional<std::variant<nitro::NullType, std::function<void(const std::string&)>>>& onAlert,
-    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>>& onConfirm,
+    const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::shared_ptr<Promise<bool>>>>(const std::string&)>>>& onConfirm,
     const std::optional<std::variant<nitro::NullType, std::function<std::shared_ptr<Promise<std::variant<nitro::NullType, std::string>>>(const std::string&, const std::optional<std::string>&)>>>& onPrompt) {
   if (!_runtime) return;
 
@@ -129,10 +132,10 @@ void HybridHtmlSandbox::setDialogCallbacks(
   if (!onConfirm.has_value() || std::holds_alternative<nitro::NullType>(onConfirm.value())) {
     _runtime->setConfirmCallback(nullptr);
   } else {
-    auto fn = std::get<std::function<std::shared_ptr<Promise<bool>>(const std::string&)>>(onConfirm.value());
+    auto fn = std::get<std::function<std::shared_ptr<Promise<std::shared_ptr<Promise<bool>>>>(const std::string&)>>(onConfirm.value());
     _runtime->setConfirmCallback([fn](const std::string& message) -> bool {
       try {
-        return fn(message)->await().get();
+        return fn(message)->await().get()->await().get();
       } catch (...) {
         return false;
       }

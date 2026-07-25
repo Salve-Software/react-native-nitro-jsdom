@@ -83,4 +83,56 @@ describe('JSDOM URL/URLSearchParams', () => {
     `);
     expect(JSON.parse(result)).toEqual({ absolute: true, relativeWithBase: true, invalid: false });
   });
+
+  it('<a>/<area> href resolves relative URLs and decomposes into protocol/hostname/pathname/etc, other elements get undefined', async () => {
+    dom = JSDOM.create(
+      `<html><body>
+        <a id="rel" href="/discount?code=SAVE10#top">10% off</a>
+        <area id="area" href="page2.html">
+        <div id="notLink"></div>
+      </body></html>`,
+      { url: 'https://shop.example.com/dir/page.html' }
+    );
+    const result = await dom.evaluate(`
+      const a = document.getElementById('rel');
+      const area = document.getElementById('area');
+      const div = document.getElementById('notLink');
+      JSON.stringify({
+        href: a.href,
+        protocol: a.protocol,
+        hostname: a.hostname,
+        pathname: a.pathname,
+        search: a.search,
+        hash: a.hash,
+        origin: a.origin,
+        areaHref: area.href,
+        divHref: div.href,
+        divProtocol: div.protocol,
+      });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      href: 'https://shop.example.com/discount?code=SAVE10#top',
+      protocol: 'https:',
+      hostname: 'shop.example.com',
+      pathname: '/discount',
+      search: '?code=SAVE10',
+      hash: '#top',
+      origin: 'https://shop.example.com',
+      areaHref: 'https://shop.example.com/dir/page2.html',
+      divHref: undefined,
+      divProtocol: undefined,
+    });
+  });
+
+  it('setting a.href writes the raw href attribute', async () => {
+    dom = JSDOM.create('<html><body><a id="a" href="/old">old</a></body></html>', {
+      url: 'https://example.com/',
+    });
+    const result = await dom.evaluate(`
+      const a = document.getElementById('a');
+      a.href = '/new';
+      JSON.stringify({ attr: a.getAttribute('href'), resolved: a.href });
+    `);
+    expect(JSON.parse(result)).toEqual({ attr: '/new', resolved: 'https://example.com/new' });
+  });
 });

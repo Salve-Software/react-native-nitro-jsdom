@@ -415,4 +415,104 @@ describe('JSDOM form elements', () => {
     `);
     expect(JSON.parse(result)).toEqual({ id: 'a"b\\c', labels: ['Weird id label'] });
   });
+
+  it('form.reset() dispatches a cancelable "reset" event and no-ops on non-form elements', async () => {
+    dom = JSDOM.create('<html><body><form id="f"></form><div id="d"></div></body></html>');
+    const result = await dom.evaluate(`
+      const form = document.getElementById('f');
+      const div = document.getElementById('d');
+      let fired = 0;
+      let receivedCancelable;
+      form.addEventListener('reset', function(e) {
+        fired++;
+        receivedCancelable = e.cancelable;
+      });
+      form.reset();
+      div.reset();
+      JSON.stringify({ fired, receivedCancelable });
+    `);
+    expect(JSON.parse(result)).toEqual({ fired: 1, receivedCancelable: true });
+  });
+
+  it('select.options exposes item()/namedItem()/add()/remove() over the option elements', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <select id="sel">
+          <option id="a" value="a">A</option>
+          <option id="b" value="b" name="bee">B</option>
+        </select>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const sel = document.getElementById('sel');
+      const before = {
+        length: sel.options.length,
+        item0: sel.options.item(0).id,
+        byName: sel.options.namedItem('bee').id,
+        byId: sel.options.namedItem('a').id,
+        missing: sel.options.namedItem('nope'),
+      };
+
+      const created = document.createElement('option');
+      created.id = 'c';
+      created.value = 'c';
+      sel.options.add(created);
+      const afterAdd = sel.options.length;
+
+      sel.options.remove(0);
+      const afterRemove = { length: sel.options.length, ids: sel.options.item(0).id + ',' + sel.options.item(1).id };
+
+      JSON.stringify({ before, afterAdd, afterRemove });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      before: { length: 2, item0: 'a', byName: 'b', byId: 'a', missing: null },
+      afterAdd: 3,
+      afterRemove: { length: 2, ids: 'b,c' },
+    });
+  });
+
+  it('select.selectedIndex/.selectedOptions default to the first option and follow .selected writes', async () => {
+    dom = JSDOM.create(`
+      <html><body>
+        <select id="sel">
+          <option id="a">A</option>
+          <option id="b">B</option>
+          <option id="c">C</option>
+        </select>
+        <select id="multi" multiple>
+          <option id="x" selected>X</option>
+          <option id="y" selected>Y</option>
+        </select>
+        <select id="multiEmpty" multiple>
+          <option id="m">M</option>
+          <option id="n">N</option>
+        </select>
+      </body></html>
+    `);
+    const result = await dom.evaluate(`
+      const sel = document.getElementById('sel');
+      const multi = document.getElementById('multi');
+      const multiEmpty = document.getElementById('multiEmpty');
+
+      const defaultIndex = sel.selectedIndex;
+      sel.selectedIndex = 2;
+      const afterSet = {
+        index: sel.selectedIndex,
+        selectedOptions: sel.selectedOptions.map((o) => o.id),
+        cSelected: document.getElementById('c').selected,
+        aSelected: document.getElementById('a').selected,
+      };
+
+      const multiSelectedOptions = multi.selectedOptions.map((o) => o.id);
+      const multiEmptyState = { index: multiEmpty.selectedIndex, selectedOptions: multiEmpty.selectedOptions };
+
+      JSON.stringify({ defaultIndex, afterSet, multiSelectedOptions, multiEmptyState });
+    `);
+    expect(JSON.parse(result)).toEqual({
+      defaultIndex: 0,
+      afterSet: { index: 2, selectedOptions: ['c'], cSelected: true, aSelected: false },
+      multiSelectedOptions: ['x', 'y'],
+      multiEmptyState: { index: -1, selectedOptions: [] },
+    });
+  });
 });

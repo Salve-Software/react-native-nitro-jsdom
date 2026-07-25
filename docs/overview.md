@@ -497,6 +497,92 @@ dom.dispose() // ← always pair with create()
 - [x] `Element.prototype.getClientRects()`/`webkitMatchesSelector()`.
 - [x] `window.reportError()`.
 
+### v0.17 — Boolean Attribute Reflection & Select Ergonomics
+> A gap list compiled by diffing this project against jsdom's own supported
+> interface set (`lib/jsdom/living/interfaces.js`), scoped down to what a
+> real-world CMS embedded script (countdown timer, personalized greeting,
+> discount badge) actually reaches for — dropping everything layout/rendering
+> or full-page-navigation related, which stays out of scope for the reasons
+> given throughout this roadmap.
+- [x] `element.disabled` / `.required` / `.readOnly` / `.multiple` /
+      `.autofocus` / `.selected` as direct boolean properties (same
+      attribute-presence-as-truthiness convention `.checked` already used) —
+      previously only reachable via `getAttribute`/`setAttribute`, which is
+      not how real-world scripts disable a button or mark a field required.
+- [x] `form.reset()` — dispatches the cancelable `reset` event (what widget
+      scripts actually listen for to run their own cleanup). Does not revert
+      field values: this sandbox has no separate default-value storage
+      (`element.value`/`.checked` read/write the live attribute directly), so
+      a script that already reassigned `.value` has overwritten its own
+      default with nothing left to revert to — the same simplification
+      `submit()` already made for the "submit" event.
+- [x] `select.options` (`HTMLOptionsCollection`-like: `item()`/`namedItem()`/
+      `add()`/`remove()`) / `.selectedIndex` / `.selectedOptions` — `select.value`
+      already worked; this rounds out the rest of the dropdown-widget surface.
+      Static array, not a live collection, same trade-off as `form.elements`/
+      `element.labels`.
+- [x] `CSS.escape()` — ports the CSSOM spec's own reference algorithm, so it's
+      exact rather than a best-effort stub; used by scripts building selectors
+      from dynamic IDs (`'#' + CSS.escape(dynamicId)`). `CSS.supports()` has
+      no real CSS engine to validate against, so it reports "supported" for
+      any syntactically-plausible property/value pair instead of parsing CSS.
+- [x] `document.visibilityState` (`'visible'` / `'hidden'`) — the companion to
+      `document.hidden`, which already existed; scripts commonly check both.
+
+### v0.18 — Link Ergonomics, currentScript & Intl
+> A second pass on the same jsdom-interfaces gap list that produced v0.17,
+> plus the one gap that isn't a missing DOM binding at all: QuickJS ships no
+> `Intl` implementation, which blocks this project's own two headline
+> examples (`docs/overview.md`'s "personalized greeting" needs date
+> formatting, "discount badge" needs currency formatting).
+- [x] `element.hidden` / `.title` / `.lang` / `.dir` as direct properties,
+      same attribute-reflection convention as v0.17's `.disabled` etc.
+- [x] `<a>`/`<area>` `.href` (resolved absolute URL, settable) and read-only
+      `.protocol`/`.username`/`.password`/`.hostname`/`.port`/`.pathname`/
+      `.search`/`.hash`/`.host`/`.origin`, resolved against `document.baseURI`
+      by delegating to the existing `URL` class (`UrlBindings.cpp`) rather
+      than re-implementing URL parsing. Other elements' `.href` and these
+      parts are `undefined`, matching real jsdom's behavior for non-hyperlink
+      elements. The component parts are read-only; only `.href` itself is
+      settable (writes the raw attribute) — real `HTMLHyperlinkElementUtils`
+      allows setting each part individually too, which this sandbox doesn't
+      attempt.
+- [x] `document.currentScript` — the classic embedded-widget pattern (a
+      `<script>` locating its own container via
+      `document.currentScript.parentElement`) now works for the initial
+      `<script>` execution pass. Null outside of synchronous script
+      execution, matching spec. Required `LexborDocument::getScriptContents()`
+      to start returning `(element, content)` pairs instead of just content
+      strings, so `HybridHtmlSandbox::initialize()` can track which
+      `<script>` element is currently running. Scripts inserted dynamically
+      via `document.createElement('script')` + `appendChild()` are still not
+      executed at all (unchanged from existing behavior), so this only
+      covers the common case.
+- [x] `Intl.NumberFormat`/`Intl.DateTimeFormat` and real
+      `Number.prototype.toLocaleString`/`Date.prototype.toLocaleString`/
+      `toLocaleDateString`/`toLocaleTimeString` — a hand-built pure-JS
+      polyfill, not real ICU/CLDR data (QuickJS has neither). Locale data
+      only exists for `en` and `pt` (the two this project's users actually
+      need); any other locale falls back to `en` formatting entirely rather
+      than guessing. Covers `style: 'decimal'/'percent'/'currency'`
+      (`currency` throws `TypeError` if omitted, matching spec; default
+      fraction digits come from a small per-currency table — `0` for JPY/
+      KRW/etc., `3` for BHD/KWD/etc., `2` otherwise) with a flat
+      currency-code → symbol table (no per-locale currency symbol variants,
+      e.g. real ICU's `en-US` showing `BRL` as `"R$"` but `pt-BR` showing
+      `USD` as `"US$"` — this always uses the same symbol regardless of
+      locale), `minimumFractionDigits`/`maximumFractionDigits`/
+      `useGrouping`, and date formatting via `year`/`month`/`day`/`weekday`/
+      `hour`/`minute`/`second`/`hour12`/`dateStyle`/`timeStyle` — the latter
+      two map to distinct `short`/`medium`/`long`/`full` component sets
+      (verified against real V8 output), except `timeStyle`'s `long`/`full`
+      collapse to the same as `medium` since this sandbox models no
+      timezone/`timeZoneName` data. Locale-correct month/weekday names and
+      date-part ordering (MDY for `en`, DMY for `pt`) also verified against
+      real V8 `Intl` output. Not modeled: calendar systems other than
+      Gregorian, `Intl.PluralRules`/`Intl.RelativeTimeFormat`/
+      `Intl.ListFormat`, and `Intl.Locale`.
+
 ---
 
 ## Repository Structure

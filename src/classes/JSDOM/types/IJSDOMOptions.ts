@@ -22,12 +22,13 @@ export interface IJSDOMOptions {
   onAlert?: (message: string) => void;
   /**
    * Callback invoked when `window.confirm(message)` is called inside the sandbox.
-   * Must return a boolean. If not provided, confirm() returns false (browser default).
+   * Return a boolean, or a `Promise<boolean>`. If not provided, confirm() returns
+   * false (browser default).
    *
-   * WARNING: The callback is synchronous. Do NOT call back into the same sandbox
-   * from inside the callback — QuickJS is not re-entrant.
+   * WARNING: Do NOT call back into the same sandbox from inside the callback —
+   * QuickJS is not re-entrant.
    */
-  onConfirm?: (message: string) => boolean;
+  onConfirm?: (message: string) => boolean | Promise<boolean>;
   /**
    * Callback invoked when `window.prompt(message, defaultValue?)` is called inside
    * the sandbox. Return a string for the user input, or null for a dismissed prompt.
